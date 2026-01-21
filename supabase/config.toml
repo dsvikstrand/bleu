@@ -1,1 +1,7 @@
 project_id = "ryncvlnxeudjbaqzlosh"
+
+[functions.generate-stack]
+verify_jwt = false
+
+[functions.analyze-blend]
+verify_jwt = false

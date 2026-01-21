@@ -172,3 +172,58 @@ export const DEFAULT_STATE: StackLabState = {
   settings: DEFAULT_SETTINGS,
   recommendations: [],
 };
+
+// Blend Builder Types
+export type DoseUnit = 'mg' | 'g' | 'mcg' | 'IU' | 'ml' | 'scoop';
+
+export interface BlendItem {
+  id: string;
+  supplementId: string;
+  name: string;
+  category: SupplementCategory;
+  amount: number;
+  unit: DoseUnit;
+}
+
+export interface BlendAnalysis {
+  classification: string;
+  score: number;
+  summary: string;
+  timing: string;
+  tweaks: string[];
+  warnings: string[];
+  rawMarkdown: string;
+}
+
+export interface BlendRecipe {
+  id: string;
+  name: string;
+  items: BlendItem[];
+  createdAt: string;
+  analysis?: BlendAnalysis;
+}
+
+export interface BlendState {
+  currentBlend: BlendRecipe | null;
+  history: BlendRecipe[];
+}
+
+export const DEFAULT_BLEND_STATE: BlendState = {
+  currentBlend: null,
+  history: [],
+};
+
+// Default doses by category for quick presets
+export const DEFAULT_DOSES: Record<string, { amount: number; unit: DoseUnit }> = {
+  'magnesium-glycinate': { amount: 400, unit: 'mg' },
+  'glycine': { amount: 3, unit: 'g' },
+  'l-theanine-sleep': { amount: 200, unit: 'mg' },
+  'apigenin': { amount: 50, unit: 'mg' },
+  'melatonin': { amount: 0.5, unit: 'mg' },
+  'creatine-monohydrate': { amount: 5, unit: 'g' },
+  'beta-alanine': { amount: 3, unit: 'g' },
+  'citrulline-malate': { amount: 6, unit: 'g' },
+  'caffeine': { amount: 100, unit: 'mg' },
+  'vitamin-d3': { amount: 5000, unit: 'IU' },
+  'omega-3': { amount: 2, unit: 'g' },
+};
