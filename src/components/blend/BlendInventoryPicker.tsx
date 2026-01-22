@@ -2,7 +2,11 @@ import { useState, useMemo } from 'react';
 
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Plus, Check } from 'lucide-react';
 import {
   SupplementCategory,
@@ -18,8 +22,19 @@ interface BlendInventoryPickerProps {
 export function BlendInventoryPicker({ selectedIds, onSelect }: BlendInventoryPickerProps) {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<SupplementCategory>('sleep-recovery');
+  const [customDialogOpen, setCustomDialogOpen] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customCategory, setCustomCategory] = useState<SupplementCategory>('foundations');
 
   const categories = Object.keys(SUPPLEMENT_CATALOG) as SupplementCategory[];
+
+  const handleAddCustom = () => {
+    if (!customName.trim()) return;
+    const customId = `custom-${Date.now()}`;
+    onSelect(customId, customName.trim(), customCategory);
+    setCustomName('');
+    setCustomDialogOpen(false);
+  };
 
   const filteredSupplements = useMemo(() => {
     const supplements = SUPPLEMENT_CATALOG[activeCategory];
@@ -30,15 +45,58 @@ export function BlendInventoryPicker({ selectedIds, onSelect }: BlendInventoryPi
 
   return (
     <div className="space-y-4">
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search supplements..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+        {/* Search + Add Custom */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search supplements..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Dialog open={customDialogOpen} onOpenChange={setCustomDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="icon" className="shrink-0">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Custom Supplement</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="custom-supp-name">Supplement Name</Label>
+                  <Input
+                    id="custom-supp-name"
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    placeholder="e.g. Lion's Mane Extract"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Select value={customCategory} onValueChange={(v) => setCustomCategory(v as SupplementCategory)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {CATEGORY_LABELS[cat]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={handleAddCustom} className="w-full">
+                  Add to Blend
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Category Tabs */}

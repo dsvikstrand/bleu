@@ -75,12 +75,17 @@ function parseAnalysisMarkdown(markdown: string): ParsedSections {
     } else if (lowerSection.includes('interaction')) {
       sections.interactions = content.split('\n').filter(l => l.trim().startsWith('-')).map(l => l.replace(/^-\s*/, '').trim());
     } else if (lowerSection.includes('roi') || lowerSection.includes('return on investment')) {
-      // Parse ROI section - look for health/cost/effectiveness keywords
+      // Parse ROI section - look for long-term/short-term, health, cost, effectiveness keywords
       const lines = content.split('\n');
       for (const line of lines) {
         const lowerLine = line.toLowerCase();
-        if (lowerLine.includes('health')) {
-          sections.roi.health = line.replace(/^-?\s*\**health[^:]*:\**\s*/i, '').trim();
+        if (lowerLine.includes('long-term') || lowerLine.includes('short-term')) {
+          sections.roi.health = line.replace(/^-?\s*\**(?:long-term\/short-term effect|long-term\/short-term)[^:]*:\**\s*/i, '').trim();
+        } else if (lowerLine.includes('health')) {
+          // Fallback for older format
+          if (!sections.roi.health) {
+            sections.roi.health = line.replace(/^-?\s*\**health[^:]*:\**\s*/i, '').trim();
+          }
         } else if (lowerLine.includes('cost')) {
           sections.roi.cost = line.replace(/^-?\s*\**cost[^:]*:\**\s*/i, '').trim();
         } else if (lowerLine.includes('effectiveness') || lowerLine.includes('efficacy')) {
@@ -364,16 +369,16 @@ function ROIContent({ sections }: { sections: ParsedSections }) {
 
       {/* ROI Cards Grid */}
       <div className="grid gap-4">
-        {/* Health Impact */}
+        {/* Long-term / Short-term Effect */}
         {roi.health && (
           <div className="p-5 rounded-xl bg-success/10 border border-success/30">
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0 w-12 h-12 rounded-full bg-success/20 flex items-center justify-center">
-                <span className="text-success text-xl font-black">♥</span>
+                <span className="text-success text-xl font-black">↔</span>
               </div>
               <div className="flex-1">
                 <h4 className="text-lg font-black uppercase tracking-wider text-success mb-2">
-                  HEALTH IMPACT
+                  LONG-TERM / SHORT-TERM EFFECT
                 </h4>
                 <p className="text-base leading-relaxed text-foreground">
                   {formatBoldText(roi.health)}
