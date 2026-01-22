@@ -322,11 +322,10 @@ const Blend = () => {
         {/* Hero Header */}
         <div className="text-center mb-12 pt-16 animate-fade-in">
           <h1 className="text-6xl sm:text-7xl lg:text-8xl font-black tracking-tighter mb-4 relative inline-block">
-            <span className="text-gradient-aqua animate-shimmer bg-[length:200%_auto] bg-clip-text [-webkit-background-clip:text]" 
+            <span className="text-gradient-themed animate-shimmer bg-[length:200%_auto]" 
                   style={{ 
                     fontFamily: "'Impact', 'Haettenschweiler', 'Franklin Gothic Bold', 'Charcoal', 'Helvetica Inserat', sans-serif",
                     letterSpacing: '0.15em',
-                    textShadow: '0 0 40px hsl(185 55% 50% / 0.4), 0 0 80px hsl(185 55% 50% / 0.2)'
                   }}>
               BLEND
             </span>
@@ -337,33 +336,29 @@ const Blend = () => {
           </p>
         </div>
 
-        {/* Name Your Blend Section */}
+        {/* Combined Name + Ingredients Section */}
         <section className="mb-8 animate-fade-in" style={{ animationDelay: '0.05s' }}>
-          <h2 className="text-2xl font-bold tracking-tight mb-4 text-foreground">
-            NAME YOUR BLEND
-          </h2>
-          <div className="bg-card/60 backdrop-blur-glass rounded-2xl p-4 border border-border/50">
-            <Input
-              value={currentBlend?.name || ''}
-              onChange={(e) => {
-                if (!currentBlend) createBlend();
-                updateBlendName(e.target.value);
-              }}
-              placeholder="Enter blend name..."
-              className="text-xl font-bold bg-transparent border-none focus-visible:ring-2 focus-visible:ring-primary/50 h-14"
-            />
+          <div className="bg-card/60 backdrop-blur-glass rounded-2xl border border-border/50 overflow-hidden">
+            {/* Blend Name Input */}
+            <div className="p-4 border-b border-border/30">
+              <Input
+                value={currentBlend?.name || ''}
+                onChange={(e) => {
+                  if (!currentBlend) createBlend();
+                  updateBlendName(e.target.value);
+                }}
+                placeholder="Enter blend name..."
+                className="text-xl font-bold bg-transparent border-none focus-visible:ring-2 focus-visible:ring-primary/50 h-14"
+              />
+            </div>
+            {/* Inventory Picker */}
+            <div className="p-4">
+              <BlendInventoryPicker
+                selectedIds={selectedIds}
+                onSelect={handleSelectSupplement}
+              />
+            </div>
           </div>
-        </section>
-
-        {/* Inventory Section */}
-        <section className="mb-8 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-          <h2 className="text-2xl font-bold tracking-tight mb-4 text-foreground">
-            CHOOSE YOUR INGREDIENTS
-          </h2>
-          <BlendInventoryPicker
-            selectedIds={selectedIds}
-            onSelect={handleSelectSupplement}
-          />
         </section>
 
         {/* Selected Items Accordion */}
