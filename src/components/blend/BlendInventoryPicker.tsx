@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -29,14 +29,7 @@ export function BlendInventoryPicker({ selectedIds, onSelect }: BlendInventoryPi
   }, [activeCategory, search]);
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Plus className="h-5 w-5 text-primary" />
-          Add Ingredients
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="space-y-4">
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -90,7 +83,6 @@ export function BlendInventoryPicker({ selectedIds, onSelect }: BlendInventoryPi
             </TabsContent>
           ))}
         </Tabs>
-      </CardContent>
-    </Card>
+    </div>
   );
 }

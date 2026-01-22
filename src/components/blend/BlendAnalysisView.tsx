@@ -10,7 +10,7 @@ interface BlendAnalysisViewProps {
   isStreaming?: boolean;
 }
 
-type AnalysisView = 'overview' | 'optimize' | 'safety';
+type AnalysisView = 'overview' | 'optimize' | 'safety' | 'roi';
 
 interface ParsedSections {
   classification: string;
@@ -21,6 +21,12 @@ interface ParsedSections {
   tips: string[];
   warnings: string[];
   interactions: string[];
+  roi: {
+    health: string;
+    cost: string;
+    effectiveness: string;
+    verdict: string;
+  };
 }
 
 function parseAnalysisMarkdown(markdown: string): ParsedSections {
@@ -33,6 +39,12 @@ function parseAnalysisMarkdown(markdown: string): ParsedSections {
     tips: [],
     warnings: [],
     interactions: [],
+    roi: {
+      health: '',
+      cost: '',
+      effectiveness: '',
+      verdict: '',
+    },
   };
 
   const lines = markdown.split('\n');
@@ -62,6 +74,21 @@ function parseAnalysisMarkdown(markdown: string): ParsedSections {
       sections.warnings = content.split('\n').filter(l => l.trim().startsWith('-')).map(l => l.replace(/^-\s*/, '').trim());
     } else if (lowerSection.includes('interaction')) {
       sections.interactions = content.split('\n').filter(l => l.trim().startsWith('-')).map(l => l.replace(/^-\s*/, '').trim());
+    } else if (lowerSection.includes('roi') || lowerSection.includes('return on investment')) {
+      // Parse ROI section - look for health/cost/effectiveness keywords
+      const lines = content.split('\n');
+      for (const line of lines) {
+        const lowerLine = line.toLowerCase();
+        if (lowerLine.includes('health')) {
+          sections.roi.health = line.replace(/^-?\s*\**health[^:]*:\**\s*/i, '').trim();
+        } else if (lowerLine.includes('cost')) {
+          sections.roi.cost = line.replace(/^-?\s*\**cost[^:]*:\**\s*/i, '').trim();
+        } else if (lowerLine.includes('effectiveness') || lowerLine.includes('efficacy')) {
+          sections.roi.effectiveness = line.replace(/^-?\s*\**(?:effectiveness|efficacy)[^:]*:\**\s*/i, '').trim();
+        } else if (lowerLine.includes('verdict') || lowerLine.includes('overall') || lowerLine.includes('conclusion')) {
+          sections.roi.verdict = line.replace(/^-?\s*\**(?:verdict|overall|conclusion)[^:]*:\**\s*/i, '').trim();
+        }
+      }
     }
     
     contentBuffer = [];
@@ -310,6 +337,106 @@ function SafetyContent({ sections }: { sections: ParsedSections }) {
   );
 }
 
+function ROIContent({ sections }: { sections: ParsedSections }) {
+  const { roi } = sections;
+  const hasROI = roi.health || roi.cost || roi.effectiveness || roi.verdict;
+
+  if (!hasROI) {
+    return (
+      <div className="text-center py-12 animate-fade-in">
+        <p className="text-lg text-muted-foreground">ROI analysis not available for this blend.</p>
+        <p className="text-sm text-muted-foreground mt-2">Try mixing again for a full analysis.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Header */}
+      <div className="text-center mb-8">
+        <p className="text-xs font-bold uppercase tracking-[0.3em] text-muted-foreground mb-2">
+          RETURN ON INVESTMENT
+        </p>
+        <h3 className="text-2xl font-black uppercase tracking-wider text-primary">
+          VALUE ANALYSIS
+        </h3>
+      </div>
+
+      {/* ROI Cards Grid */}
+      <div className="grid gap-4">
+        {/* Health Impact */}
+        {roi.health && (
+          <div className="p-5 rounded-xl bg-success/10 border border-success/30">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-success/20 flex items-center justify-center">
+                <span className="text-success text-xl font-black">♥</span>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-lg font-black uppercase tracking-wider text-success mb-2">
+                  HEALTH IMPACT
+                </h4>
+                <p className="text-base leading-relaxed text-foreground">
+                  {formatBoldText(roi.health)}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cost Efficiency */}
+        {roi.cost && (
+          <div className="p-5 rounded-xl bg-primary/10 border border-primary/30">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                <span className="text-primary text-xl font-black">$</span>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-lg font-black uppercase tracking-wider text-primary mb-2">
+                  COST EFFICIENCY
+                </h4>
+                <p className="text-base leading-relaxed text-foreground">
+                  {formatBoldText(roi.cost)}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Effectiveness */}
+        {roi.effectiveness && (
+          <div className="p-5 rounded-xl bg-accent/30 border border-accent-foreground/20">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-accent flex items-center justify-center">
+                <span className="text-accent-foreground text-xl font-black">★</span>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-lg font-black uppercase tracking-wider text-accent-foreground mb-2">
+                  EFFECTIVENESS
+                </h4>
+                <p className="text-base leading-relaxed text-foreground">
+                  {formatBoldText(roi.effectiveness)}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Verdict */}
+      {roi.verdict && (
+        <div className="mt-6 p-6 rounded-xl bg-muted/50 border border-border">
+          <h4 className="text-lg font-black uppercase tracking-wider text-foreground mb-3">
+            VERDICT
+          </h4>
+          <p className="text-lg leading-relaxed text-muted-foreground">
+            {formatBoldText(roi.verdict)}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function BlendAnalysisView({ analysis, isStreaming }: BlendAnalysisViewProps) {
   const [activeView, setActiveView] = useState<AnalysisView>('overview');
   const sections = parseAnalysisMarkdown(analysis.rawMarkdown);
@@ -368,6 +495,12 @@ export function BlendAnalysisView({ analysis, isStreaming }: BlendAnalysisViewPr
             </span>
           )}
         </TabButton>
+        <TabButton 
+          active={activeView === 'roi'} 
+          onClick={() => setActiveView('roi')}
+        >
+          ROI
+        </TabButton>
       </div>
 
       {/* Content Area */}
@@ -375,6 +508,7 @@ export function BlendAnalysisView({ analysis, isStreaming }: BlendAnalysisViewPr
         {activeView === 'overview' && <OverviewContent sections={sections} />}
         {activeView === 'optimize' && <OptimizeContent sections={sections} />}
         {activeView === 'safety' && <SafetyContent sections={sections} />}
+        {activeView === 'roi' && <ROIContent sections={sections} />}
       </CardContent>
 
       {/* Disclaimer */}

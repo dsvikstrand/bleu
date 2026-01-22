@@ -40,16 +40,22 @@ const BLEND_SYSTEM_PROMPT = `You are an expert supplement mixologist and nutriti
 - [Improvement 2]
 - [Improvement 3]
 
-### ⚠️ Warnings & Interactions
+### Warnings & Interactions
 - [Warning 1]
 - [Warning 2]
 (If none, state "No major concerns with this combination at these doses.")
 
-### 💡 Pro Tips
+### Pro Tips
 [1-2 bonus tips for getting the most out of this blend]
 
+### ROI (Return on Investment)
+- **Health Impact:** [Rate the health benefit potential - high/medium/low and explain why]
+- **Cost Efficiency:** [Assess if the ingredients are cost-effective for the benefits provided]
+- **Effectiveness:** [Rate how well the ingredients work together for the stated goal]
+- **Verdict:** [One sentence summarizing if this blend is worth the investment]
+
 ---
-*⚠️ This analysis is for educational purposes only. Consult a healthcare provider before starting any supplement regimen.*
+*This analysis is for educational purposes only. Consult a healthcare provider before starting any supplement regimen.*
 `;
 
 serve(async (req) => {
