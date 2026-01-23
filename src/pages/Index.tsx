@@ -1,12 +1,12 @@
-import { Link } from 'react-router-dom';
 import { useStackLabState } from '@/hooks/useStackLabState';
 import { InventoryPicker } from '@/components/InventoryPicker';
 import { GoalsPicker } from '@/components/GoalsPicker';
 import { PlanSettings } from '@/components/PlanSettings';
 import { SafetyCard } from '@/components/SafetyCard';
 import { ChatPanel } from '@/components/ChatPanel';
+import { AppNavigation } from '@/components/shared/AppNavigation';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, Beaker, FlaskConical, Dumbbell } from 'lucide-react';
+import { RotateCcw, Beaker } from 'lucide-react';
 
 const Index = () => {
   const {
@@ -47,24 +47,9 @@ const Index = () => {
             </div>
 
             {/* Navigation */}
-            <nav className="hidden sm:flex items-center gap-1 ml-4 p-1 bg-card/50 backdrop-blur-sm rounded-xl border border-border/30">
-              <Button variant="glass" size="sm" className="gap-2 bg-accent/50 pointer-events-none">
-                <Beaker className="h-4 w-4" />
-                StackLab
-              </Button>
-              <Link to="/blend">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <FlaskConical className="h-4 w-4" />
-                  Blend
-                </Button>
-              </Link>
-              <Link to="/protein">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <Dumbbell className="h-4 w-4" />
-                  Protein
-                </Button>
-              </Link>
-            </nav>
+            <div className="hidden sm:block ml-4">
+              <AppNavigation variant="header" />
+            </div>
           </div>
           <Button variant="ghost" size="sm" onClick={resetAll} className="text-muted-foreground">
             <RotateCcw className="h-4 w-4 mr-2" />
@@ -72,6 +57,11 @@ const Index = () => {
           </Button>
         </div>
       </header>
+
+      {/* Mobile Navigation */}
+      <div className="sm:hidden">
+        <AppNavigation variant="floating" />
+      </div>
 
       {/* Main Layout */}
       <main className="container mx-auto px-4 py-6">

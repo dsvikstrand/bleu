@@ -1,5 +1,4 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { useBlendState } from '@/hooks/useBlendState';
 import { BlendInventoryPicker } from '@/components/blend/BlendInventoryPicker';
 import { BlendDoseModal } from '@/components/blend/BlendDoseModal';
@@ -9,6 +8,7 @@ import { HistoryDropdown } from '@/components/blend/HistoryDropdown';
 import { MixButton } from '@/components/blend/MixButton';
 import { CocktailLoadingAnimation } from '@/components/blend/CocktailLoadingAnimation';
 import { ThemeToggle } from '@/components/blend/ThemeToggle';
+import { AppNavigation } from '@/components/shared/AppNavigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ import {
   BlendItem,
   BlendAnalysis,
 } from '@/types/stacklab';
-import { Beaker, RotateCcw, Sparkles, ArrowLeft } from 'lucide-react';
+import { RotateCcw, Sparkles } from 'lucide-react';
 
 const ANALYZE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blend`;
 
@@ -302,12 +302,6 @@ const Blend = () => {
       {/* Minimal Top Bar */}
       <header className="fixed top-4 right-4 z-40 flex items-center gap-2">
         <ThemeToggle />
-        <Link to="/">
-          <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">StackLab</span>
-          </Button>
-        </Link>
         <Button variant="outline" size="sm" onClick={handleNewBlend} className="gap-2">
           <Sparkles className="h-4 w-4" />
           <span className="hidden sm:inline">New</span>
@@ -316,6 +310,9 @@ const Blend = () => {
           <RotateCcw className="h-4 w-4" />
         </Button>
       </header>
+
+      {/* Navigation */}
+      <AppNavigation variant="floating" />
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8 max-w-3xl">

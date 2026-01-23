@@ -143,7 +143,6 @@ export function ProteinSourcePicker({ selectedIds, onSelect }: ProteinSourcePick
                   >
                     {isSelected && <Check className="h-3 w-3 mr-1" />}
                     <span>{source.name}</span>
-                    <span className="ml-1 text-xs opacity-60">({source.proteinPerServing}g)</span>
                   </Badge>
                 );
               })}
