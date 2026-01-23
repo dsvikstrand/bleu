@@ -10,7 +10,7 @@ interface ProteinAnalysisViewProps {
   isStreaming?: boolean;
 }
 
-type AnalysisView = 'profile' | 'optimize' | 'safety' | 'gains';
+type AnalysisView = 'profile' | 'optimize' | 'gains';
 
 interface ParsedSections {
   completenessScore: number;
@@ -391,18 +391,6 @@ export function ProteinAnalysisView({ analysis, isStreaming }: ProteinAnalysisVi
         <TabButton active={activeView === 'optimize'} onClick={() => setActiveView('optimize')}>
           OPTIMIZE
         </TabButton>
-        <TabButton
-          active={activeView === 'safety'}
-          onClick={() => setActiveView('safety')}
-          variant={warningCount > 0 ? 'warning' : 'default'}
-        >
-          SAFETY
-          {warningCount > 0 && (
-            <Badge variant="destructive" className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
-              {warningCount}
-            </Badge>
-          )}
-        </TabButton>
         <TabButton active={activeView === 'gains'} onClick={() => setActiveView('gains')}>
           GAINS
         </TabButton>
@@ -412,7 +400,6 @@ export function ProteinAnalysisView({ analysis, isStreaming }: ProteinAnalysisVi
       <CardContent className="p-6">
         {activeView === 'profile' && <ProfileContent sections={sections} />}
         {activeView === 'optimize' && <OptimizeContent sections={sections} />}
-        {activeView === 'safety' && <SafetyContent sections={sections} />}
         {activeView === 'gains' && <GainsContent sections={sections} />}
       </CardContent>
     </Card>

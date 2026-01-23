@@ -1,5 +1,4 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { useProteinState } from '@/hooks/useProteinState';
 import { ProteinSourcePicker } from '@/components/protein/ProteinSourcePicker';
 import { ProteinDoseModal } from '@/components/protein/ProteinDoseModal';
@@ -9,6 +8,7 @@ import { ProteinHistoryDropdown } from '@/components/protein/ProteinHistoryDropd
 import { BlendButton } from '@/components/protein/BlendButton';
 import { BlenderLoadingAnimation } from '@/components/protein/BlenderLoadingAnimation';
 import { ThemeToggle } from '@/components/blend/ThemeToggle';
+import { AppNavigation } from '@/components/shared/AppNavigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ import {
   ShakeItem,
   ProteinAnalysis,
 } from '@/types/stacklab';
-import { Beaker, RotateCcw, Sparkles, ArrowLeft } from 'lucide-react';
+import { RotateCcw, Sparkles } from 'lucide-react';
 
 const ANALYZE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-protein`;
 
@@ -296,12 +296,6 @@ const Protein = () => {
       {/* Minimal Top Bar */}
       <header className="fixed top-4 right-4 z-40 flex items-center gap-2">
         <ThemeToggle />
-        <Link to="/">
-          <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">StackLab</span>
-          </Button>
-        </Link>
         <Button variant="outline" size="sm" onClick={handleNewShake} className="gap-2">
           <Sparkles className="h-4 w-4" />
           <span className="hidden sm:inline">New</span>
@@ -311,17 +305,23 @@ const Protein = () => {
         </Button>
       </header>
 
+      {/* Navigation */}
+      <AppNavigation variant="floating" />
+
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8 max-w-3xl">
         {/* Hero Header */}
         <div className="text-center mb-12 pt-16 animate-fade-in">
-          <h1 className="text-6xl sm:text-7xl lg:text-8xl font-black tracking-tighter mb-4 relative inline-block">
-            <span className="text-gradient-themed animate-shimmer bg-[length:200%_auto]" 
-                  style={{ 
-                    fontFamily: "'Impact', 'Haettenschweiler', 'Franklin Gothic Bold', 'Charcoal', 'Helvetica Inserat', sans-serif",
-                    letterSpacing: '0.15em',
-                  }}>
-              PROTEIN
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight mb-4 relative inline-block">
+            <span 
+              className="text-gradient-themed animate-shimmer bg-[length:200%_auto] relative"
+              style={{ 
+                fontFamily: "'Impact', 'Haettenschweiler', 'Franklin Gothic Bold', 'Charcoal', 'Helvetica Inserat', sans-serif",
+                letterSpacing: '0.08em',
+                textShadow: '2px 2px 0 hsl(var(--border)), 4px 4px 0 hsl(var(--border)/0.5), 6px 6px 8px hsl(var(--foreground)/0.15)',
+                WebkitTextStroke: '1px hsl(var(--border))',
+              }}>
+              COMPLETE MY PROTEIN
             </span>
             <span className="absolute -inset-4 bg-primary/5 blur-2xl rounded-full animate-pulse-soft -z-10" />
           </h1>
