@@ -33,6 +33,7 @@ function CommentItem({
   const [isEditing, setIsEditing] = useState(false);
   const [replyBody, setReplyBody] = useState('');
   const [editBody, setEditBody] = useState(comment.body);
+  const [visibleReplies, setVisibleReplies] = useState(5);
 
   const displayName = comment.profile.display_name || 'Anonymous';
   const initials = displayName.slice(0, 2).toUpperCase();
@@ -132,7 +133,7 @@ function CommentItem({
 
       {comment.children.length > 0 && (
         <div className="space-y-3">
-          {comment.children.map((child) => (
+          {comment.children.slice(0, visibleReplies).map((child) => (
             <CommentItem
               key={child.id}
               comment={child}
@@ -144,6 +145,15 @@ function CommentItem({
               depth={depth + 1}
             />
           ))}
+          {comment.children.length > visibleReplies && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setVisibleReplies((count) => count + 5)}
+            >
+              Load more replies ({comment.children.length - visibleReplies})
+            </Button>
+          )}
         </div>
       )}
     </div>

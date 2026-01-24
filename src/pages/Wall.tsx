@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,10 +12,11 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, MessageCircle, Share2, FlaskConical, Dumbbell, Beaker, Tag } from 'lucide-react';
+import { Heart, MessageCircle, Share2, FlaskConical, Dumbbell, Beaker, Tag, Bookmark } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { CommentsThread } from '@/components/wall/CommentsThread';
+import { useBookmarks } from '@/hooks/useBookmarks';
 
 interface WallPost {
   id: string;
@@ -38,6 +39,7 @@ interface WallPost {
   };
   tags: { id: string; slug: string }[];
   user_liked: boolean;
+  user_bookmarked: boolean;
 }
 
 const RECIPE_ICONS = {
@@ -56,6 +58,7 @@ const FEED_TABS = [
   { value: 'for-you', label: 'For You' },
   { value: 'latest', label: 'Latest' },
   { value: 'trending', label: 'Trending' },
+  { value: 'saved', label: 'Saved' },
 ] as const;
 
 type FeedTab = (typeof FEED_TABS)[number]['value'];
@@ -66,10 +69,23 @@ export default function Wall() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<FeedTab>('for-you');
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
+  const { bookmarks, isLoading: bookmarksLoading, toggleBookmark, isUpdating: isBookmarking } = useBookmarks();
+
+  const bookmarkIds = useMemo(() => bookmarks.map((bookmark) => bookmark.post_id), [bookmarks]);
+  const bookmarkSet = useMemo(() => new Set(bookmarkIds), [bookmarkIds]);
+  const bookmarkOrder = useMemo(
+    () => new Map(bookmarks.map((bookmark) => [bookmark.post_id, new Date(bookmark.created_at).getTime()])),
+    [bookmarks]
+  );
 
   const { data: posts, isLoading } = useQuery({
-    queryKey: ['wall-posts', activeTab, user?.id],
+    queryKey: ['wall-posts', activeTab, user?.id, bookmarkIds],
+    enabled: activeTab !== 'saved' || (!!user && !bookmarksLoading),
     queryFn: async () => {
+      if (activeTab === 'saved') {
+        if (!user) return [] as WallPost[];
+        if (bookmarkIds.length === 0) return [] as WallPost[];
+      }
       const limit = activeTab === 'for-you' ? 120 : 80;
       let query = supabase
         .from('wall_posts')
@@ -84,6 +100,10 @@ export default function Wall() {
           .gte('created_at', cutoff.toISOString())
           .order('likes_count', { ascending: false })
           .order('created_at', { ascending: false });
+      }
+
+      if (activeTab === 'saved') {
+        query = query.in('id', bookmarkIds);
       }
 
       const { data: postsData, error: postsError } = await query;
@@ -154,6 +174,7 @@ export default function Wall() {
         profile: profilesMap.get(post.user_id) || { display_name: null, avatar_url: null },
         tags: recipeTagsMap.get(post.recipe_id) || [],
         user_liked: likedPostIds.has(post.id),
+        user_bookmarked: bookmarkSet.has(post.id),
       })) as WallPost[];
 
       if (activeTab === 'for-you') {
@@ -163,6 +184,14 @@ export default function Wall() {
           const postTagIds = (recipeTagsMap.get(post.recipe_id) || []).map((tag) => tag.id);
           if (postTagIds.some((tagId) => mutedTagIds.has(tagId))) return false;
           return postTagIds.some((tagId) => followTagIds.has(tagId));
+        });
+      }
+
+      if (activeTab === 'saved') {
+        return hydrated.sort((a, b) => {
+          const aTime = bookmarkOrder.get(a.id) ?? 0;
+          const bTime = bookmarkOrder.get(b.id) ?? 0;
+          return bTime - aTime;
         });
       }
 
@@ -219,9 +248,30 @@ export default function Wall() {
     likeMutation.mutate({ postId, liked: currentlyLiked });
   };
 
+  const handleBookmark = async (postId: string, bookmarked: boolean) => {
+    if (!user) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to save posts.',
+      });
+      return;
+    }
+    try {
+      await toggleBookmark({ postId, bookmarked });
+    } catch (error) {
+      toast({
+        title: 'Failed to update bookmark',
+        description: error instanceof Error ? error.message : 'Please try again',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const toggleComments = (postId: string) => {
     setOpenComments((prev) => ({ ...prev, [postId]: !prev[postId] }));
   };
+
+  const showLoading = isLoading || (activeTab === 'saved' && bookmarksLoading);
 
   return (
     <div className="min-h-screen bg-background">
@@ -263,7 +313,7 @@ export default function Wall() {
           </TabsList>
 
           <TabsContent value={activeTab} className="mt-0">
-            {isLoading ? (
+            {showLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <Card key={i}>
                   <CardHeader className="flex flex-row items-center gap-3">
@@ -344,6 +394,16 @@ export default function Wall() {
                             <MessageCircle className="h-4 w-4 mr-1" />
                             {openComments[post.id] ? 'Hide' : 'Comments'}
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={post.user_bookmarked ? 'text-primary' : ''}
+                            onClick={() => handleBookmark(post.id, post.user_bookmarked)}
+                            disabled={isBookmarking}
+                          >
+                            <Bookmark className={`h-4 w-4 mr-1 ${post.user_bookmarked ? 'fill-current' : ''}`} />
+                            Save
+                          </Button>
                           <Button variant="ghost" size="sm" disabled>
                             <Share2 className="h-4 w-4" />
                           </Button>
@@ -369,11 +429,15 @@ export default function Wall() {
                     <div>
                       <h3 className="font-semibold">No posts yet</h3>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {activeTab === 'for-you'
+                        {activeTab === 'saved'
                           ? user
-                            ? 'Follow tags to personalize your feed.'
-                            : 'Sign in to follow tags and personalize your feed.'
-                          : 'Be the first to share your blend with the community!'}
+                            ? 'No saved posts yet.'
+                            : 'Sign in to view your saved posts.'
+                          : activeTab === 'for-you'
+                            ? user
+                              ? 'Follow tags to personalize your feed.'
+                              : 'Sign in to follow tags and personalize your feed.'
+                            : 'Be the first to share your blend with the community!'}
                       </p>
                     </div>
                     <div className="flex gap-2">

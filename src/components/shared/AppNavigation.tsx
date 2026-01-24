@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Beaker, FlaskConical, Dumbbell, Users } from 'lucide-react';
+import { Beaker, FlaskConical, Dumbbell, Users, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AppNavigationProps {
@@ -16,6 +16,7 @@ export function AppNavigation({ variant = 'header' }: AppNavigationProps) {
     { path: '/blend', label: 'Blend', icon: FlaskConical },
     { path: '/protein', label: 'Protein', icon: Dumbbell },
     { path: '/wall', label: 'Wall', icon: Users },
+    { path: '/tags', label: 'Tags', icon: Tag },
   ];
 
   if (variant === 'floating') {
