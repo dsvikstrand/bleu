@@ -14,6 +14,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      post_bookmarks: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_bookmarks_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "wall_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_likes: {
         Row: {
           created_at: string
@@ -84,6 +113,7 @@ export type Database = {
           recipe_type: Database["public"]["Enums"]["recipe_type"]
           updated_at: string
           user_id: string
+          visibility: Database["public"]["Enums"]["recipe_visibility"]
         }
         Insert: {
           analysis?: Json | null
@@ -95,6 +125,7 @@ export type Database = {
           recipe_type: Database["public"]["Enums"]["recipe_type"]
           updated_at?: string
           user_id: string
+          visibility?: Database["public"]["Enums"]["recipe_visibility"]
         }
         Update: {
           analysis?: Json | null
@@ -106,6 +137,7 @@ export type Database = {
           recipe_type?: Database["public"]["Enums"]["recipe_type"]
           updated_at?: string
           user_id?: string
+          visibility?: Database["public"]["Enums"]["recipe_visibility"]
         }
         Relationships: []
       }
@@ -181,6 +213,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "moderator" | "user"
       recipe_type: "blend" | "protein" | "stack"
+      recipe_visibility: "private" | "unlisted" | "public"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -310,6 +343,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "moderator", "user"],
       recipe_type: ["blend", "protein", "stack"],
+      recipe_visibility: ["private", "unlisted", "public"],
     },
   },
 } as const
