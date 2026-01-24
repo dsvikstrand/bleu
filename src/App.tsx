@@ -13,6 +13,12 @@ import MyRecipes from "./pages/MyRecipes";
 import Profile from "./pages/Profile";
 import Tags from "./pages/Tags";
 import PostDetail from "./pages/PostDetail";
+import Inventory from "./pages/Inventory";
+import InventoryCreate from "./pages/InventoryCreate";
+import InventoryDetail from "./pages/InventoryDetail";
+import InventoryBuild from "./pages/InventoryBuild";
+import BlueprintDetail from "./pages/BlueprintDetail";
+import BlueprintRemix from "./pages/BlueprintRemix";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "@/components/shared/RequireAuth";
 
@@ -32,6 +38,12 @@ const App = () => (
             <Route path="/wall" element={<RequireAuth><Wall /></RequireAuth>} />
             <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/inventory" element={<RequireAuth><Inventory /></RequireAuth>} />
+            <Route path="/inventory/create" element={<RequireAuth><InventoryCreate /></RequireAuth>} />
+            <Route path="/inventory/:inventoryId" element={<RequireAuth><InventoryDetail /></RequireAuth>} />
+            <Route path="/inventory/:inventoryId/build" element={<RequireAuth><InventoryBuild /></RequireAuth>} />
+            <Route path="/blueprint/:blueprintId" element={<RequireAuth><BlueprintDetail /></RequireAuth>} />
+            <Route path="/blueprint/:blueprintId/remix" element={<RequireAuth><BlueprintRemix /></RequireAuth>} />
             <Route path="/my-recipes" element={<RequireAuth><MyRecipes /></RequireAuth>} />
             <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
             <Route path="/tags" element={<RequireAuth><Tags /></RequireAuth>} />

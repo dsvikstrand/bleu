@@ -1,0 +1,138 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const BLUEPRINT_SYSTEM_PROMPT = `You are a helpful analyst for user-created blueprints (routines, habits, workflows, protocols).
+
+Your job:
+1) Summarize what this blueprint accomplishes
+2) Highlight strengths and gaps
+3) Suggest optimizations or missing pieces
+4) Provide a short, actionable review
+
+Guidelines:
+- Keep it concise and clear
+- Use bullets where helpful
+- Avoid medical claims; be cautious
+
+Response format (use these exact headings):
+
+### Overview
+[2-3 sentence overview]
+
+### Strengths
+- [Strength 1]
+- [Strength 2]
+
+### Gaps / Risks
+- [Gap 1]
+- [Gap 2]
+
+### Suggestions
+- [Suggestion 1]
+- [Suggestion 2]
+
+### Quick Verdict
+[One sentence takeaway]
+
+---
+*This review is informational only.*
+`;
+
+function formatSelectedItems(selectedItems: Record<string, string[]>) {
+  const lines: string[] = [];
+  for (const [category, items] of Object.entries(selectedItems || {})) {
+    if (!Array.isArray(items) || items.length === 0) continue;
+    lines.push(`## ${category}`);
+    lines.push(...items.map((item) => `- ${item}`));
+    lines.push('');
+  }
+  return lines.join('\n').trim();
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { title, inventoryTitle, selectedItems, mixNotes, reviewPrompt } = await req.json();
+
+    if (!selectedItems || typeof selectedItems !== 'object') {
+      return new Response(
+        JSON.stringify({ error: "Selected items are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
+    }
+
+    const itemsBlock = formatSelectedItems(selectedItems);
+    const focus = reviewPrompt?.trim() || 'general effectiveness';
+
+    const userPrompt = `Review this blueprint and focus on: ${focus}
+
+Blueprint title: ${title || 'Untitled'}
+Inventory: ${inventoryTitle || 'N/A'}
+
+Selected items:
+${itemsBlock || '- No items listed'}
+
+Mix notes:
+${mixNotes?.trim() || 'None'}
+`;
+
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          { role: "system", content: BLUEPRINT_SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+        stream: true,
+      }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        return new Response(
+          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (response.status === 402) {
+        return new Response(
+          JSON.stringify({ error: "AI credits exhausted. Please add funds to continue." }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const errorText = await response.text();
+      console.error("AI gateway error:", response.status, errorText);
+      return new Response(
+        JSON.stringify({ error: "Failed to analyze blueprint. Please try again." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    return new Response(response.body, {
+      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    });
+  } catch (error) {
+    console.error("analyze-blueprint error:", error);
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});

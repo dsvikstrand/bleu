@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader } from '@/components/shared/AppHeader';
@@ -10,84 +11,61 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, MessageCircle, Share2, FlaskConical, Dumbbell, Beaker, Bookmark } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Heart, MessageCircle, Share2, Layers } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useBookmarks } from '@/hooks/useBookmarks';
+import type { Json } from '@/integrations/supabase/types';
 
-interface WallPost {
+interface BlueprintPost {
   id: string;
-  user_id: string;
-  recipe_id: string;
-  caption: string | null;
+  creator_user_id: string;
+  title: string;
+  selected_items: Json;
+  llm_review: string | null;
   likes_count: number;
   created_at: string;
-  recipe: {
-    id: string;
-    name: string;
-    recipe_type: 'blend' | 'protein' | 'stack';
-    items: unknown[];
-    analysis: unknown | null;
-    visibility: 'private' | 'unlisted' | 'public';
-  };
   profile: {
     display_name: string | null;
     avatar_url: string | null;
   };
   tags: { id: string; slug: string }[];
   user_liked: boolean;
-  user_bookmarked: boolean;
 }
-
-const RECIPE_ICONS = {
-  blend: FlaskConical,
-  protein: Dumbbell,
-  stack: Beaker,
-};
-
-const RECIPE_COLORS = {
-  blend: 'bg-purple-500/10 text-purple-500',
-  protein: 'bg-green-500/10 text-green-500',
-  stack: 'bg-blue-500/10 text-blue-500',
-};
 
 const FEED_TABS = [
   { value: 'for-you', label: 'For You' },
   { value: 'latest', label: 'Latest' },
   { value: 'trending', label: 'Trending' },
-  { value: 'saved', label: 'Saved' },
 ] as const;
 
 type FeedTab = (typeof FEED_TABS)[number]['value'];
+
+function countSelectedItems(selected: Json) {
+  if (!selected || typeof selected !== 'object' || Array.isArray(selected)) return 0;
+  return Object.values(selected as Record<string, string[]>).reduce(
+    (sum, items) => sum + (Array.isArray(items) ? items.length : 0),
+    0
+  );
+}
 
 export default function Wall() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<FeedTab>('for-you');
-  const { bookmarks, isLoading: bookmarksLoading, toggleBookmark, isUpdating: isBookmarking } = useBookmarks();
 
-  const bookmarkIds = useMemo(() => bookmarks.map((bookmark) => bookmark.post_id), [bookmarks]);
-  const bookmarkSet = useMemo(() => new Set(bookmarkIds), [bookmarkIds]);
-  const bookmarkOrder = useMemo(
-    () => new Map(bookmarks.map((bookmark) => [bookmark.post_id, new Date(bookmark.created_at).getTime()])),
-    [bookmarks]
-  );
-
-  const wallQueryKey = ['wall-posts', activeTab, user?.id, bookmarkIds] as const;
+  const wallQueryKey = ['wall-blueprints', activeTab, user?.id] as const;
 
   const { data: posts, isLoading } = useQuery({
     queryKey: wallQueryKey,
-    enabled: activeTab !== 'saved' || (!!user && !bookmarksLoading),
+    enabled: !!user,
     queryFn: async () => {
-      if (!user) return [] as WallPost[];
-      if (activeTab === 'saved') {
-        if (bookmarkIds.length === 0) return [] as WallPost[];
-      }
+      if (!user) return [] as BlueprintPost[];
+
       const limit = activeTab === 'for-you' ? 120 : 80;
       let query = supabase
-        .from('wall_posts')
-        .select('id, user_id, recipe_id, caption, likes_count, created_at')
+        .from('blueprints')
+        .select('id, creator_user_id, title, selected_items, llm_review, likes_count, created_at')
+        .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(limit);
 
@@ -100,91 +78,55 @@ export default function Wall() {
           .order('created_at', { ascending: false });
       }
 
-      if (activeTab === 'saved') {
-        query = query.in('id', bookmarkIds);
-      }
+      const { data: blueprints, error } = await query;
+      if (error) throw error;
+      if (!blueprints || blueprints.length === 0) return [] as BlueprintPost[];
 
-      const { data: postsData, error: postsError } = await query;
+      const blueprintIds = blueprints.map((row) => row.id);
+      const userIds = [...new Set(blueprints.map((row) => row.creator_user_id))];
 
-      if (postsError) throw postsError;
-      if (!postsData || postsData.length === 0) return [] as WallPost[];
-
-      const recipeIds = postsData.map((p) => p.recipe_id);
-      const userIds = [...new Set(postsData.map((p) => p.user_id))];
-      const postIds = postsData.map((p) => p.id);
-
-      const [recipesRes, profilesRes, likesRes, recipeTagsRes] = await Promise.all([
-        supabase
-          .from('user_recipes')
-          .select('id, name, recipe_type, items, analysis, visibility')
-          .in('id', recipeIds),
+      const [tagsRes, likesRes, profilesRes] = await Promise.all([
+        supabase.from('blueprint_tags').select('blueprint_id, tag_id').in('blueprint_id', blueprintIds),
+        supabase.from('blueprint_likes').select('blueprint_id').eq('user_id', user.id).in('blueprint_id', blueprintIds),
         supabase.from('profiles').select('user_id, display_name, avatar_url').in('user_id', userIds),
-        user
-          ? supabase.from('post_likes').select('post_id').eq('user_id', user.id).in('post_id', postIds)
-          : Promise.resolve({ data: [] }),
-        supabase.from('recipe_tags').select('recipe_id, tag_id').in('recipe_id', recipeIds),
       ]);
 
-      const recipeTags = recipeTagsRes.data || [];
-      const tagIds = [...new Set(recipeTags.map((row) => row.tag_id))];
-      const { data: tagsRes } = tagIds.length > 0
+      const tagRows = tagsRes.data || [];
+      const tagIds = [...new Set(tagRows.map((row) => row.tag_id))];
+      const { data: tagsData } = tagIds.length > 0
         ? await supabase.from('tags').select('id, slug').in('id', tagIds)
         : { data: [] as { id: string; slug: string }[] };
 
-      const recipesMap = new Map((recipesRes.data || []).map((r) => [r.id, r]));
-      const profilesMap = new Map((profilesRes.data || []).map((p) => [p.user_id, p]));
-      const likedPostIds = new Set((likesRes.data || []).map((l) => l.post_id));
-      const tagsMap = new Map((tagsRes || []).map((t) => [t.id, t]));
+      const tagsMap = new Map((tagsData || []).map((tag) => [tag.id, tag]));
+      const blueprintTags = new Map<string, { id: string; slug: string }[]>();
 
-      const recipeTagsMap = new Map<string, { id: string; slug: string }[]>();
-      recipeTags.forEach((row) => {
+      tagRows.forEach((row) => {
         const tag = tagsMap.get(row.tag_id);
         if (!tag) return;
-        const list = recipeTagsMap.get(row.recipe_id) || [];
+        const list = blueprintTags.get(row.blueprint_id) || [];
         list.push(tag);
-        recipeTagsMap.set(row.recipe_id, list);
+        blueprintTags.set(row.blueprint_id, list);
       });
 
-      let followTagIds = new Set<string>();
+      const likedIds = new Set((likesRes.data || []).map((row) => row.blueprint_id));
+      const profilesMap = new Map((profilesRes.data || []).map((profile) => [profile.user_id, profile]));
 
-      if (activeTab === 'for-you' && user) {
+      let followTagIds = new Set<string>();
+      if (activeTab === 'for-you') {
         const followsRes = await supabase.from('tag_follows').select('tag_id').eq('user_id', user.id);
         followTagIds = new Set((followsRes.data || []).map((row) => row.tag_id));
       }
 
-      const hydrated = postsData.map((post) => ({
-        ...post,
-        recipe:
-          recipesMap.get(post.recipe_id) ||
-          ({
-            id: '',
-            name: 'Unknown',
-            recipe_type: 'blend',
-            items: [],
-            analysis: null,
-            visibility: 'public',
-          } as WallPost['recipe']),
-        profile: profilesMap.get(post.user_id) || { display_name: null, avatar_url: null },
-        tags: recipeTagsMap.get(post.recipe_id) || [],
-        user_liked: likedPostIds.has(post.id),
-        user_bookmarked: bookmarkSet.has(post.id),
-      })) as WallPost[];
+      const hydrated = blueprints.map((blueprint) => ({
+        ...blueprint,
+        profile: profilesMap.get(blueprint.creator_user_id) || { display_name: null, avatar_url: null },
+        tags: blueprintTags.get(blueprint.id) || [],
+        user_liked: likedIds.has(blueprint.id),
+      })) as BlueprintPost[];
 
       if (activeTab === 'for-you') {
-        if (!user || followTagIds.size === 0) return [] as WallPost[];
-
-        return hydrated.filter((post) => {
-          const postTagIds = (recipeTagsMap.get(post.recipe_id) || []).map((tag) => tag.id);
-          return postTagIds.some((tagId) => followTagIds.has(tagId));
-        });
-      }
-
-      if (activeTab === 'saved') {
-        return hydrated.sort((a, b) => {
-          const aTime = bookmarkOrder.get(a.id) ?? 0;
-          const bTime = bookmarkOrder.get(b.id) ?? 0;
-          return bTime - aTime;
-        });
+        if (followTagIds.size === 0) return [] as BlueprintPost[];
+        return hydrated.filter((post) => post.tags.some((tag) => followTagIds.has(tag.id)));
       }
 
       return hydrated;
@@ -192,22 +134,22 @@ export default function Wall() {
   });
 
   const likeMutation = useMutation({
-    mutationFn: async ({ postId, liked }: { postId: string; liked: boolean }) => {
+    mutationFn: async ({ blueprintId, liked }: { blueprintId: string; liked: boolean }) => {
       if (!user) throw new Error('Must be logged in');
 
       if (liked) {
-        await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', user.id);
+        await supabase.from('blueprint_likes').delete().eq('blueprint_id', blueprintId).eq('user_id', user.id);
       } else {
-        await supabase.from('post_likes').insert({ post_id: postId, user_id: user.id });
+        await supabase.from('blueprint_likes').insert({ blueprint_id: blueprintId, user_id: user.id });
       }
     },
-    onMutate: async ({ postId, liked }) => {
+    onMutate: async ({ blueprintId, liked }) => {
       await queryClient.cancelQueries({ queryKey: wallQueryKey });
       const previousPosts = queryClient.getQueryData(wallQueryKey);
 
-      queryClient.setQueryData(wallQueryKey, (old: WallPost[] | undefined) =>
+      queryClient.setQueryData(wallQueryKey, (old: BlueprintPost[] | undefined) =>
         old?.map((post) =>
-          post.id === postId
+          post.id === blueprintId
             ? {
                 ...post,
                 user_liked: !liked,
@@ -219,7 +161,7 @@ export default function Wall() {
 
       return { previousPosts };
     },
-    onError: (err, variables, context) => {
+    onError: (_err, _variables, context) => {
       queryClient.setQueryData(wallQueryKey, context?.previousPosts);
       toast({
         title: 'Error',
@@ -229,34 +171,15 @@ export default function Wall() {
     },
   });
 
-  const handleLike = (postId: string, currentlyLiked: boolean) => {
+  const handleLike = (blueprintId: string, currentlyLiked: boolean) => {
     if (!user) {
       toast({
         title: 'Sign in required',
-        description: 'Please sign in to like posts.',
+        description: 'Please sign in to like blueprints.',
       });
       return;
     }
-    likeMutation.mutate({ postId, liked: currentlyLiked });
-  };
-
-  const handleBookmark = async (postId: string, bookmarked: boolean) => {
-    if (!user) {
-      toast({
-        title: 'Sign in required',
-        description: 'Please sign in to save posts.',
-      });
-      return;
-    }
-    try {
-      await toggleBookmark({ postId, bookmarked });
-    } catch (error) {
-      toast({
-        title: 'Failed to update bookmark',
-        description: error instanceof Error ? error.message : 'Please try again',
-        variant: 'destructive',
-      });
-    }
+    likeMutation.mutate({ blueprintId, liked: currentlyLiked });
   };
 
   if (authLoading) {
@@ -270,8 +193,6 @@ export default function Wall() {
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
-
-  const showLoading = isLoading || (activeTab === 'saved' && bookmarksLoading);
 
   return (
     <div className="min-h-screen bg-background">
@@ -293,7 +214,7 @@ export default function Wall() {
           </TabsList>
 
           <TabsContent value={activeTab} className="mt-0">
-            {showLoading ? (
+            {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <Card key={i}>
                   <CardHeader className="flex flex-row items-center gap-3">
@@ -311,11 +232,10 @@ export default function Wall() {
             ) : posts && posts.length > 0 ? (
               <div className="space-y-4">
                 {posts.map((post) => {
-                  const Icon = RECIPE_ICONS[post.recipe.recipe_type];
-                  const colorClass = RECIPE_COLORS[post.recipe.recipe_type];
                   const displayName = post.profile.display_name || 'Anonymous';
                   const initials = displayName.slice(0, 2).toUpperCase();
-                  const itemCount = Array.isArray(post.recipe.items) ? post.recipe.items.length : 0;
+                  const itemCount = countSelectedItems(post.selected_items);
+                  const preview = post.llm_review ? post.llm_review.slice(0, 160) : '';
 
                   return (
                     <Card key={post.id} className="overflow-hidden">
@@ -332,20 +252,22 @@ export default function Wall() {
                             {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
                           </p>
                         </div>
-                        <Badge variant="secondary" className={colorClass}>
-                          <Icon className="h-3 w-3 mr-1" />
-                          {post.recipe.recipe_type}
+                        <Badge variant="secondary" className="bg-blue-500/10 text-blue-500">
+                          <Layers className="h-3 w-3 mr-1" />
+                          Blueprint
                         </Badge>
                       </CardHeader>
 
                       <CardContent className="pt-0 space-y-3">
                         <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-                          <h3 className="font-semibold">{post.recipe.name}</h3>
+                          <h3 className="font-semibold">{post.title}</h3>
                           <p className="text-sm text-muted-foreground">
-                            {itemCount} ingredient{itemCount !== 1 ? 's' : ''}
+                            {itemCount} item{itemCount !== 1 ? 's' : ''}
                           </p>
-                          {post.caption && (
-                            <p className="text-sm pt-2 border-t border-border/50">{post.caption}</p>
+                          {preview && (
+                            <p className="text-sm pt-2 border-t border-border/50 text-muted-foreground">
+                              {preview}...
+                            </p>
                           )}
                         </div>
                         {post.tags.length > 0 && (
@@ -372,22 +294,12 @@ export default function Wall() {
                             <Heart className={`h-4 w-4 mr-1 ${post.user_liked ? 'fill-current' : ''}`} />
                             {post.likes_count}
                           </Button>
-                          <Link to={`/wall/${post.id}`}>
+                          <Link to={`/blueprint/${post.id}`}>
                             <Button variant="ghost" size="sm">
                               <MessageCircle className="h-4 w-4 mr-1" />
                               View
                             </Button>
                           </Link>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={post.user_bookmarked ? 'text-primary' : ''}
-                            onClick={() => handleBookmark(post.id, post.user_bookmarked)}
-                            disabled={isBookmarking}
-                          >
-                            <Bookmark className={`h-4 w-4 mr-1 ${post.user_bookmarked ? 'fill-current' : ''}`} />
-                            Save
-                          </Button>
                           <Button variant="ghost" size="sm" disabled>
                             <Share2 className="h-4 w-4" />
                           </Button>
@@ -402,21 +314,19 @@ export default function Wall() {
                 <CardContent>
                   <div className="flex flex-col items-center gap-4">
                     <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-                      <Beaker className="h-8 w-8 text-muted-foreground" />
+                      <Layers className="h-8 w-8 text-muted-foreground" />
                     </div>
                     <div>
-                      <h3 className="font-semibold">No posts yet</h3>
+                      <h3 className="font-semibold">No blueprints yet</h3>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {activeTab === 'saved'
-                          ? 'No saved posts yet.'
-                          : activeTab === 'for-you'
-                            ? 'Follow tags to personalize your feed.'
-                            : 'Be the first to share your blend with the community!'}
+                        {activeTab === 'for-you'
+                          ? 'Follow tags to personalize your feed.'
+                          : 'Be the first to share a blueprint.'}
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <Link to="/blend">
-                        <Button>Create a Blend</Button>
+                      <Link to="/inventory">
+                        <Button>Create Blueprint</Button>
                       </Link>
                       <Link to="/tags">
                         <Button variant="outline">Explore Tags</Button>
@@ -429,7 +339,6 @@ export default function Wall() {
           </TabsContent>
         </Tabs>
       </main>
-
     </div>
   );
 }
