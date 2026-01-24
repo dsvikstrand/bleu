@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTagsDirectory } from '@/hooks/useTags';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeTag } from '@/lib/tagging';
+import { AppNavigation } from '@/components/shared/AppNavigation';
 
 export default function Tags() {
   const { user } = useAuth();
@@ -65,6 +67,18 @@ export default function Tags() {
       </div>
 
       <main className="max-w-3xl mx-auto px-4 py-8">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-2">
+            <Link to="/wall">
+              <Button variant="outline" size="sm">Back to Wall</Button>
+            </Link>
+            <Link to="/blend">
+              <Button variant="ghost" size="sm">Go to Blend</Button>
+            </Link>
+          </div>
+          <AppNavigation />
+        </div>
+
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Tag Directory</CardTitle>
