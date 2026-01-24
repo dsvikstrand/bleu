@@ -3,16 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { AppNavigation } from '@/components/shared/AppNavigation';
-import { UserMenu } from '@/components/shared/UserMenu';
-import { ThemeToggle } from '@/components/blend/ThemeToggle';
+import { AppHeader } from '@/components/shared/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, MessageCircle, Share2, FlaskConical, Dumbbell, Beaker, Tag, Bookmark } from 'lucide-react';
+import { Heart, MessageCircle, Share2, FlaskConical, Dumbbell, Beaker, Bookmark } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { CommentsThread } from '@/components/wall/CommentsThread';
@@ -280,27 +278,7 @@ export default function Wall() {
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
       </div>
 
-      <header className="sticky top-0 z-30 backdrop-blur-glass border-b border-border/50 bg-background/80">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2">
-              <Beaker className="h-6 w-6 text-primary" />
-              <span className="font-semibold">Wall</span>
-            </Link>
-            <Link to="/tags" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <Tag className="h-4 w-4" /> Tags
-            </Link>
-          </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <UserMenu />
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-3xl mx-auto px-4 py-4">
-        <AppNavigation />
-      </div>
+      <AppHeader />
 
       <main className="max-w-3xl mx-auto px-4 pb-24">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FeedTab)}>
@@ -458,7 +436,6 @@ export default function Wall() {
         </Tabs>
       </main>
 
-      <AppNavigation variant="floating" />
     </div>
   );
 }

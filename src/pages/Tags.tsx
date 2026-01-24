@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useTagsDirectory } from '@/hooks/useTags';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeTag } from '@/lib/tagging';
-import { AppNavigation } from '@/components/shared/AppNavigation';
+import { AppHeader } from '@/components/shared/AppHeader';
 
 export default function Tags() {
   const { user } = useAuth();
@@ -74,18 +74,9 @@ export default function Tags() {
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
       </div>
 
+      <AppHeader />
+
       <main className="max-w-3xl mx-auto px-4 py-8">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div className="flex items-center gap-2">
-            <Link to="/wall">
-              <Button variant="outline" size="sm">Back to Wall</Button>
-            </Link>
-            <Link to="/blend">
-              <Button variant="ghost" size="sm">Go to Blend</Button>
-            </Link>
-          </div>
-          <AppNavigation />
-        </div>
 
         <Card className="mb-6">
           <CardHeader>

@@ -4,10 +4,9 @@ import { GoalsPicker } from '@/components/GoalsPicker';
 import { PlanSettings } from '@/components/PlanSettings';
 import { SafetyCard } from '@/components/SafetyCard';
 import { ChatPanel } from '@/components/ChatPanel';
-import { AppNavigation } from '@/components/shared/AppNavigation';
-import { UserMenu } from '@/components/shared/UserMenu';
+import { AppHeader } from '@/components/shared/AppHeader';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, Beaker } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 
 const Index = () => {
   const {
@@ -33,39 +32,14 @@ const Index = () => {
         <div className="absolute -bottom-40 left-1/3 w-[500px] h-[500px] bg-secondary/10 rounded-full blur-3xl animate-pulse-soft" />
       </div>
 
-      {/* Header */}
-      <header className="border-b border-border/50 bg-card/40 backdrop-blur-glass sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-glow-aqua animate-pulse-soft">
-                <Beaker className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-xl font-semibold text-foreground tracking-tight">StackLab</h1>
-                <p className="text-xs text-muted-foreground">Supplement Stack Builder</p>
-              </div>
-            </div>
-
-            {/* Navigation */}
-            <div className="hidden sm:block ml-4">
-              <AppNavigation variant="header" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={resetAll} className="text-muted-foreground">
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Reset All
-            </Button>
-            <UserMenu />
-          </div>
-        </div>
-      </header>
-
-      {/* Mobile Navigation */}
-      <div className="sm:hidden">
-        <AppNavigation variant="floating" />
-      </div>
+      <AppHeader
+        actions={(
+          <Button variant="ghost" size="sm" onClick={resetAll} className="text-muted-foreground">
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset All
+          </Button>
+        )}
+      />
 
       {/* Main Layout */}
       <main className="container mx-auto px-4 py-6">

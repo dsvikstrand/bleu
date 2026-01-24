@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { AppHeader } from '@/components/shared/AppHeader';
 
 export default function Profile() {
   const { user, profile, isLoading, updateProfile } = useAuth();
@@ -67,6 +68,8 @@ export default function Profile() {
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
       </div>
+
+      <AppHeader />
 
       <main className="max-w-2xl mx-auto px-4 py-10">
         <Card>
