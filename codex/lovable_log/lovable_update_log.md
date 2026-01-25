@@ -1,4 +1,4 @@
-# Lovable Update Log
+﻿# Lovable Update Log
 
 Date: 2026-01-24
 
@@ -10,12 +10,30 @@ This file summarizes the current direction, recent updates, and required Lovable
 ## Product Direction (Blueprints + Inventories)
 - The app is a community library of **Blueprints** (published routines/workflows) created from **Inventories** (templates).
 - Discovery happens via tags. Users follow tags; the Wall shows blueprints with those tags.
-- Flow: Inventory search ? Build Blueprint ? Publish ? Explore ? Remix.
+- Flow: Inventory search → Build Blueprint → Publish → Explore → Remix.
+ - We are now community-focused: the goal is a large pool of shareable blueprints where users can find, use, review, comment, like, and follow topics of interest (Reddit-style, but for blueprints).
 
 Working identity lines (keep all three for now):
 - "Blueprints is a community library of routines, protocols, and workflows you can remix."
 - "Follow tags, discover blueprints, and publish what works."
-- "A community of shareable blueprints�recipes for results."
+- "A community of shareable blueprints—recipes for results."
+
+---
+
+## Naming Convention Update (From Previous Version)
+Previous naming used “recipe/stack/post” language. We are now standardizing on:
+- **Inventory** = the reusable template (what Blend/Protein used to represent).
+  - It defines the available items/tools and the “mix” flow.
+  - Users create or remix inventories.
+- **Blueprint** = the published result of a build (what posts used to represent).
+  - It is read-only and includes the LLM review + comments/likes.
+  - Wall now shows Blueprints only.
+- **Build** = the in‑progress version while a user is selecting items and mixing.
+- **Remix** = creating a new Blueprint (or Inventory) from an existing one, with a source link.
+
+Direction summary:
+- Inventories power creation.
+- Blueprints power sharing and discovery.
 
 ---
 
