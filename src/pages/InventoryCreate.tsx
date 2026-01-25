@@ -196,7 +196,7 @@ export default function InventoryCreate() {
       });
 
       addRecentTags(tags);
-      navigate(`/inventory/${inventory.id}`);
+      navigate(`/inventory/${inventory.id}/build`);
     } catch (error) {
       toast({
         title: 'Creation failed',
