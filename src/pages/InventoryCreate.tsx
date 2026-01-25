@@ -13,19 +13,15 @@ import { useCreateInventory } from '@/hooks/useInventories';
 import { useToast } from '@/hooks/use-toast';
 import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
+import { Loader2, Sparkles, Wand2 } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
-function buildSchema(promptInventory: string, promptCategories: string): Json {
-  const categories = promptCategories
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .map((name) => ({ name, items: [] as string[] }));
+const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-inventory`;
 
-  return {
-    summary: promptInventory.trim(),
-    categories,
-  };
+interface GeneratedSchema {
+  summary: string;
+  categories: Array<{ name: string; items: string[] }>;
+  suggestedTags?: string[];
 }
 
 export default function InventoryCreate() {
@@ -35,18 +31,84 @@ export default function InventoryCreate() {
   const { data: tagSuggestions } = useTagSuggestions();
   const { recentTags, addRecentTags } = useRecentTags();
 
+  // Step 1: Keywords input
+  const [keywords, setKeywords] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Step 2: Generated/edited inventory
   const [title, setTitle] = useState('');
   const [promptInventory, setPromptInventory] = useState('');
-  const [promptCategories, setPromptCategories] = useState('');
+  const [generatedSchema, setGeneratedSchema] = useState<GeneratedSchema | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(true);
 
-  const previewCategories = useMemo(() => {
-    return promptCategories
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-  }, [promptCategories]);
+  const categoryNames = useMemo(() => {
+    if (!generatedSchema) return [];
+    return generatedSchema.categories.map((c) => c.name);
+  }, [generatedSchema]);
+
+  const handleGenerate = async () => {
+    if (!keywords.trim()) {
+      toast({
+        title: 'Keywords required',
+        description: 'Enter what kind of inventory you want to create.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      const response = await fetch(GENERATE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          keywords: keywords.trim(),
+          title: title.trim() || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to generate inventory');
+      }
+
+      const schema: GeneratedSchema = await response.json();
+
+      setGeneratedSchema(schema);
+      setPromptInventory(schema.summary || '');
+
+      // Auto-fill title if empty
+      if (!title.trim()) {
+        const autoTitle = keywords.trim().split(' ').slice(0, 3).map(
+          (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ') + ' Inventory';
+        setTitle(autoTitle);
+      }
+
+      // Use suggested tags if available
+      if (schema.suggestedTags && schema.suggestedTags.length > 0) {
+        setTags(schema.suggestedTags.slice(0, 4));
+      }
+
+      toast({
+        title: 'Inventory generated!',
+        description: `Created ${schema.categories.length} categories with ${schema.categories.reduce((sum, c) => sum + c.items.length, 0)} items.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Generation failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!title.trim()) {
@@ -58,10 +120,10 @@ export default function InventoryCreate() {
       return;
     }
 
-    if (!promptInventory.trim() || !promptCategories.trim()) {
+    if (!generatedSchema) {
       toast({
-        title: 'Prompts required',
-        description: 'Fill out the inventory prompts before continuing.',
+        title: 'Generate inventory first',
+        description: 'Use the generate button to create your inventory.',
         variant: 'destructive',
       });
       return;
@@ -77,12 +139,12 @@ export default function InventoryCreate() {
     }
 
     try {
-      const schema = buildSchema(promptInventory, promptCategories);
+      const promptCategories = categoryNames.join(', ');
       const inventory = await createInventory.mutateAsync({
         title: title.trim(),
         promptInventory: promptInventory.trim(),
-        promptCategories: promptCategories.trim(),
-        generatedSchema: schema,
+        promptCategories,
+        generatedSchema: generatedSchema as unknown as Json,
         tags,
         isPublic,
       });
@@ -99,115 +161,207 @@ export default function InventoryCreate() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Ambient background blobs */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
+        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-primary/8 rounded-full blur-3xl animate-drift" />
+        <div className="absolute top-1/2 -left-32 w-96 h-96 bg-accent/15 rounded-full blur-3xl animate-float" />
+        <div className="absolute -bottom-20 right-1/4 w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-pulse-soft" />
+      </div>
+
       <AppHeader />
 
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-        <section className="space-y-2">
-          <h1 className="text-3xl font-semibold">Create Inventory</h1>
-          <p className="text-muted-foreground">
-            Inventories are the reusable base for blueprints.
+        {/* Hero Header */}
+        <div className="text-center mb-12 pt-8 animate-fade-in">
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight mb-4 relative inline-block">
+            <span
+              className="relative inline-block"
+              style={{
+                fontFamily: "'Impact', 'Haettenschweiler', 'Franklin Gothic Bold', 'Charcoal', 'Helvetica Inserat', sans-serif",
+                letterSpacing: '0.06em',
+              }}
+            >
+              <span
+                className="absolute inset-0 text-border/40"
+                style={{ transform: 'translate(4px, 4px)' }}
+                aria-hidden="true"
+              >
+                CREATE INVENTORY
+              </span>
+              <span
+                className="absolute inset-0 text-border/60"
+                style={{ transform: 'translate(2px, 2px)' }}
+                aria-hidden="true"
+              >
+                CREATE INVENTORY
+              </span>
+              <span className="text-gradient-themed animate-shimmer bg-[length:200%_auto] relative">
+                CREATE INVENTORY
+              </span>
+            </span>
+            <span className="absolute -inset-4 bg-primary/10 blur-2xl rounded-full animate-pulse-soft -z-10" />
+          </h1>
+          <p className="text-lg text-muted-foreground max-w-md mx-auto">
+            Describe what you want to build, and AI will generate your inventory
           </p>
-        </section>
+        </div>
 
-        <Card>
+        {/* Step 1: Keywords Generation */}
+        <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in">
           <CardHeader>
-            <CardTitle>Inventory details</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Wand2 className="h-5 w-5 text-primary" />
+              What kind of inventory?
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="inventory-title">Title</Label>
-              <Input
-                id="inventory-title"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="Skincare Starter Kit"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="inventory-prompt">What should your inventory contain?</Label>
-              <Textarea
-                id="inventory-prompt"
-                value={promptInventory}
-                onChange={(event) => setPromptInventory(event.target.value)}
-                placeholder="Tools, ingredients, and steps needed for a skincare routine."
-                rows={4}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="inventory-categories">Give a few categories this inventory should contain</Label>
-              <Textarea
-                id="inventory-categories"
-                value={promptCategories}
-                onChange={(event) => setPromptCategories(event.target.value)}
-                placeholder="Cleansers, serums, moisturizers, SPF"
-                rows={3}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Discovery</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {recentTags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {recentTags.map((tag) => (
-                  <Button
-                    key={tag}
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]).slice(0, 4))}
-                  >
-                    #{tag}
-                  </Button>
-                ))}
+              <Label htmlFor="keywords">Describe your inventory in a few words</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="keywords"
+                  value={keywords}
+                  onChange={(e) => setKeywords(e.target.value)}
+                  placeholder="e.g., skincare routine, green smoothie, morning habits..."
+                  className="flex-1"
+                  onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+                />
+                <Button
+                  onClick={handleGenerate}
+                  disabled={isGenerating || !keywords.trim()}
+                  className="gap-2"
+                >
+                  {isGenerating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  {isGenerating ? 'Generating...' : 'Generate'}
+                </Button>
               </div>
-            )}
-            <div className="space-y-2">
-              <Label>Tags (max 4)</Label>
-              <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions || []} />
             </div>
-            <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
-              <div>
-                <p className="font-medium">Public inventory</p>
-                <p className="text-sm text-muted-foreground">Public inventories appear in search.</p>
-              </div>
-              <Switch checked={isPublic} onCheckedChange={setIsPublic} />
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Auto-generated preview</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Categories will be generated from your prompts.
-            </p>
+            {/* Quick suggestions */}
             <div className="flex flex-wrap gap-2">
-              {previewCategories.length > 0 ? (
-                previewCategories.map((category) => (
-                  <Badge key={category} variant="secondary">{category}</Badge>
-                ))
-              ) : (
-                <Badge variant="outline">Add categories to preview</Badge>
-              )}
+              {['skincare routine', 'green smoothie', 'morning routine', 'home workout', 'meditation practice'].map((suggestion) => (
+                <Button
+                  key={suggestion}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setKeywords(suggestion)}
+                  className="text-xs"
+                >
+                  {suggestion}
+                </Button>
+              ))}
             </div>
           </CardContent>
         </Card>
 
-        <Button
-          onClick={handleSubmit}
-          disabled={createInventory.isPending}
-          className="w-full"
-        >
-          Create Inventory
-        </Button>
+        {/* Step 2: Generated Schema Preview & Edit */}
+        {generatedSchema && (
+          <>
+            <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in">
+              <CardHeader>
+                <CardTitle>Inventory Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="inventory-title">Title</Label>
+                  <Input
+                    id="inventory-title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="My Custom Inventory"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inventory-description">Description</Label>
+                  <Textarea
+                    id="inventory-description"
+                    value={promptInventory}
+                    onChange={(e) => setPromptInventory(e.target.value)}
+                    placeholder="What this inventory is for..."
+                    rows={3}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in">
+              <CardHeader>
+                <CardTitle>Generated Categories</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {generatedSchema.categories.map((category, idx) => (
+                  <div key={idx} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold">{category.name}</h4>
+                      <Badge variant="secondary">{category.items.length} items</Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {category.items.map((item, itemIdx) => (
+                        <Badge key={itemIdx} variant="outline" className="text-xs">
+                          {item}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in">
+              <CardHeader>
+                <CardTitle>Discovery</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {recentTags.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {recentTags.map((tag) => (
+                      <Button
+                        key={tag}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]).slice(0, 4))}
+                      >
+                        #{tag}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Tags (max 4)</Label>
+                  <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions || []} />
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
+                  <div>
+                    <p className="font-medium">Public inventory</p>
+                    <p className="text-sm text-muted-foreground">Public inventories appear in search.</p>
+                  </div>
+                  <Switch checked={isPublic} onCheckedChange={setIsPublic} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Button
+              onClick={handleSubmit}
+              disabled={createInventory.isPending}
+              className="w-full gap-2"
+              size="lg"
+            >
+              {createInventory.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              Create Inventory
+            </Button>
+          </>
+        )}
       </main>
     </div>
   );
