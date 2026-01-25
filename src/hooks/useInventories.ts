@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizeTag, normalizeTags } from '@/lib/tagging';
+import { DEFAULT_INVENTORY_SEEDS } from '@/lib/inventoryDefaults';
 import type { Json } from '@/integrations/supabase/types';
 
 export interface InventoryRow {
@@ -39,6 +40,54 @@ interface CreateInventoryInput {
 }
 
 const INVENTORY_FIELDS = 'id, title, prompt_inventory, prompt_categories, generated_schema, creator_user_id, is_public, likes_count, created_at, updated_at';
+
+const seededUsers = new Set<string>();
+
+async function ensureDefaultInventories(userId: string) {
+  if (seededUsers.has(userId)) return;
+  const titles = DEFAULT_INVENTORY_SEEDS.map((seed) => seed.title);
+  const { data: existing, error } = await supabase
+    .from('inventories')
+    .select('id, title')
+    .in('title', titles);
+
+  if (error) throw error;
+  const existingTitles = new Set((existing || []).map((row) => row.title));
+  const missing = DEFAULT_INVENTORY_SEEDS.filter((seed) => !existingTitles.has(seed.title));
+  if (missing.length === 0) {
+    seededUsers.add(userId);
+    return;
+  }
+
+  for (const seed of missing) {
+    const { data: inventory, error: createError } = await supabase
+      .from('inventories')
+      .insert({
+        title: seed.title,
+        prompt_inventory: seed.promptInventory,
+        prompt_categories: seed.promptCategories,
+        generated_schema: seed.generatedSchema,
+        creator_user_id: userId,
+        is_public: true,
+      })
+      .select('id')
+      .single();
+
+    if (createError) throw createError;
+    const tags = await ensureTags(seed.tags, userId);
+    if (tags.length > 0) {
+      const { error: tagError } = await supabase.from('inventory_tags').insert(
+        tags.map((tag) => ({
+          inventory_id: inventory.id,
+          tag_id: tag.id,
+        }))
+      );
+      if (tagError) throw tagError;
+    }
+  }
+
+  seededUsers.add(userId);
+}
 
 async function ensureTags(slugs: string[], userId: string): Promise<InventoryTag[]> {
   const normalized = normalizeTags(slugs);
@@ -113,6 +162,9 @@ export function useInventorySearch(search: string) {
   return useQuery({
     queryKey: ['inventory-search', search, user?.id],
     queryFn: async () => {
+      if (user?.id) {
+        await ensureDefaultInventories(user.id);
+      }
       const trimmed = search.trim();
       let inventories: InventoryRow[] = [];
 
@@ -182,97 +234,4 @@ export function useInventory(inventoryId?: string) {
   return useQuery({
     queryKey: ['inventory', inventoryId, user?.id],
     enabled: !!inventoryId,
-    queryFn: async () => {
-      if (!inventoryId) return null;
-      const { data: inventory, error } = await supabase
-        .from('inventories')
-        .select(INVENTORY_FIELDS)
-        .eq('id', inventoryId)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (!inventory) return null;
-
-      const hydrated = await hydrateInventories([inventory], user?.id);
-      return hydrated[0] || null;
-    },
-  });
-}
-
-export function useCreateInventory() {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (input: CreateInventoryInput) => {
-      if (!user) throw new Error('Must be logged in');
-
-      const { data: inventory, error } = await supabase
-        .from('inventories')
-        .insert({
-          title: input.title,
-          prompt_inventory: input.promptInventory,
-          prompt_categories: input.promptCategories,
-          generated_schema: input.generatedSchema,
-          creator_user_id: user.id,
-          is_public: input.isPublic,
-        })
-        .select(INVENTORY_FIELDS)
-        .single();
-
-      if (error) throw error;
-
-      const tags = await ensureTags(input.tags, user.id);
-      if (tags.length > 0) {
-        const { error: tagError } = await supabase.from('inventory_tags').insert(
-          tags.map((tag) => ({
-            inventory_id: inventory.id,
-            tag_id: tag.id,
-          }))
-        );
-        if (tagError) throw tagError;
-      }
-
-      if (input.sourceInventoryId) {
-        await supabase.from('inventory_remixes').insert({
-          inventory_id: inventory.id,
-          source_inventory_id: input.sourceInventoryId,
-          user_id: user.id,
-        });
-      }
-
-      return inventory as InventoryRow;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inventory-search'] });
-    },
-  });
-}
-
-export function useToggleInventoryLike() {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ inventoryId, liked }: { inventoryId: string; liked: boolean }) => {
-      if (!user) throw new Error('Must be logged in');
-      if (liked) {
-        const { error } = await supabase
-          .from('inventory_likes')
-          .delete()
-          .eq('inventory_id', inventoryId)
-          .eq('user_id', user.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('inventory_likes')
-          .insert({ inventory_id: inventoryId, user_id: user.id });
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inventory-search'] });
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
-    },
-  });
-}
+    
