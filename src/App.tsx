@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import Home from "./pages/Home";
 import Index from "./pages/Index";
 import Blend from "./pages/Blend";
 import Protein from "./pages/Protein";
@@ -32,17 +33,18 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Index />} />
+            <Route path="/" element={<Home />} />
+            <Route path="/stacklab" element={<Index />} />
             <Route path="/blend" element={<Blend />} />
             <Route path="/protein" element={<Protein />} />
-            <Route path="/wall" element={<RequireAuth><Wall /></RequireAuth>} />
+            <Route path="/wall" element={<Wall />} />
             <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/inventory" element={<RequireAuth><Inventory /></RequireAuth>} />
             <Route path="/inventory/create" element={<RequireAuth><InventoryCreate /></RequireAuth>} />
             <Route path="/inventory/:inventoryId" element={<RequireAuth><InventoryDetail /></RequireAuth>} />
             <Route path="/inventory/:inventoryId/build" element={<RequireAuth><InventoryBuild /></RequireAuth>} />
-            <Route path="/blueprint/:blueprintId" element={<RequireAuth><BlueprintDetail /></RequireAuth>} />
+            <Route path="/blueprint/:blueprintId" element={<BlueprintDetail />} />
             <Route path="/blueprint/:blueprintId/remix" element={<RequireAuth><BlueprintRemix /></RequireAuth>} />
             <Route path="/my-recipes" element={<RequireAuth><MyRecipes /></RequireAuth>} />
             <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />

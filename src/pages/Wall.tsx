@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
@@ -57,9 +57,8 @@ export default function Wall() {
 
   const { data: posts, isLoading } = useQuery({
     queryKey: wallQueryKey,
-    enabled: !!user,
     queryFn: async () => {
-      if (!user) return [] as BlueprintPost[];
+      const isForYou = activeTab === 'for-you' && !!user;
 
       const limit = activeTab === 'for-you' ? 120 : 80;
       let query = supabase
@@ -87,7 +86,9 @@ export default function Wall() {
 
       const [tagsRes, likesRes, profilesRes] = await Promise.all([
         supabase.from('blueprint_tags').select('blueprint_id, tag_id').in('blueprint_id', blueprintIds),
-        supabase.from('blueprint_likes').select('blueprint_id').eq('user_id', user.id).in('blueprint_id', blueprintIds),
+        user
+          ? supabase.from('blueprint_likes').select('blueprint_id').eq('user_id', user.id).in('blueprint_id', blueprintIds)
+          : Promise.resolve({ data: [] as { blueprint_id: string }[] }),
         supabase.from('profiles').select('user_id, display_name, avatar_url').in('user_id', userIds),
       ]);
 
@@ -112,7 +113,7 @@ export default function Wall() {
       const profilesMap = new Map((profilesRes.data || []).map((profile) => [profile.user_id, profile]));
 
       let followTagIds = new Set<string>();
-      if (activeTab === 'for-you') {
+      if (isForYou) {
         const followsRes = await supabase.from('tag_follows').select('tag_id').eq('user_id', user.id);
         followTagIds = new Set((followsRes.data || []).map((row) => row.tag_id));
       }
@@ -124,7 +125,7 @@ export default function Wall() {
         user_liked: likedIds.has(blueprint.id),
       })) as BlueprintPost[];
 
-      if (activeTab === 'for-you') {
+      if (isForYou) {
         if (followTagIds.size === 0) return [] as BlueprintPost[];
         return hydrated.filter((post) => post.tags.some((tag) => followTagIds.has(tag.id)));
       }
@@ -188,10 +189,6 @@ export default function Wall() {
         <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
       </div>
     );
-  }
-
-  if (!user) {
-    return <Navigate to="/auth" replace />;
   }
 
   return (

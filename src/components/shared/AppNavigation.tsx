@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Users, Tag, Layers } from 'lucide-react';
+import { Home, Users, Tag, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AppNavigationProps {
@@ -13,8 +13,9 @@ export function AppNavigation({ variant = 'header', mode = 'all' }: AppNavigatio
   const currentPath = location.pathname;
 
   const navItems = [
+    { path: '/', label: 'Home', icon: Home, isPublic: true },
     { path: '/inventory', label: 'Inventory', icon: Layers, isPublic: false },
-    { path: '/wall', label: 'Wall', icon: Users, isPublic: false },
+    { path: '/wall', label: 'Wall', icon: Users, isPublic: true },
     { path: '/tags', label: 'Tags', icon: Tag, isPublic: false },
   ];
 
