@@ -210,6 +210,7 @@ export type Database = {
           generated_schema: Json
           id: string
           is_public: boolean
+          include_score: boolean
           likes_count: number
           prompt_categories: string
           prompt_inventory: string
@@ -223,6 +224,7 @@ export type Database = {
           generated_schema?: Json
           id?: string
           is_public?: boolean
+          include_score?: boolean
           likes_count?: number
           prompt_categories: string
           prompt_inventory: string
@@ -236,6 +238,7 @@ export type Database = {
           generated_schema?: Json
           id?: string
           is_public?: boolean
+          include_score?: boolean
           likes_count?: number
           prompt_categories?: string
           prompt_inventory?: string

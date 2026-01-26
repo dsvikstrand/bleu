@@ -1,5 +1,5 @@
 import { CATEGORY_LABELS, SUPPLEMENT_CATALOG, PROTEIN_CATEGORY_LABELS, PROTEIN_CATALOG } from '@/types/stacklab';
-import { DEFAULT_REVIEW_SECTIONS } from '@/lib/reviewSections';
+import { DEFAULT_ADDITIONAL_SECTIONS } from '@/lib/reviewSections';
 import type { Json } from '@/integrations/supabase/types';
 
 export interface InventorySeed {
@@ -30,7 +30,7 @@ export const DEFAULT_INVENTORY_SEEDS: InventorySeed[] = [
     promptCategories: Object.values(CATEGORY_LABELS).join(', '),
     tags: ['blend', 'supplements', 'stack', 'performance', 'wellness'],
     generatedSchema: buildSchemaFromCatalog(CATEGORY_LABELS, SUPPLEMENT_CATALOG),
-    reviewSections: DEFAULT_REVIEW_SECTIONS,
+    reviewSections: DEFAULT_ADDITIONAL_SECTIONS,
   },
   {
     title: 'Protein Inventory',
@@ -38,6 +38,6 @@ export const DEFAULT_INVENTORY_SEEDS: InventorySeed[] = [
     promptCategories: Object.values(PROTEIN_CATEGORY_LABELS).join(', '),
     tags: ['protein', 'shake', 'amino', 'nutrition', 'recovery'],
     generatedSchema: buildSchemaFromCatalog(PROTEIN_CATEGORY_LABELS, PROTEIN_CATALOG),
-    reviewSections: DEFAULT_REVIEW_SECTIONS,
+    reviewSections: DEFAULT_ADDITIONAL_SECTIONS,
   },
 ];

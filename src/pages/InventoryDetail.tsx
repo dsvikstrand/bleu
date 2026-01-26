@@ -1,13 +1,24 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useInventory, useToggleInventoryLike } from '@/hooks/useInventories';
+import { Switch } from '@/components/ui/switch';
+import { useInventory, useToggleInventoryLike, useUpdateInventory } from '@/hooks/useInventories';
 import { useToast } from '@/hooks/use-toast';
-import { DEFAULT_REVIEW_SECTIONS } from '@/lib/reviewSections';
-import { Heart } from 'lucide-react';
+import {
+  DEFAULT_ADDITIONAL_SECTIONS,
+  MAX_ADDITIONAL_SECTIONS,
+  MAX_REVIEW_SECTIONS,
+  OVERVIEW_SECTION,
+  buildReviewSections,
+  formatReviewSection,
+  normalizeAdditionalSections,
+} from '@/lib/reviewSections';
+import { Heart, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 function getCategories(schema: Json) {
@@ -19,16 +30,35 @@ function getCategories(schema: Json) {
     .filter(Boolean);
 }
 
-function getReviewSections(sections?: string[] | null) {
-  if (Array.isArray(sections) && sections.length > 0) return sections;
-  return DEFAULT_REVIEW_SECTIONS;
-}
-
 export default function InventoryDetail() {
   const { inventoryId } = useParams();
   const { data: inventory, isLoading } = useInventory(inventoryId);
   const toggleLike = useToggleInventoryLike();
+  const updateInventory = useUpdateInventory();
   const { toast } = useToast();
+  const [editableSections, setEditableSections] = useState<string[]>([]);
+  const [sectionInput, setSectionInput] = useState('');
+  const [sectionError, setSectionError] = useState('');
+  const [includeScore, setIncludeScore] = useState(true);
+
+  useEffect(() => {
+    if (!inventory) return;
+    setEditableSections(normalizeAdditionalSections(inventory.review_sections));
+    setIncludeScore(inventory.include_score ?? true);
+    setSectionInput('');
+    setSectionError('');
+  }, [inventory]);
+
+  const availableSections = useMemo(() => {
+    return DEFAULT_ADDITIONAL_SECTIONS.filter(
+      (section) => !editableSections.some((existing) => existing.toLowerCase() === section.toLowerCase())
+    );
+  }, [editableSections]);
+
+  const fullSections = useMemo(
+    () => buildReviewSections(inventory?.review_sections ?? null),
+    [inventory]
+  );
 
   const handleLike = async () => {
     if (!inventory) return;
@@ -37,6 +67,62 @@ export default function InventoryDetail() {
     } catch (error) {
       toast({
         title: 'Action failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleAddSection = (raw: string) => {
+    const formatted = formatReviewSection(raw);
+    if (!formatted) return;
+    if (formatted.toLowerCase() === OVERVIEW_SECTION.toLowerCase()) {
+      setSectionInput('');
+      return;
+    }
+    if (editableSections.some((section) => section.toLowerCase() === formatted.toLowerCase())) {
+      setSectionInput('');
+      setSectionError('');
+      return;
+    }
+    if (editableSections.length >= MAX_ADDITIONAL_SECTIONS) {
+      setSectionError(`You can add up to ${MAX_REVIEW_SECTIONS} sections total.`);
+      return;
+    }
+    setEditableSections((prev) => [...prev, formatted]);
+    setSectionInput('');
+    setSectionError('');
+  };
+
+  const handleRemoveSection = (section: string) => {
+    setEditableSections((prev) => prev.filter((item) => item !== section));
+    setSectionError('');
+  };
+
+  const handleSaveReviewSettings = async () => {
+    if (!inventory) return;
+    if (editableSections.length > MAX_ADDITIONAL_SECTIONS) {
+      toast({
+        title: 'Too many sections',
+        description: `Please use ${MAX_REVIEW_SECTIONS} sections or fewer.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await updateInventory.mutateAsync({
+        inventoryId: inventory.id,
+        reviewSections: editableSections,
+        includeScore,
+      });
+      toast({
+        title: 'Saved',
+        description: 'Review settings updated.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Save failed',
         description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
@@ -95,11 +181,81 @@ export default function InventoryDetail() {
                 </div>
                 <div>
                   <h3 className="font-semibold">Review sections</h3>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {getReviewSections(inventory.review_sections).map((section) => (
-                      <Badge key={section} variant="outline">{section}</Badge>
-                    ))}
-                  </div>
+                  {inventory.is_owner ? (
+                    <div className="mt-3 space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="secondary">{OVERVIEW_SECTION}</Badge>
+                        {editableSections.map((section) => (
+                          <Badge key={section} variant="secondary" className="gap-1">
+                            {section}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-4 w-4"
+                              onClick={() => handleRemoveSection(section)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </Badge>
+                        ))}
+                      </div>
+                      {availableSections.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {availableSections.map((section) => (
+                            <Button
+                              key={section}
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleAddSection(section)}
+                            >
+                              {section}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <Input
+                          value={sectionInput}
+                          onChange={(event) => setSectionInput(event.target.value)}
+                          placeholder="Add custom section"
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              handleAddSection(sectionInput);
+                            }
+                          }}
+                        />
+                        <Button type="button" variant="outline" onClick={() => handleAddSection(sectionInput)}>
+                          Add
+                        </Button>
+                      </div>
+                      {sectionError && (
+                        <p className="text-sm text-destructive">{sectionError}</p>
+                      )}
+                      <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
+                        <div>
+                          <p className="font-medium">Include score</p>
+                          <p className="text-sm text-muted-foreground">Adds a 1–100 score in Overview.</p>
+                        </div>
+                        <Switch checked={includeScore} onCheckedChange={setIncludeScore} />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={handleSaveReviewSettings}
+                        disabled={updateInventory.isPending}
+                      >
+                        Save review settings
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {fullSections.map((section) => (
+                        <Badge key={section} variant="outline">{section}</Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Link to={`/inventory/${inventory.id}/build`}>

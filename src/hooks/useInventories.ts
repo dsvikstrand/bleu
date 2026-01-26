@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizeTag, normalizeTags } from '@/lib/tagging';
 import { DEFAULT_INVENTORY_SEEDS } from '@/lib/inventoryDefaults';
-import { DEFAULT_REVIEW_SECTIONS } from '@/lib/reviewSections';
+import { DEFAULT_ADDITIONAL_SECTIONS } from '@/lib/reviewSections';
 import type { Json } from '@/integrations/supabase/types';
 
 export interface InventoryRow {
@@ -12,7 +12,8 @@ export interface InventoryRow {
   prompt_inventory: string;
   prompt_categories: string;
   generated_schema: Json;
-  review_sections: string[];
+  review_sections: string[] | null;
+  include_score: boolean;
   creator_user_id: string;
   is_public: boolean;
   likes_count: number;
@@ -37,12 +38,13 @@ interface CreateInventoryInput {
   promptCategories: string;
   generatedSchema: Json;
   reviewSections: string[];
+  includeScore: boolean;
   tags: string[];
   isPublic: boolean;
   sourceInventoryId?: string | null;
 }
 
-const INVENTORY_FIELDS = 'id, title, prompt_inventory, prompt_categories, generated_schema, review_sections, creator_user_id, is_public, likes_count, created_at, updated_at';
+const INVENTORY_FIELDS = 'id, title, prompt_inventory, prompt_categories, generated_schema, review_sections, include_score, creator_user_id, is_public, likes_count, created_at, updated_at';
 
 const seededUsers = new Set<string>();
 
@@ -70,7 +72,8 @@ async function ensureDefaultInventories(userId: string) {
         prompt_inventory: seed.promptInventory,
         prompt_categories: seed.promptCategories,
         generated_schema: seed.generatedSchema,
-        review_sections: seed.reviewSections || DEFAULT_REVIEW_SECTIONS,
+        review_sections: seed.reviewSections || DEFAULT_ADDITIONAL_SECTIONS,
+        include_score: true,
         creator_user_id: userId,
         is_public: true,
       })
@@ -299,6 +302,7 @@ export function useCreateInventory() {
           prompt_categories: input.promptCategories,
           generated_schema: input.generatedSchema,
           review_sections: input.reviewSections,
+          include_score: input.includeScore,
           creator_user_id: user.id,
           is_public: input.isPublic,
         })
@@ -329,6 +333,32 @@ export function useCreateInventory() {
       return inventory;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-search'] });
+    },
+  });
+}
+
+export function useUpdateInventory() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (input: { inventoryId: string; reviewSections: string[]; includeScore: boolean }) => {
+      if (!user?.id) throw new Error('Must be logged in');
+
+      const { error } = await supabase
+        .from('inventories')
+        .update({
+          review_sections: input.reviewSections,
+          include_score: input.includeScore,
+        })
+        .eq('id', input.inventoryId)
+        .eq('creator_user_id', user.id);
+
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory', variables.inventoryId] });
       queryClient.invalidateQueries({ queryKey: ['inventory-search'] });
     },
   });

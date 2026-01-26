@@ -2,7 +2,6 @@ import { useMemo, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,7 +19,7 @@ import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
 import { useToast } from '@/hooks/use-toast';
-import { DEFAULT_REVIEW_SECTIONS } from '@/lib/reviewSections';
+import { buildReviewSections } from '@/lib/reviewSections';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -82,12 +81,7 @@ export default function InventoryBuild() {
     [selectedItems]
   );
 
-  const reviewSections = useMemo(() => {
-    if (inventory?.review_sections && inventory.review_sections.length > 0) {
-      return inventory.review_sections;
-    }
-    return DEFAULT_REVIEW_SECTIONS;
-  }, [inventory]);
+  const reviewSections = useMemo(() => buildReviewSections(inventory?.review_sections), [inventory]);
 
   const toggleItem = useCallback((categoryName: string, item: string) => {
     setSelectedItems((prev) => {
@@ -189,6 +183,7 @@ export default function InventoryBuild() {
           mixNotes: mixNotes.trim(),
           reviewPrompt: reviewPrompt.trim(),
           reviewSections,
+          includeScore: inventory?.include_score ?? true,
         }),
       });
 
@@ -463,14 +458,6 @@ export default function InventoryBuild() {
                         placeholder="What should the AI focus on?"
                         rows={3}
                       />
-                    </div>
-                    <div className="space-y-2 sm:col-span-2">
-                      <Label>Review sections</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {reviewSections.map((section) => (
-                          <Badge key={section} variant="outline">{section}</Badge>
-                        ))}
-                      </div>
                     </div>
                   </div>
                 </CardContent>

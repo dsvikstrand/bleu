@@ -13,7 +13,13 @@ import { useCreateInventory } from '@/hooks/useInventories';
 import { useToast } from '@/hooks/use-toast';
 import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
-import { DEFAULT_REVIEW_SECTIONS, MAX_REVIEW_SECTIONS, formatReviewSection } from '@/lib/reviewSections';
+import {
+  DEFAULT_ADDITIONAL_SECTIONS,
+  MAX_ADDITIONAL_SECTIONS,
+  MAX_REVIEW_SECTIONS,
+  OVERVIEW_SECTION,
+  formatReviewSection,
+} from '@/lib/reviewSections';
 import { Loader2, Sparkles, Wand2, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -43,9 +49,11 @@ export default function InventoryCreate() {
   const [generatedSchema, setGeneratedSchema] = useState<GeneratedSchema | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(true);
-  const [reviewSections, setReviewSections] = useState<string[]>(DEFAULT_REVIEW_SECTIONS);
+  const [reviewSections, setReviewSections] = useState<string[]>(DEFAULT_ADDITIONAL_SECTIONS);
   const [reviewSectionInput, setReviewSectionInput] = useState('');
   const [reviewSectionsError, setReviewSectionsError] = useState('');
+  const maxInventoryTags = 5;
+  const [includeScore, setIncludeScore] = useState(true);
 
   const categoryNames = useMemo(() => {
     if (!generatedSchema) return [];
@@ -58,7 +66,7 @@ export default function InventoryCreate() {
   const [newCategoryName, setNewCategoryName] = useState('');
 
   const availableReviewSections = useMemo(() => {
-    return DEFAULT_REVIEW_SECTIONS.filter(
+    return DEFAULT_ADDITIONAL_SECTIONS.filter(
       (section) => !reviewSections.some((existing) => existing.toLowerCase() === section.toLowerCase())
     );
   }, [reviewSections]);
@@ -73,8 +81,8 @@ export default function InventoryCreate() {
       return;
     }
 
-    if (reviewSections.length >= MAX_REVIEW_SECTIONS) {
-      setReviewSectionsError(`You can add up to ${MAX_REVIEW_SECTIONS} sections.`);
+    if (reviewSections.length >= MAX_ADDITIONAL_SECTIONS) {
+      setReviewSectionsError(`You can add up to ${MAX_REVIEW_SECTIONS} sections total.`);
       return;
     }
 
@@ -181,7 +189,16 @@ export default function InventoryCreate() {
       return;
     }
 
-    if (reviewSections.length > MAX_REVIEW_SECTIONS) {
+    if (tags.length > maxInventoryTags) {
+      toast({
+        title: 'Too many tags',
+        description: `Please use ${maxInventoryTags} tags or fewer.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (reviewSections.length > MAX_ADDITIONAL_SECTIONS) {
       toast({
         title: 'Too many sections',
         description: `Please use ${MAX_REVIEW_SECTIONS} sections or fewer.`,
@@ -192,13 +209,14 @@ export default function InventoryCreate() {
 
     try {
       const promptCategories = categoryNames.join(', ');
-      const sectionsToSave = reviewSections.length > 0 ? reviewSections : DEFAULT_REVIEW_SECTIONS;
+      const sectionsToSave = reviewSections;
       const inventory = await createInventory.mutateAsync({
         title: title.trim(),
         promptInventory: promptInventory.trim(),
         promptCategories,
         generatedSchema: generatedSchema as unknown as Json,
         reviewSections: sectionsToSave,
+        includeScore,
         tags,
         isPublic,
       });
@@ -358,15 +376,16 @@ export default function InventoryCreate() {
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <Label>Review sections</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Pick the headings the AI should use for the review.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {reviewSections.map((section) => (
-                      <Badge key={section} variant="secondary" className="gap-1">
-                        {section}
+                  <Label>Review sections</Label>
+                  <p className="text-sm text-muted-foreground">
+                      Overview is always included.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">{OVERVIEW_SECTION}</Badge>
+                  {reviewSections.map((section) => (
+                    <Badge key={section} variant="secondary" className="gap-1">
+                      {section}
                         <Button
                           type="button"
                           variant="ghost"
@@ -413,11 +432,13 @@ export default function InventoryCreate() {
                   {reviewSectionsError && (
                     <p className="text-sm text-destructive">{reviewSectionsError}</p>
                   )}
-                  {reviewSections.length === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      We&apos;ll use the default sections if you leave this blank.
-                    </p>
-                  )}
+                  <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
+                    <div>
+                      <p className="font-medium">Include score</p>
+                      <p className="text-sm text-muted-foreground">Adds a 1–100 score in Overview.</p>
+                    </div>
+                    <Switch checked={includeScore} onCheckedChange={setIncludeScore} />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -569,8 +590,8 @@ export default function InventoryCreate() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label>Tags (max 4)</Label>
-                  <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions || []} />
+                  <Label>Tags</Label>
+                  <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions || []} maxTags={maxInventoryTags} />
                 </div>
                 <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
                   <div>

@@ -23,8 +23,11 @@ function normalizeReviewSections(input: unknown) {
   return normalized;
 }
 
-function buildSystemPrompt(sections: string[]) {
+function buildSystemPrompt(sections: string[], includeScore: boolean) {
   const headings = sections.map((section) => `### ${section}`).join("\n");
+  const scoreLine = includeScore
+    ? "- Include a line `Score: X/100` in the Overview section."
+    : "";
 
   return `You are a helpful analyst for user-created blueprints (routines, habits, workflows, protocols).
 
@@ -36,9 +39,10 @@ Your job:
 
 Guidelines:
 - Keep it concise and clear
-- For Strengths, Gaps, Risks, and Suggestions sections: ALWAYS use bullet points starting with a dash and space (\`- \`). Never use \`+\`, \`*\`, or paragraph-style formatting for these sections.
+- Use bullets where helpful
 - Avoid medical claims; be cautious
 - Do not add extra headings
+${scoreLine}
 
 Response format (use these exact headings in order):
 ${headings}
@@ -73,7 +77,7 @@ serve(async (req) => {
   }
 
   try {
-    const { title, inventoryTitle, selectedItems, mixNotes, reviewPrompt, reviewSections } = await req.json();
+    const { title, inventoryTitle, selectedItems, mixNotes, reviewPrompt, reviewSections, includeScore } = await req.json();
 
     if (!selectedItems || typeof selectedItems !== 'object') {
       return new Response(
@@ -89,6 +93,7 @@ serve(async (req) => {
 
     const sections = normalizeReviewSections(reviewSections);
     const resolvedSections = sections.length > 0 ? sections : DEFAULT_REVIEW_SECTIONS;
+    const shouldIncludeScore = includeScore !== false;
 
     const itemsBlock = formatSelectedItems(selectedItems);
     const focus = reviewPrompt?.trim() || 'general effectiveness';
@@ -98,6 +103,7 @@ serve(async (req) => {
 Blueprint title: ${title || 'Untitled'}
 Inventory: ${inventoryTitle || 'N/A'}
 Requested sections: ${resolvedSections.join(', ')}
+Include score: ${shouldIncludeScore ? 'Yes' : 'No'}
 
 Selected items:
 ${itemsBlock || '- No items listed'}
@@ -115,7 +121,7 @@ ${mixNotes?.trim() || 'None'}
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          { role: "system", content: buildSystemPrompt(resolvedSections) },
+          { role: "system", content: buildSystemPrompt(resolvedSections, shouldIncludeScore) },
           { role: "user", content: userPrompt },
         ],
         stream: true,
