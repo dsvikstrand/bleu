@@ -10,9 +10,9 @@ Task 1: Inventory page access
 - expected outcome: Inventory library loads with search bar and Create Inventory button
 - feedback: yep
 
-Task 2: Create Inventory (basic)
+Task 2: Build page (Create Inventory)
 - do this/task: Create a new inventory with prompts + tags
-- how to do it: /inventory/create -> fill Title, prompts, add at least 1 tag -> Create Inventory
+- how to do it: Build page /inventory/create -> fill Title, prompts, add at least 1 tag -> Create Inventory
 - expected outcome: Redirects to /inventory/:id and shows title + categories preview
 - feedback: yep
 
@@ -34,9 +34,9 @@ Task 5: Inventory like
 - expected outcome: Likes count updates and icon toggles
 - feedback: yep
 
-Task 6: Build Blueprint from inventory
+Task 6: Mix page (Create Blueprint from inventory)
 - do this/task: Create a blueprint from an inventory
-- how to do it: /inventory/:id/build -> select items -> add mix notes -> add tags
+- how to do it: Mix page /inventory/:id/build -> select items -> add mix notes -> add tags
 - expected outcome: Blueprint builder allows selection and publish
 - feedback: 
 

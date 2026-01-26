@@ -8,7 +8,8 @@ Provide a single prep reference that locks vocabulary, routes, data objects, and
 ## Vocabulary (Public Terms)
 - Blueprint: published, shareable output
 - Inventory: the template layer (Blend/Protein today)
-- Build: in-progress draft created from an inventory
+- Build page: generate inventories (`/inventory/create`)
+- Mix page: use an inventory to build a blueprint (`/inventory/:inventoryId/build`)
 - Remix: derived blueprint or inventory linked to a source
 
 ---
@@ -25,9 +26,9 @@ Provide a single prep reference that locks vocabulary, routes, data objects, and
 - /inventory/:inventoryId
   - Inventory details (neutral state)
 - /inventory/:inventoryId/build
-  - Builder view from inventory
+  - Mix page (use inventory to build a blueprint)
 - /inventory/create
-  - Inventory creator
+  - Build page (generate inventories)
 
 ---
 
@@ -107,13 +108,13 @@ Provide a single prep reference that locks vocabulary, routes, data objects, and
 
 ## UX Flow Map (Text)
 
-### A) Create Inventory
+### A) Build page (Create Inventory)
 1) /inventory/create
 2) User enters: name + 2 prompts
 3) LLM auto-generates inventory schema
 4) Save inventory (public by default)
 
-### B) Discover Inventory + Build Blueprint
+### B) Discover Inventory + Mix Blueprint
 1) /inventory search by tag or title
 2) Pick top-rated inventory for tag
 3) Open /inventory/:id (neutral state)
@@ -147,4 +148,3 @@ Provide a single prep reference that locks vocabulary, routes, data objects, and
 - Weighted ranking (likes + recency)
 - Inventory approval workflows
 - Tag hubs (dedicated tag pages)
-

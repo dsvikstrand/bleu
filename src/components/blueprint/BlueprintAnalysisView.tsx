@@ -1,5 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
 interface BlueprintAnalysisViewProps {
   review: string;
@@ -99,6 +100,28 @@ function applySectionOrder(sections: ParsedSection[], sectionOrder?: string[]) {
   return ordered.concat(extras);
 }
 
+function extractScore(section: ParsedSection) {
+  const scoreRegex = /score\s*:\s*(\d{1,3})\s*\/\s*100/i;
+  let score: number | null = null;
+
+  const textMatch = section.text.match(scoreRegex);
+  if (textMatch) {
+    score = parseInt(textMatch[1], 10);
+  }
+
+  const filteredBullets = section.bullets.filter((item) => {
+    const match = item.match(scoreRegex);
+    if (match && score === null) {
+      score = parseInt(match[1], 10);
+    }
+    return !match;
+  });
+
+  const cleanedText = section.text.replace(scoreRegex, '').replace(/\s{2,}/g, ' ').trim();
+
+  return { score, text: cleanedText, bullets: filteredBullets };
+}
+
 export function BlueprintAnalysisView({ review, isStreaming, sectionOrder }: BlueprintAnalysisViewProps) {
   const parsedSections = parseReviewSections(review);
   const orderedSections = applySectionOrder(parsedSections, sectionOrder);
@@ -120,25 +143,58 @@ export function BlueprintAnalysisView({ review, isStreaming, sectionOrder }: Blu
           </TabsList>
 
           <div className="p-6">
-            {orderedSections.map((section) => (
-              <TabsContent key={section.key} value={section.key} className="mt-0 space-y-4">
-                <h3 className="text-2xl font-bold tracking-tight">{section.title}</h3>
-                {section.bullets.length > 0 ? (
-                  <ul className="space-y-3">
-                    {section.bullets.map((item, index) => (
-                      <li key={index} className="flex gap-3">
-                        <span className="text-primary font-bold">{getSectionMarker(section.title)}</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-muted-foreground leading-relaxed">
-                    {section.text || (isStreaming ? 'Generating...' : 'No details yet.')}
-                  </p>
-                )}
-              </TabsContent>
-            ))}
+            {orderedSections.map((section) => {
+              const isOverview = section.key === 'overview' || section.title.toLowerCase().includes('overview');
+              const { score, text, bullets } = isOverview ? extractScore(section) : {
+                score: null,
+                text: section.text,
+                bullets: section.bullets,
+              };
+
+              const scoreColor =
+                score !== null && score >= 80
+                  ? 'text-green-500'
+                  : score !== null && score >= 60
+                  ? 'text-amber-500'
+                  : 'text-red-500';
+
+              return (
+                <TabsContent key={section.key} value={section.key} className="mt-0 space-y-4">
+                  <h3 className="text-2xl font-bold tracking-tight">{section.title}</h3>
+
+                  {isOverview && score !== null && (
+                    <div className="text-center py-4">
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Blueprint score</p>
+                      <p className={cn('text-6xl font-black', scoreColor)}>
+                        {score}
+                        <span className="text-2xl text-muted-foreground">/100</span>
+                      </p>
+                    </div>
+                  )}
+
+                  {text ? (
+                    <p className="text-muted-foreground leading-relaxed">{text}</p>
+                  ) : null}
+
+                  {bullets.length > 0 ? (
+                    <ul className="space-y-3">
+                      {bullets.map((item, index) => (
+                        <li key={index} className="flex gap-3">
+                          <span className="text-primary font-bold">{getSectionMarker(section.title)}</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+
+                  {!text && bullets.length === 0 && (
+                    <p className="text-muted-foreground leading-relaxed">
+                      {isStreaming ? 'Generating...' : 'No details yet.'}
+                    </p>
+                  )}
+                </TabsContent>
+              );
+            })}
           </div>
         </Tabs>
 

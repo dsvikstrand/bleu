@@ -479,11 +479,20 @@ export default function InventoryBuild() {
                       />
                     </div>
                     <div className="space-y-3 sm:col-span-2">
-                      <div>
-                        <Label>Review sections</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Overview is always included.
-                        </p>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <Label>Review sections</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Overview is always included.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="text-xs font-medium">Include score</p>
+                            <p className="text-[11px] text-muted-foreground">Adds a 1–100 score in Overview.</p>
+                          </div>
+                          <Switch checked={includeScore} onCheckedChange={setIncludeScore} className="scale-90" />
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Badge variant="secondary">{OVERVIEW_SECTION}</Badge>
@@ -563,13 +572,6 @@ export default function InventoryBuild() {
                       {sectionError && (
                         <p className="text-sm text-destructive">{sectionError}</p>
                       )}
-                      <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
-                        <div>
-                          <p className="font-medium">Include score</p>
-                          <p className="text-sm text-muted-foreground">Adds a 1–100 score in Overview.</p>
-                        </div>
-                        <Switch checked={includeScore} onCheckedChange={setIncludeScore} />
-                      </div>
                     </div>
                   </div>
                 </CardContent>

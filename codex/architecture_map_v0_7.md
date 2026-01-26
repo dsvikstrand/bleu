@@ -4,8 +4,9 @@ Date: 2026-01-25
 
 ## 1) Core Concepts (Vocabulary)
 - Inventory = reusable template (what Blend/Protein used to represent)
-- Build = in-progress draft created from an Inventory
-- Blueprint = published result of a Build (public, read-only + comments/likes)
+- Build page = create/generate inventories (`/inventory/create`)
+- Mix page = use an inventory to build a blueprint (`/inventory/:inventoryId/build`)
+- Blueprint = published result of a Mix (public, read-only + comments/likes)
 - Remix = new Inventory/Blueprint derived from a source (lineage)
 
 ## 2) Routes (App.tsx)
@@ -19,9 +20,9 @@ Auth-gated
 - /wall (Blueprint feed)
 - /wall/:postId (legacy post detail)
 - /inventory
-- /inventory/create
+- /inventory/create (Build page)
 - /inventory/:inventoryId
-- /inventory/:inventoryId/build
+- /inventory/:inventoryId/build (Mix page)
 - /blueprint/:blueprintId
 - /blueprint/:blueprintId/remix
 - /my-recipes
@@ -32,9 +33,9 @@ Auth-gated
 - Index: legacy StackLab builder (not blueprint-based)
 - Blend / Protein: legacy inventory builders (LLM analysis + post)
 - Inventory: search + list + like inventories
-- InventoryCreate: LLM-generated inventory schema + tags + publish
+- InventoryCreate: Build page (LLM-generated inventory schema + tags + publish)
 - InventoryDetail: inventory overview + CTA to build
-- InventoryBuild: build a blueprint from an inventory
+- InventoryBuild: Mix page (build a blueprint from an inventory)
 - BlueprintDetail: published blueprint page (LLM review + comments + remix)
 - BlueprintRemix: build from existing blueprint
 - Wall: blueprint feed (For You / Latest / Trending)
@@ -93,7 +94,7 @@ Tags
 - generate-stack (legacy)
 
 ## 8) Core Data Flows
-Inventory creation
+Inventory creation (Build page)
 1) User enters keywords -> generate-inventory
 2) LLM returns schema + suggested tags
 3) User confirms -> inventories + inventory_tags
@@ -102,7 +103,7 @@ Inventory discovery
 1) /inventory search by tag/title
 2) tag -> inventory_tags -> inventories (rank by likes)
 
-Build blueprint
+Mix blueprint (Mix page)
 1) /inventory/:id/build
 2) select items + optional context + mix notes
 3) analyze-blueprint (SSE)
