@@ -39,3 +39,6 @@ Process:
 
 ## 4) Plan approved
 if I add PA (plan approved), you can go with code (don't need to wait for code ok here)
+
+## 5) Lovable tickets workflow
+When we have a new Lovable task, add a new numbered markdown file in `lovable/tickets` (e.g., `1.md`, `2.md`, ...). Do not create templates. When a ticket is solved, admin will add a `_solved` suffix to the filename.
