@@ -271,6 +271,7 @@ export function BlueprintBuilder({
         inventoryId: inventory.id,
         title: title.trim(),
         selectedItems: payload,
+        steps: null,
         mixNotes: mixNotes.trim() ? mixNotes.trim() : null,
         reviewPrompt: reviewPrompt.trim() ? reviewPrompt.trim() : null,
         llmReview: review,

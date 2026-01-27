@@ -10,6 +10,7 @@ export interface BlueprintRow {
   creator_user_id: string;
   title: string;
   selected_items: Json;
+  steps: Json | null;
   mix_notes: string | null;
   review_prompt: string | null;
   llm_review: string | null;
@@ -38,6 +39,7 @@ interface CreateBlueprintInput {
   inventoryId: string | null;
   title: string;
   selectedItems: Json;
+  steps: Json | null;
   mixNotes: string | null;
   reviewPrompt: string | null;
   llmReview: string | null;
@@ -46,7 +48,7 @@ interface CreateBlueprintInput {
   sourceBlueprintId?: string | null;
 }
 
-const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, mix_notes, review_prompt, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
+const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, steps, mix_notes, review_prompt, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
 
 async function ensureTags(slugs: string[], userId: string): Promise<BlueprintTag[]> {
   const normalized = normalizeTags(slugs);
@@ -135,6 +137,7 @@ export function useCreateBlueprint() {
           creator_user_id: user.id,
           title: input.title,
           selected_items: input.selectedItems,
+          steps: input.steps,
           mix_notes: input.mixNotes,
           review_prompt: input.reviewPrompt,
           llm_review: input.llmReview,

@@ -36,6 +36,9 @@ export default function InventoryCreate() {
   const [keywords, setKeywords] = useState('');
   const [customInstructions, setCustomInstructions] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
+  const [preferredCategoryInput, setPreferredCategoryInput] = useState('');
+  const [preferredCategoryError, setPreferredCategoryError] = useState('');
 
   // Step 2: Generated/edited inventory
   const [title, setTitle] = useState('');
@@ -44,6 +47,7 @@ export default function InventoryCreate() {
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(true);
   const maxInventoryTags = 5;
+  const maxPreferredCategories = 6;
 
   const categoryNames = useMemo(() => {
     if (!generatedSchema) return [];
@@ -79,6 +83,7 @@ export default function InventoryCreate() {
           keywords: keywords.trim(),
           title: title.trim() || undefined,
           customInstructions: customInstructions.trim() || undefined,
+          preferredCategories: preferredCategories.length > 0 ? preferredCategories : undefined,
         }),
       });
 
@@ -276,6 +281,75 @@ export default function InventoryCreate() {
                 <p className="text-xs text-muted-foreground">
                   Regenerating will replace the current categories and items.
                 </p>
+              )}
+            </div>
+            <div className="space-y-3">
+              <div>
+                <Label>Preferred categories (optional)</Label>
+                <p className="text-xs text-muted-foreground">
+                  We will always generate 6 categories total.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {preferredCategories.map((category, index) => (
+                  <Badge key={`${category}-${index}`} variant="secondary" className="gap-1">
+                    {category}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4"
+                      onClick={() => {
+                        setPreferredCategories((prev) => prev.filter((_, i) => i !== index));
+                        setPreferredCategoryError('');
+                      }}
+                      aria-label="Remove category"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={preferredCategoryInput}
+                  onChange={(event) => setPreferredCategoryInput(event.target.value)}
+                  placeholder="Add category"
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      const value = preferredCategoryInput.trim();
+                      if (!value) return;
+                      if (preferredCategories.length >= maxPreferredCategories) {
+                        setPreferredCategoryError('You can only add up to 6 categories.');
+                        return;
+                      }
+                      setPreferredCategories((prev) => [...prev, value]);
+                      setPreferredCategoryInput('');
+                      setPreferredCategoryError('');
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const value = preferredCategoryInput.trim();
+                    if (!value) return;
+                    if (preferredCategories.length >= maxPreferredCategories) {
+                      setPreferredCategoryError('You can only add up to 6 categories.');
+                      return;
+                    }
+                    setPreferredCategories((prev) => [...prev, value]);
+                    setPreferredCategoryInput('');
+                    setPreferredCategoryError('');
+                  }}
+                >
+                  Add
+                </Button>
+              </div>
+              {preferredCategoryError && (
+                <p className="text-xs text-destructive">{preferredCategoryError}</p>
               )}
             </div>
 

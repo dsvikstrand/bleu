@@ -15,10 +15,18 @@ import { ArrowLeft, GitBranch, Heart } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 type ItemValue = string | { name?: string; context?: string };
+type StepItem = { category?: string; name?: string; context?: string };
+type BlueprintStep = { id?: string; title?: string; description?: string | null; items?: StepItem[] };
 
 function formatItem(item: ItemValue) {
   if (typeof item === 'string') return item;
   if (!item || typeof item !== 'object') return String(item);
+  const name = typeof item.name === 'string' ? item.name : 'Untitled';
+  const context = typeof item.context === 'string' && item.context.trim() ? item.context.trim() : '';
+  return context ? `${name} [${context}]` : name;
+}
+
+function formatStepItem(item: StepItem) {
   const name = typeof item.name === 'string' ? item.name : 'Untitled';
   const context = typeof item.context === 'string' && item.context.trim() ? item.context.trim() : '';
   return context ? `${name} [${context}]` : name;
@@ -31,6 +39,12 @@ function parseSelectedItems(selected: Json) {
   return Object.entries(selected as Record<string, ItemValue[]>).filter(([, items]) => Array.isArray(items));
 }
 
+function parseSteps(steps: Json) {
+  if (!steps || typeof steps !== 'object') return [] as BlueprintStep[];
+  if (!Array.isArray(steps)) return [] as BlueprintStep[];
+  return steps.filter((step): step is BlueprintStep => !!step && typeof step === 'object');
+}
+
 export default function BlueprintDetail() {
   const navigate = useNavigate();
   const { blueprintId } = useParams();
@@ -40,6 +54,7 @@ export default function BlueprintDetail() {
   const toggleLike = useToggleBlueprintLike();
   const { toast } = useToast();
   const [comment, setComment] = useState('');
+  const steps = blueprint ? parseSteps(blueprint.steps) : [];
 
   const handleLike = async () => {
     if (!blueprint) return;
@@ -154,17 +169,56 @@ export default function BlueprintDetail() {
                   </div>
                 )}
                 <div>
-                  <h3 className="font-semibold">Selected items</h3>
-                  <div className="mt-2 space-y-2">
-                    {parseSelectedItems(blueprint.selected_items).map(([category, items]) => (
-                      <div key={category} className="rounded-lg border border-border/60 p-3">
-                        <p className="text-sm font-medium">{category}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {items.length > 0 ? items.map(formatItem).join(', ') : 'No items listed'}
-                        </p>
+                  {steps.length > 0 ? (
+                    <>
+                      <h3 className="font-semibold">Steps</h3>
+                      <div className="mt-3 space-y-3">
+                        {steps.map((step, index) => (
+                          <div key={step.id || `${step.title}-${index}`} className="rounded-lg border border-border/60 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">
+                                {step.title?.trim() ? step.title : `Step ${index + 1}`}
+                              </p>
+                              <Badge variant="secondary" className="text-xs">
+                                {step.items?.length || 0} items
+                              </Badge>
+                            </div>
+                            {step.description && (
+                              <p className="text-xs text-muted-foreground mt-1">{step.description}</p>
+                            )}
+                            <div className="mt-2 space-y-2">
+                              {step.items && step.items.length > 0 ? (
+                                step.items.map((item, itemIndex) => (
+                                  <div key={`${step.id || index}-${itemIndex}`} className="text-sm">
+                                    <p className="text-sm">{formatStepItem(item)}</p>
+                                    {item.category && (
+                                      <p className="text-xs text-muted-foreground">{item.category}</p>
+                                    )}
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-xs text-muted-foreground">No items assigned.</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="font-semibold">Selected items</h3>
+                      <div className="mt-2 space-y-2">
+                        {parseSelectedItems(blueprint.selected_items).map(([category, items]) => (
+                          <div key={category} className="rounded-lg border border-border/60 p-3">
+                            <p className="text-sm font-medium">{category}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {items.length > 0 ? items.map(formatItem).join(', ') : 'No items listed'}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div>
                   <h3 className="font-semibold">LLM Review</h3>

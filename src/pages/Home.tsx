@@ -73,11 +73,11 @@ export default function Home() {
         <footer className="pt-8 border-t border-border/40 text-center space-y-4">
           <nav className="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
             <Link to="/wall" className="hover:text-foreground transition-colors">Wall</Link>
-            <span className="text-border">·</span>
+            <span className="text-border">&middot;</span>
             <Link to="/inventory" className="hover:text-foreground transition-colors">Inventories</Link>
-            <span className="text-border">·</span>
+            <span className="text-border">&middot;</span>
             <Link to="/tags" className="hover:text-foreground transition-colors">Tags</Link>
-            <span className="text-border">·</span>
+            <span className="text-border">&middot;</span>
             <Link to="/auth" className="hover:text-foreground transition-colors">Sign In</Link>
           </nav>
           <p className="text-xs text-muted-foreground/70">
