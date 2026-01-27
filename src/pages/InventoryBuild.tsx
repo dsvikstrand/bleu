@@ -27,7 +27,7 @@ import {
   formatReviewSection,
   normalizeAdditionalSections,
 } from '@/lib/reviewSections';
-import { ArrowDown, ArrowLeft, ArrowUp, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, GripVertical, Pencil, Sparkles, Trash2, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 const ANALYZE_BLUEPRINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
@@ -86,6 +86,9 @@ export default function InventoryBuild() {
   const [stepTitle, setStepTitle] = useState('');
   const [stepDescription, setStepDescription] = useState('');
   const [stepError, setStepError] = useState('');
+  const [draggedStepIndex, setDraggedStepIndex] = useState<number | null>(null);
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
+  const [stepTitleDrafts, setStepTitleDrafts] = useState<Record<string, string>>({});
 
   // Categories with custom items
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
@@ -242,6 +245,16 @@ export default function InventoryBuild() {
       if (targetIndex < 0 || targetIndex >= next.length) return prev;
       const [moved] = next.splice(index, 1);
       next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  }, []);
+
+  const reorderSteps = useCallback((fromIndex: number, toIndex: number) => {
+    setSteps((prev) => {
+      if (fromIndex === toIndex) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
       return next;
     });
   }, []);
@@ -652,37 +665,82 @@ export default function InventoryBuild() {
                             return { key, category, item };
                           })
                           .filter((entry) => entry.item);
+                        const isCurrentStep = index === steps.length - 1;
+                        const isEditing = editingStepId === step.id;
+                        const draftValue = stepTitleDrafts[step.id] ?? step.title;
                         return (
-                          <div key={step.id} className="rounded-xl border border-border/40 bg-background/40 p-4 space-y-3">
+                          <div
+                            key={step.id}
+                            className={`rounded-xl border p-4 space-y-3 ${isCurrentStep ? 'border-primary/60 bg-primary/5' : 'border-border/40 bg-background/40'}`}
+                            draggable
+                            onDragStart={() => setDraggedStepIndex(index)}
+                            onDragOver={(event) => event.preventDefault()}
+                            onDrop={() => {
+                              if (draggedStepIndex === null) return;
+                              reorderSteps(draggedStepIndex, index);
+                              setDraggedStepIndex(null);
+                            }}
+                            onDragEnd={() => setDraggedStepIndex(null)}
+                          >
                             <div className="flex flex-wrap items-center gap-2">
-                              <Input
-                                value={step.title}
-                                onChange={(event) => updateStep(index, { title: event.target.value })}
-                                placeholder={displayTitle}
-                                className="min-w-[180px] flex-1"
-                              />
-                              <Badge variant="secondary">{step.itemKeys.length} items</Badge>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => moveStep(index, 'up')}
-                                  disabled={index === 0}
-                                  aria-label="Move step up"
-                                >
-                                  <ArrowUp className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => moveStep(index, 'down')}
-                                  disabled={index === steps.length - 1}
-                                  aria-label="Move step down"
-                                >
-                                  <ArrowDown className="h-4 w-4" />
-                                </Button>
+                              <div className="flex items-center gap-2 flex-1 min-w-[180px]">
+                                <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                                {isEditing ? (
+                                  <div className="flex items-center gap-2 flex-1">
+                                    <Input
+                                      value={draftValue}
+                                      onChange={(event) =>
+                                        setStepTitleDrafts((prev) => ({ ...prev, [step.id]: event.target.value }))
+                                      }
+                                      placeholder={displayTitle}
+                                      className="flex-1"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        updateStep(index, { title: draftValue });
+                                        setEditingStepId(null);
+                                      }}
+                                      aria-label="Save step title"
+                                    >
+                                      <Check className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        setStepTitleDrafts((prev) => ({ ...prev, [step.id]: step.title }));
+                                        setEditingStepId(null);
+                                      }}
+                                      aria-label="Cancel edit"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2 flex-1">
+                                    <p className="font-medium">{displayTitle}</p>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        setEditingStepId(step.id);
+                                        setStepTitleDrafts((prev) => ({ ...prev, [step.id]: step.title }));
+                                      }}
+                                      aria-label="Edit step title"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary">{step.itemKeys.length} items</Badge>
+                                {isCurrentStep && <Badge variant="outline">Current</Badge>}
                                 <Button
                                   type="button"
                                   variant="ghost"
