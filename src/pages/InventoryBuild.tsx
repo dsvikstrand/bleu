@@ -12,7 +12,6 @@ import { Badge } from '@/components/ui/badge';
 import { TagInput } from '@/components/shared/TagInput';
 import { MixButton } from '@/components/blend/MixButton';
 import { BlueprintItemPicker } from '@/components/blueprint/BlueprintItemPicker';
-import { BlueprintRecipeAccordion } from '@/components/blueprint/BlueprintRecipeAccordion';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 import { BlueprintLoadingAnimation } from '@/components/blueprint/BlueprintLoadingAnimation';
 import { useInventory } from '@/hooks/useInventories';
@@ -119,25 +118,6 @@ export default function InventoryBuild() {
 
   const getItemKey = useCallback((categoryName: string, item: string) => `${categoryName}::${item}`, []);
 
-  const assignedItemKeys = useMemo(() => {
-    const keys = new Set<string>();
-    steps.forEach((step) => {
-      step.itemKeys.forEach((key) => keys.add(key));
-    });
-    return keys;
-  }, [steps]);
-
-  const unassignedItemCount = useMemo(() => {
-    let count = 0;
-    Object.entries(selectedItems).forEach(([category, items]) => {
-      items.forEach((item) => {
-        const key = getItemKey(category, item);
-        if (!assignedItemKeys.has(key)) count += 1;
-      });
-    });
-    return count;
-  }, [assignedItemKeys, getItemKey, selectedItems]);
-
   const removeItemFromSteps = useCallback((itemKey: string) => {
     setSteps((prev) =>
       prev.map((step) => ({
@@ -149,7 +129,14 @@ export default function InventoryBuild() {
 
   const addItemToLatestStep = useCallback((itemKey: string) => {
     setSteps((prev) => {
-      if (prev.length === 0) return prev;
+      if (prev.length === 0) {
+        return [{
+          id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+          title: '',
+          description: '',
+          itemKeys: [itemKey],
+        }];
+      }
       const lastIndex = prev.length - 1;
       return prev.map((step, index) => {
         if (index !== lastIndex) return step;
@@ -260,7 +247,31 @@ export default function InventoryBuild() {
   }, []);
 
   const removeStep = useCallback((index: number) => {
-    setSteps((prev) => prev.filter((_, i) => i !== index));
+    setSteps((prev) => {
+      const stepToRemove = prev[index];
+      if (!stepToRemove) return prev;
+      const itemKeysToRemove = new Set(stepToRemove.itemKeys);
+      if (itemKeysToRemove.size > 0) {
+        setSelectedItems((prevSelected) => {
+          const nextSelected: Record<string, string[]> = {};
+          Object.entries(prevSelected).forEach(([category, items]) => {
+            const filtered = items.filter((item) => !itemKeysToRemove.has(getItemKey(category, item)));
+            if (filtered.length > 0) {
+              nextSelected[category] = filtered;
+            }
+          });
+          return nextSelected;
+        });
+        setItemContexts((prevContexts) => {
+          const nextContexts = { ...prevContexts };
+          itemKeysToRemove.forEach((key) => {
+            delete nextContexts[key];
+          });
+          return nextContexts;
+        });
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   }, []);
 
   const updateStep = useCallback((index: number, updates: Partial<BlueprintStep>) => {
@@ -592,34 +603,13 @@ export default function InventoryBuild() {
               </div>
             </section>
 
-            {/* Selected Items Accordion */}
+            {/* Steps + Selected Items */}
             <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-              <BlueprintRecipeAccordion
-                title={title || 'Your Selection'}
-                selectedItems={selectedItems}
-                itemContexts={itemContexts}
-                onRemoveItem={removeItem}
-                onUpdateContext={updateItemContext}
-                onClear={clearSelection}
-              />
-            </section>
-
-            {/* Steps Builder */}
-            <section className="animate-fade-in" style={{ animationDelay: '0.12s' }}>
               <Card className="bg-card/60 backdrop-blur-glass border-border/50">
                 <CardHeader>
-                  <CardTitle>Steps (optional)</CardTitle>
+                  <CardTitle>Steps</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-muted-foreground">
-                      Items are added to the latest step.
-                    </p>
-                    {unassignedItemCount > 0 && (
-                      <Badge variant="outline">{unassignedItemCount} unassigned</Badge>
-                    )}
-                  </div>
-
+                <CardContent className="space-y-5">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="step-title">Step title</Label>
@@ -627,7 +617,7 @@ export default function InventoryBuild() {
                         id="step-title"
                         value={stepTitle}
                         onChange={(event) => setStepTitle(event.target.value)}
-                        placeholder="e.g., Cleanse"
+                        placeholder="e.g., Warm-up stretch"
                       />
                     </div>
                     <div className="space-y-2">
@@ -636,7 +626,7 @@ export default function InventoryBuild() {
                         id="step-description"
                         value={stepDescription}
                         onChange={(event) => setStepDescription(event.target.value)}
-                        placeholder="e.g., wait 5 minutes"
+                        placeholder="e.g., 5 minutes"
                         rows={2}
                       />
                     </div>
@@ -649,58 +639,107 @@ export default function InventoryBuild() {
                   </div>
 
                   {steps.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No steps yet. Add one to create a stepwise blueprint.</p>
+                    <p className="text-sm text-muted-foreground">
+                      No steps yet. Items you select will create a nameless step.
+                    </p>
                   ) : (
-                    <div className="space-y-3">
-                      {steps.map((step, index) => (
-                        <div key={step.id} className="rounded-xl border border-border/40 bg-background/40 p-4 space-y-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Input
-                              value={step.title}
-                              onChange={(event) => updateStep(index, { title: event.target.value })}
-                              className="min-w-[180px] flex-1"
-                            />
-                            <Badge variant="secondary">{step.itemKeys.length} items</Badge>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => moveStep(index, 'up')}
-                                disabled={index === 0}
-                                aria-label="Move step up"
-                              >
-                                <ArrowUp className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => moveStep(index, 'down')}
-                                disabled={index === steps.length - 1}
-                                aria-label="Move step down"
-                              >
-                                <ArrowDown className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeStep(index)}
-                                aria-label="Remove step"
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
+                    <div className="space-y-4">
+                      {steps.map((step, index) => {
+                        const displayTitle = step.title.trim() ? step.title : `Step ${index + 1}`;
+                        const itemEntries = step.itemKeys
+                          .map((key) => {
+                            const [category, item] = key.split('::');
+                            return { key, category, item };
+                          })
+                          .filter((entry) => entry.item);
+                        return (
+                          <div key={step.id} className="rounded-xl border border-border/40 bg-background/40 p-4 space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Input
+                                value={step.title}
+                                onChange={(event) => updateStep(index, { title: event.target.value })}
+                                placeholder={displayTitle}
+                                className="min-w-[180px] flex-1"
+                              />
+                              <Badge variant="secondary">{step.itemKeys.length} items</Badge>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => moveStep(index, 'up')}
+                                  disabled={index === 0}
+                                  aria-label="Move step up"
+                                >
+                                  <ArrowUp className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => moveStep(index, 'down')}
+                                  disabled={index === steps.length - 1}
+                                  aria-label="Move step down"
+                                >
+                                  <ArrowDown className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeStep(index)}
+                                  aria-label="Remove step"
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
                             </div>
+                            <Textarea
+                              value={step.description}
+                              onChange={(event) => updateStep(index, { description: event.target.value })}
+                              placeholder="Add step notes..."
+                              rows={2}
+                            />
+                            {itemEntries.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">No items selected for this step.</p>
+                            ) : (
+                              <div className="space-y-3">
+                                {itemEntries.map((entry) => (
+                                  <div key={entry.key} className="rounded-lg border border-border/40 p-3 space-y-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div>
+                                        <p className="text-sm font-medium">{entry.item}</p>
+                                        <p className="text-xs text-muted-foreground">{entry.category}</p>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => removeItem(entry.category, entry.item)}
+                                        aria-label="Remove item"
+                                      >
+                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                      </Button>
+                                    </div>
+                                    <Input
+                                      value={itemContexts[entry.key] || ''}
+                                      onChange={(event) => updateItemContext(entry.category, entry.item, event.target.value)}
+                                      placeholder="Add context (e.g., 0.5 mg, morning, with food...)"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <Textarea
-                            value={step.description}
-                            onChange={(event) => updateStep(index, { description: event.target.value })}
-                            placeholder="Add step notes..."
-                            rows={2}
-                          />
-                        </div>
-                      ))}
+                        );
+                      })}
+                    </div>
+                  )}
+                  {totalSelected > 0 && (
+                    <div className="flex justify-end">
+                      <Button type="button" variant="ghost" onClick={clearSelection}>
+                        Clear all selections
+                      </Button>
                     </div>
                   )}
                 </CardContent>
