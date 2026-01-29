@@ -29,6 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // On GitHub Pages, apps are often hosted under a sub-path.
+  // Using BASE_URL ensures auth redirects land back on the SPA path.
+  const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
+
   // Fetch profile for user
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
@@ -83,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password,
       options: {
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: appUrl,
         data: {
           display_name: displayName,
         },
