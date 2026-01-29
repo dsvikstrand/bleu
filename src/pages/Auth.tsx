@@ -82,11 +82,16 @@ export default function Auth() {
 
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
+
+    // IMPORTANT: On GitHub Pages the app is usually served from a sub-path.
+    // Use Vite's BASE_URL so OAuth redirects back to the deployed SPA path,
+    // not the domain root (which would 404).
+    const redirectTo = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
     
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin,
+        redirectTo,
       },
     });
     
