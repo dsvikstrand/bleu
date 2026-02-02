@@ -213,16 +213,18 @@ export default function InventoryCreate() {
         <div className="absolute -bottom-20 right-1/4 w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-pulse-soft" />
       </div>
 
-      <AppHeader
-        actions={
+      <AppHeader />
+
+      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+        {/* Sub-header row: Inventory Library + Help buttons */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Inventory Library</h2>
           <div className="flex items-center gap-1">
             <InventoryTourButton onClick={() => setShowTour(true)} />
             <InventoryHelpButton onClick={() => setShowHelp(true)} />
           </div>
-        }
-      />
+        </div>
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
         {/* Tour Banner (first-time users) */}
         {showTourBanner && (
           <InventoryTourBanner
@@ -271,38 +273,35 @@ export default function InventoryCreate() {
 
         {/* Step 1: Keywords Generation */}
         <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="flex items-center gap-2">
               <Wand2 className="h-5 w-5 text-primary" />
               What kind of inventory?
             </CardTitle>
+            <Button
+              onClick={handleGenerate}
+              disabled={isGenerating || !keywords.trim()}
+              className="gap-2"
+              data-help-id="generate"
+            >
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {isGenerating ? 'Generating...' : generatedSchema ? 'Regenerate' : 'Generate'}
+            </Button>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2" data-help-id="keywords">
               <Label htmlFor="keywords">Describe your inventory in a few words</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="keywords"
-                  value={keywords}
-                  onChange={(e) => setKeywords(e.target.value)}
-                  placeholder="e.g., skincare routine, green smoothie, morning habits..."
-                  className="flex-1"
-                  onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-                />
-                <Button
-                  onClick={handleGenerate}
-                  disabled={isGenerating || !keywords.trim()}
-                  className="gap-2"
-                  data-help-id="generate"
-                >
-                  {isGenerating ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-4 w-4" />
-                  )}
-                  {isGenerating ? 'Generating...' : generatedSchema ? 'Regenerate' : 'Generate'}
-                </Button>
-              </div>
+              <Input
+                id="keywords"
+                value={keywords}
+                onChange={(e) => setKeywords(e.target.value)}
+                placeholder="e.g., skincare routine, green smoothie, morning habits..."
+                onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+              />
             </div>
 
             {/* Quick suggestions */}
@@ -587,21 +586,6 @@ export default function InventoryCreate() {
                 <CardTitle>Discovery</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {recentTags.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {recentTags.map((tag) => (
-                      <Button
-                        key={tag}
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]).slice(0, 4))}
-                      >
-                        #{tag}
-                      </Button>
-                    ))}
-                  </div>
-                )}
                 <div className="space-y-2">
                   <Label>Tags</Label>
                   <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions || []} maxTags={maxInventoryTags} />
