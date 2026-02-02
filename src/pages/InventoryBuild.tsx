@@ -526,24 +526,23 @@ export default function InventoryBuild() {
         <div className="absolute bottom-40 left-20 w-3 h-3 bg-primary/15 rounded-full blur-sm animate-drift" />
       </div>
 
-      <AppHeader
-        actions={
+      <AppHeader />
+
+      <main className="container mx-auto px-4 py-8 max-w-3xl">
+        {/* Sub-header row: Back link + Help buttons */}
+        <div className="flex items-center justify-between mb-6">
+          <Link
+            to="/inventory"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to inventory
+          </Link>
           <div className="flex items-center gap-1">
             <TourButton onClick={() => setShowTour(true)} />
             <HelpButton onClick={() => setShowHelp(true)} />
           </div>
-        }
-      />
-
-      <main className="container mx-auto px-4 py-8 max-w-3xl">
-        {/* Back link */}
-        <Link
-          to="/inventory"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to inventory
-        </Link>
+        </div>
 
         {/* Hero Header */}
         <div className="text-center mb-12 pt-8 animate-fade-in">
