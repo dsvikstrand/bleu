@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,13 @@ export function BlueprintItemPicker({
   const [customDialogOpen, setCustomDialogOpen] = useState(false);
   const [customName, setCustomName] = useState('');
   const [customCategory, setCustomCategory] = useState<string>(categories[0]?.name || '');
+
+  useEffect(() => {
+    if (activeCategory) return;
+    if (categories.length === 0) return;
+    setActiveCategory(categories[0].name);
+    setCustomCategory(categories[0].name);
+  }, [activeCategory, categories]);
 
   // Get selected item IDs as a flat set for quick lookup
   const selectedSet = useMemo(() => {
