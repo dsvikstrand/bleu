@@ -39,7 +39,7 @@ export function MixButton({ onClick, disabled, isLoading, itemCount }: MixButton
             <>
               <FlaskConical className="h-10 w-10 text-primary-foreground group-hover:rotate-12 transition-transform duration-300" />
               <span className="text-xs font-bold text-primary-foreground/90 uppercase tracking-widest">
-                Review
+                Build
               </span>
             </>
           )}
@@ -63,8 +63,8 @@ export function MixButton({ onClick, disabled, isLoading, itemCount }: MixButton
         {isLoading 
           ? "Analyzing your blend..." 
           : itemCount === 0 
-            ? "Review your Blueprint" 
-            : `Ready to review ${itemCount} item${itemCount !== 1 ? 's' : ''}`
+            ? "Build your Blueprint" 
+            : `Ready to build ${itemCount} item${itemCount !== 1 ? 's' : ''}`
         }
       </p>
     </div>

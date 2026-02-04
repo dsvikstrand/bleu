@@ -32,7 +32,7 @@ const TOUR_STEPS: TourStep[] = [
   {
     targetId: 'mix',
     title: 'Generate AI Analysis',
-    description: 'When you\'re ready, hit Mix to get an AI-powered review of your blueprint!',
+    description: 'When you\'re ready, hit Build to get an AI-powered review of your blueprint!',
   },
 ];
 

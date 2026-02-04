@@ -167,7 +167,7 @@ export default function BlueprintDetail() {
               <CardContent className="space-y-4">
                 {blueprint.mix_notes && (
                   <div>
-                    <h3 className="font-semibold">Mix notes</h3>
+                    <h3 className="font-semibold">Build notes</h3>
                     <p className="text-sm text-muted-foreground mt-1">{blueprint.mix_notes}</p>
                   </div>
                 )}

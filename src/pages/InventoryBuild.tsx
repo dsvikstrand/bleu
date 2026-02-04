@@ -866,7 +866,7 @@ export default function InventoryBuild() {
                         <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
                       </div>
                       <p className="text-xs text-muted-foreground text-left">
-                        Mix notes, review focus, custom sections
+                        Build notes, review focus, custom sections
                       </p>
                     </CardHeader>
                   </CollapsibleTrigger>
@@ -874,12 +874,12 @@ export default function InventoryBuild() {
                     <CardContent className="pt-0 pb-4 px-4 space-y-4">
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
-                          <Label htmlFor="mix-notes">Mix notes (optional)</Label>
+                          <Label htmlFor="mix-notes">Build notes (optional)</Label>
                           <Textarea
                             id="mix-notes"
                             value={mixNotes}
                             onChange={(e) => setMixNotes(e.target.value)}
-                            placeholder="Any additional context for your mix..."
+                            placeholder="Any additional context for your build..."
                             rows={3}
                           />
                         </div>

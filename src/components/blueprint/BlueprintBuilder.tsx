@@ -329,12 +329,12 @@ export function BlueprintBuilder({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="mix-notes">Mix notes</Label>
+              <Label htmlFor="mix-notes">Build notes</Label>
               <Textarea
                 id="mix-notes"
                 value={mixNotes}
                 onChange={(event) => setMixNotes(event.target.value)}
-                placeholder="Optional notes for your mix"
+                placeholder="Optional notes for your build"
                 rows={4}
               />
             </div>
@@ -412,7 +412,7 @@ export function BlueprintBuilder({
         </CardHeader>
         <CardContent className="space-y-4">
           <Button type="button" onClick={handleGenerate} disabled={isAnalyzing || createBlueprint.isPending}>
-            {isAnalyzing ? 'Mixing...' : 'Mix Blueprint'}
+            {isAnalyzing ? 'Building...' : 'Build Blueprint'}
           </Button>
           <Textarea value={review} onChange={(event) => setReview(event.target.value)} rows={12} />
         </CardContent>
