@@ -1,4 +1,10 @@
-import type { BlueprintAnalysisRequest, InventoryRequest, InventorySchema, LLMClient } from './types';
+import type {
+  BlueprintAnalysisRequest,
+  InventoryRequest,
+  InventorySchema,
+  LLMClient,
+  StackGenerationRequest,
+} from './types';
 
 export function createMockClient(): LLMClient {
   return {
@@ -28,6 +34,16 @@ export function createMockClient(): LLMClient {
         }
         return `### ${section}\n- Example point 1\n- Example point 2`;
       }).join('\n\n');
+    },
+    async generateStack(input: StackGenerationRequest): Promise<string> {
+      return [
+        '### Overview',
+        `Mock recommendation based on: ${input.userPrompt.slice(0, 120)}...`,
+        '',
+        '### Suggestions',
+        '- Example recommendation 1',
+        '- Example recommendation 2',
+      ].join('\n');
     },
   };
 }

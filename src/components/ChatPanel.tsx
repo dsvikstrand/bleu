@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { StackLabState, Recommendation } from '@/types/stacklab';
 import { SYSTEM_PROMPT, buildUserPrompt } from '@/lib/prompts';
 import { RecommendationView } from './RecommendationView';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ChatPanelProps {
   state: StackLabState;
@@ -19,6 +20,16 @@ export function ChatPanel({ state, recommendations, onNewRecommendation, onReset
   const [isLoading, setIsLoading] = useState(false);
   const [streamedContent, setStreamedContent] = useState('');
   const { toast } = useToast();
+  const { session } = useAuth();
+
+  const agenticBaseUrl = import.meta.env.VITE_AGENTIC_BACKEND_URL;
+  const useAgenticBackend = import.meta.env.VITE_USE_AGENTIC_BACKEND === 'true';
+  const agenticGenerateUrl = agenticBaseUrl
+    ? `${agenticBaseUrl.replace(/\/$/, '')}/api/generate-stack`
+    : '';
+  const generateUrl = useAgenticBackend && agenticGenerateUrl
+    ? agenticGenerateUrl
+    : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-stack`;
 
   const latestRecommendation = recommendations[0];
   const displayContent = isLoading ? streamedContent : latestRecommendation?.rawMarkdown;
@@ -35,17 +46,28 @@ export function ChatPanel({ state, recommendations, onNewRecommendation, onReset
       return;
     }
 
+    if (useAgenticBackend && !session?.access_token) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to generate recommendations.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsLoading(true);
     setStreamedContent('');
 
     const userPrompt = buildUserPrompt(state);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-stack`, {
+      const response = await fetch(generateUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: useAgenticBackend && session?.access_token
+            ? `Bearer ${session.access_token}`
+            : `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
           systemPrompt: SYSTEM_PROMPT,
