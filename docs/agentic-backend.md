@@ -10,6 +10,8 @@ Provide a thin, swappable backend client that can call OpenAI (or a mock) withou
 - `PORT` (optional, default `8787`)
 - `CORS_ORIGIN` (optional, comma-separated)
 - `AGENTIC_API_KEY` (optional but recommended; enables X-API-Key auth)
+- `RATE_LIMIT_WINDOW_MS` (optional, default `60000`)
+- `RATE_LIMIT_MAX` (optional, default `60` per IP per window)
 
 2) Start the backend:
 ```

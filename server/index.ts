@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { createLLMClient } from './llm/client';
 import type { InventoryRequest } from './llm/types';
@@ -7,12 +8,42 @@ import type { InventoryRequest } from './llm/types';
 const app = express();
 const port = Number(process.env.PORT) || 8787;
 
+app.set('trust proxy', true);
+
 const corsOrigin = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
   : '*';
 
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '1mb' }));
+
+const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000;
+const rateLimitMax = Number(process.env.RATE_LIMIT_MAX) || 60;
+const limiter = rateLimit({
+  windowMs: rateLimitWindowMs,
+  max: rateLimitMax,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/api/health',
+});
+
+app.use(limiter);
+
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  res.on('finish', () => {
+    const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+    const line = [
+      req.ip,
+      req.method,
+      req.originalUrl,
+      res.statusCode,
+      `${durationMs.toFixed(1)}ms`,
+    ].join(' ');
+    console.log(line);
+  });
+  next();
+});
 
 const apiKey = process.env.AGENTIC_API_KEY?.trim();
 
