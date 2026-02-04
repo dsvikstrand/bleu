@@ -47,3 +47,8 @@ Push access depends on the SSH key stored in this environment. Any Codex session
 
 ## 7) UDO shortcut for execution
 If a message ends with `UDO`, treat it as approval to execute the actions you propose without waiting for a separate confirmation. Always summarize what you did afterward.
+
+## 8) Branch + Pages mapping
+- `main` is the agentic backend branch and deploys to the root URL.
+- `lovable-main` is the legacy Lovable branch and deploys to `/lovable-backend/`.
+- `main-pre-agentic` keeps a backup pointer to the old main before the swap.

@@ -1,12 +1,12 @@
 # GitHub Pages: Main + Agentic Branches
 
 ## Live URLs
-- Main (Lovable-synced): https://dsvikstrand.github.io/remix-of-stackwise-advisor/
-- Agentic backend: https://dsvikstrand.github.io/remix-of-stackwise-advisor/agentic-backend/
+- Main (Agentic): https://dsvikstrand.github.io/remix-of-stackwise-advisor/
+- Lovable (legacy): https://dsvikstrand.github.io/remix-of-stackwise-advisor/lovable-backend/
 
 ## Branch Mapping
-- `main` builds to the root of `gh-pages`.
-- `agentic-backend` builds to `gh-pages/agentic-backend/`.
+- `main` (agentic) builds to the root of `gh-pages`.
+- `lovable-main` (legacy) builds to `gh-pages/lovable-backend/`.
 
 ## How It Works
 - The workflow builds with `VITE_BASE_PATH` to set the correct base URL per branch.
@@ -18,6 +18,6 @@
 - Folder: `/ (root)`
 
 ## Troubleshooting
-- **Blank page or app 404 on `/agentic-backend/*`**: base path not set or wrong workflow deployed.
+- **404 on `/lovable-backend/*`**: `main` build not deployed yet or workflow still using old base path.
 - **`npm ci` fails**: update lockfile with `npm install --package-lock-only` and commit `package-lock.json`.
 - **Deep links 404**: confirm `public/404.html` exists and is deployed for both branches.

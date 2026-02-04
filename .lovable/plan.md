@@ -1,6 +1,10 @@
 
 # Explore Page Implementation Plan
 
+## Repo State (Current)
+- `main` = agentic backend branch (deployed to the root URL).
+- `lovable-main` = legacy Lovable branch (deployed to `/lovable-backend/`).
+
 ## Overview
 
 Add a new public **Explore** page (`/explore`) as a search-first discovery hub for Blueprints, Inventories, and Users. The page emphasizes a minimal, search-forward design with unified results across all content types.
