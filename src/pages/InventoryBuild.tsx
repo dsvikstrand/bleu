@@ -25,6 +25,7 @@ import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import {
   MAX_ADDITIONAL_SECTIONS,
   MAX_REVIEW_SECTIONS,
@@ -116,7 +117,12 @@ export default function InventoryBuild() {
 
   const isOwner = !!(isEditing && blueprint && user && blueprint.creator_user_id === user.id);
   const isLoading = inventoryLoading || (isEditing && blueprintLoading);
-  const canGenerateBanner = USE_AGENTIC_BACKEND && !!session?.access_token;
+  const canGenerateBanner = USE_AGENTIC_BACKEND && !!user;
+  const bannerHelpText = !USE_AGENTIC_BACKEND
+    ? 'Banner generation requires the agentic backend.'
+    : !user
+      ? 'Sign in to generate a banner.'
+      : null;
 
   const parseSelectedItemsWithContext = useCallback((selected: Json) => {
     const items: Record<string, string[]> = {};
@@ -547,6 +553,14 @@ export default function InventoryBuild() {
     }
   }, [inventory, selectedItems, itemContexts, title, mixNotes, reviewPrompt, reviewSections, includeScore, totalSelected, toast]);
 
+  const resolveAccessToken = useCallback(async () => {
+    if (session?.access_token) return session.access_token;
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session?.access_token) return sessionData.session.access_token;
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    return refreshed.session?.access_token ?? null;
+  }, [session?.access_token]);
+
   const handleGenerateBanner = useCallback(async () => {
     if (!inventory) return;
     if (!USE_AGENTIC_BACKEND || !AGENTIC_BANNER_URL) {
@@ -558,7 +572,8 @@ export default function InventoryBuild() {
       return null;
     }
 
-    if (!session?.access_token) {
+    const accessToken = await resolveAccessToken();
+    if (!accessToken) {
       toast({
         title: 'Sign in required',
         description: 'Please sign in to generate a banner.',
@@ -583,7 +598,7 @@ export default function InventoryBuild() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           title: title.trim(),
@@ -614,7 +629,7 @@ export default function InventoryBuild() {
     } finally {
       setIsGeneratingBanner(false);
     }
-  }, [inventory, session?.access_token, title, tags, toast]);
+  }, [inventory, resolveAccessToken, title, tags, toast]);
 
   const handlePublish = async () => {
     if (isEditing && blueprintId && !isOwner) {
@@ -1178,8 +1193,8 @@ export default function InventoryBuild() {
                               </Button>
                             )}
                           </div>
-                          {!canGenerateBanner && (
-                            <p className="text-xs text-muted-foreground">Sign in to generate a banner.</p>
+                          {bannerHelpText && (
+                            <p className="text-xs text-muted-foreground">{bannerHelpText}</p>
                           )}
                         </div>
                       )}
