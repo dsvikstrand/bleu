@@ -33,13 +33,19 @@ import {
   formatReviewSection,
   normalizeAdditionalSections,
 } from '@/lib/reviewSections';
-import { ArrowLeft, ChevronDown, Settings2, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, RefreshCcw, Settings2, Sparkles, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 const AGENTIC_BASE_URL = import.meta.env.VITE_AGENTIC_BACKEND_URL;
 const USE_AGENTIC_BACKEND = import.meta.env.VITE_USE_AGENTIC_BACKEND === 'true';
 const AGENTIC_ANALYZE_URL = AGENTIC_BASE_URL
   ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/analyze-blueprint`
+  : '';
+const AGENTIC_BANNER_URL = AGENTIC_BASE_URL
+  ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/generate-banner`
+  : '';
+const AGENTIC_BANNER_URL = AGENTIC_BASE_URL
+  ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/generate-banner`
   : '';
 const ANALYZE_BLUEPRINT_URL = USE_AGENTIC_BACKEND && AGENTIC_ANALYZE_URL
   ? AGENTIC_ANALYZE_URL
@@ -89,6 +95,12 @@ export default function InventoryBuild() {
   const [mixNotes, setMixNotes] = useState('');
   const [reviewPrompt, setReviewPrompt] = useState('');
   const [review, setReview] = useState('');
+  const [generateBanner, setGenerateBanner] = useState(true);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [isGeneratingBanner, setIsGeneratingBanner] = useState(false);
+  const [generateBanner, setGenerateBanner] = useState(true);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [isGeneratingBanner, setIsGeneratingBanner] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -110,6 +122,7 @@ export default function InventoryBuild() {
 
   const isOwner = !!(isEditing && blueprint && user && blueprint.creator_user_id === user.id);
   const isLoading = inventoryLoading || (isEditing && blueprintLoading);
+  const canGenerateBanner = USE_AGENTIC_BACKEND && !!session?.access_token;
 
   const parseSelectedItemsWithContext = useCallback((selected: Json) => {
     const items: Record<string, string[]> = {};
@@ -211,6 +224,8 @@ export default function InventoryBuild() {
       setMixNotes(blueprint.mix_notes || '');
       setReviewPrompt(blueprint.review_prompt || '');
       setReview(blueprint.llm_review || '');
+      setBannerUrl(blueprint.banner_url || null);
+      setGenerateBanner(true);
       setTags(blueprint.tags.map((tag) => tag.slug));
       setIsPublic(blueprint.is_public);
       const initialSteps = parseStepsForBuilder(blueprint.steps);
@@ -220,6 +235,8 @@ export default function InventoryBuild() {
       setTitle(inventory.title);
       setSteps([]);
       setActiveStepId(null);
+      setBannerUrl(null);
+      setGenerateBanner(true);
     }
 
     setIsInitialized(true);
@@ -415,6 +432,13 @@ export default function InventoryBuild() {
     });
   }, []);
 
+  const handleToggleGenerateBanner = (value: boolean) => {
+    setGenerateBanner(value);
+    if (!value) {
+      setBannerUrl(null);
+    }
+  };
+
   const handleAnalyze = useCallback(async () => {
     if (!inventory) return;
 
@@ -529,6 +553,75 @@ export default function InventoryBuild() {
     }
   }, [inventory, selectedItems, itemContexts, title, mixNotes, reviewPrompt, reviewSections, includeScore, totalSelected, toast]);
 
+  const handleGenerateBanner = useCallback(async () => {
+    if (!inventory) return;
+    if (!USE_AGENTIC_BACKEND || !AGENTIC_BANNER_URL) {
+      toast({
+        title: 'Banner generation unavailable',
+        description: 'The agentic backend is not configured.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    if (!session?.access_token) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to generate a banner.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    if (!title.trim()) {
+      toast({
+        title: 'Title required',
+        description: 'Add a blueprint title before generating a banner.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    setIsGeneratingBanner(true);
+
+    try {
+      const response = await fetch(AGENTIC_BANNER_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          inventoryTitle: inventory.title,
+          tags,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to generate banner');
+      }
+
+      const data = await response.json();
+      if (!data?.bannerUrl) {
+        throw new Error('No banner URL returned');
+      }
+
+      setBannerUrl(data.bannerUrl);
+      return data.bannerUrl as string;
+    } catch (error) {
+      toast({
+        title: 'Banner generation failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+      throw error;
+    } finally {
+      setIsGeneratingBanner(false);
+    }
+  }, [inventory, session?.access_token, title, tags, toast]);
+
   const handlePublish = async () => {
     if (isEditing && blueprintId && !isOwner) {
       toast({
@@ -635,6 +728,15 @@ export default function InventoryBuild() {
           ]
         : null;
 
+      let resolvedBannerUrl = bannerUrl;
+      if (generateBanner && !resolvedBannerUrl) {
+        resolvedBannerUrl = await handleGenerateBanner();
+      }
+
+      if (generateBanner && !resolvedBannerUrl) {
+        throw new Error('Banner generation is required before publishing.');
+      }
+
       if (isEditing && blueprintId) {
         const updated = await updateBlueprint.mutateAsync({
           blueprintId,
@@ -643,6 +745,7 @@ export default function InventoryBuild() {
           steps: finalSteps,
           mixNotes: mixNotes.trim() ? mixNotes.trim() : null,
           reviewPrompt: reviewPrompt.trim() ? reviewPrompt.trim() : null,
+          bannerUrl: resolvedBannerUrl,
           llmReview: review,
           tags,
           isPublic,
@@ -658,6 +761,7 @@ export default function InventoryBuild() {
           steps: finalSteps,
           mixNotes: mixNotes.trim() ? mixNotes.trim() : null,
           reviewPrompt: reviewPrompt.trim() ? reviewPrompt.trim() : null,
+          bannerUrl: resolvedBannerUrl,
           llmReview: review,
           tags,
           isPublic,
@@ -1031,6 +1135,62 @@ export default function InventoryBuild() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    <div className="rounded-lg border border-border/60 px-4 py-3 space-y-3">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="font-medium">Generate banner</p>
+                          <p className="text-sm text-muted-foreground">Create a 4:1 banner for this blueprint.</p>
+                        </div>
+                        <Switch checked={generateBanner} onCheckedChange={handleToggleGenerateBanner} />
+                      </div>
+
+                      {generateBanner && (
+                        <div className="space-y-3">
+                          <div className="aspect-[4/1] w-full overflow-hidden rounded-lg border border-border/60 bg-muted/40">
+                            {bannerUrl ? (
+                              <img
+                                src={bannerUrl}
+                                alt="Blueprint banner"
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">
+                                No banner yet
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => handleGenerateBanner()}
+                              disabled={isGeneratingBanner || !canGenerateBanner}
+                            >
+                              <RefreshCcw className={`h-3.5 w-3.5 ${isGeneratingBanner ? 'animate-spin' : ''}`} />
+                              {bannerUrl ? 'Regenerate banner' : 'Generate banner'}
+                            </Button>
+                            {bannerUrl && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setBannerUrl(null)}
+                                disabled={isGeneratingBanner}
+                              >
+                                Remove
+                              </Button>
+                            )}
+                          </div>
+                          {!canGenerateBanner && (
+                            <p className="text-xs text-muted-foreground">Sign in to generate a banner.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     {recentTags.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {recentTags.map((tag) => (

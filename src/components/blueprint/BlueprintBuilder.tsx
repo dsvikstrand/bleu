@@ -294,6 +294,7 @@ export function BlueprintBuilder({
         steps: null,
         mixNotes: mixNotes.trim() ? mixNotes.trim() : null,
         reviewPrompt: reviewPrompt.trim() ? reviewPrompt.trim() : null,
+        bannerUrl: null,
         llmReview: review,
         tags,
         isPublic,

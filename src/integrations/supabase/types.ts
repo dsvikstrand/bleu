@@ -119,6 +119,7 @@ export type Database = {
           inventory_id: string | null
           is_public: boolean
           likes_count: number
+          banner_url: string | null
           llm_review: string | null
           mix_notes: string | null
           review_prompt: string | null
@@ -135,6 +136,7 @@ export type Database = {
           inventory_id?: string | null
           is_public?: boolean
           likes_count?: number
+          banner_url?: string | null
           llm_review?: string | null
           mix_notes?: string | null
           review_prompt?: string | null
@@ -151,6 +153,7 @@ export type Database = {
           inventory_id?: string | null
           is_public?: boolean
           likes_count?: number
+          banner_url?: string | null
           llm_review?: string | null
           mix_notes?: string | null
           review_prompt?: string | null

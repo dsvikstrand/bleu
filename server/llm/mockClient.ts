@@ -1,4 +1,6 @@
 import type {
+  BannerRequest,
+  BannerResult,
   BlueprintAnalysisRequest,
   InventoryRequest,
   InventorySchema,
@@ -33,6 +35,32 @@ export function createMockClient(): LLMClient {
         }
         return `### ${section}\n- Example point 1\n- Example point 2`;
       }).join('\n\n');
+    },
+    async generateBanner(input: BannerRequest): Promise<BannerResult> {
+      const title = input.title.trim() || 'Blueprint';
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024">
+          <defs>
+            <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.25"/>
+              <stop offset="100%" stop-color="#f97316" stop-opacity="0.35"/>
+            </linearGradient>
+          </defs>
+          <rect width="1536" height="1024" fill="#0b1220"/>
+          <rect width="1536" height="1024" fill="url(#g)"/>
+          <circle cx="1200" cy="200" r="180" fill="#22d3ee" opacity="0.15"/>
+          <circle cx="240" cy="840" r="220" fill="#fb923c" opacity="0.12"/>
+          <text x="96" y="140" fill="#e2e8f0" font-size="48" font-family="Inter, Arial, sans-serif" opacity="0.7">
+            ${title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+          </text>
+        </svg>
+      `;
+
+      return {
+        buffer: Buffer.from(svg),
+        mimeType: 'image/svg+xml',
+        prompt: 'mock-banner',
+      };
     },
   };
 }

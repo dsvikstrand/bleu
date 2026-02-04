@@ -26,7 +26,20 @@ export interface BlueprintAnalysisRequest {
   includeScore?: boolean;
 }
 
+export interface BannerRequest {
+  title: string;
+  inventoryTitle?: string;
+  tags?: string[];
+}
+
+export interface BannerResult {
+  buffer: Buffer;
+  mimeType: string;
+  prompt: string;
+}
+
 export interface LLMClient {
   generateInventory(input: InventoryRequest): Promise<InventorySchema>;
   analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string>;
+  generateBanner(input: BannerRequest): Promise<BannerResult>;
 }

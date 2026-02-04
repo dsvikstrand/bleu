@@ -11,6 +11,7 @@ export interface BlueprintRow {
   title: string;
   selected_items: Json;
   mix_notes: string | null;
+  banner_url: string | null;
   llm_review: string | null;
   is_public: boolean;
   likes_count: number;
@@ -31,7 +32,7 @@ export interface BlueprintListItem extends BlueprintRow {
 
 export type BlueprintSort = 'popular' | 'latest';
 
-const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, mix_notes, llm_review, is_public, likes_count, created_at, updated_at';
+const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, mix_notes, banner_url, llm_review, is_public, likes_count, created_at, updated_at';
 
 function applyVisibilityFilter(query: any, userId?: string | null) {
   if (userId) {

@@ -13,6 +13,7 @@ export interface BlueprintRow {
   steps: Json | null;
   mix_notes: string | null;
   review_prompt: string | null;
+  banner_url: string | null;
   llm_review: string | null;
   is_public: boolean;
   likes_count: number;
@@ -42,6 +43,7 @@ interface CreateBlueprintInput {
   steps: Json | null;
   mixNotes: string | null;
   reviewPrompt: string | null;
+  bannerUrl: string | null;
   llmReview: string | null;
   tags: string[];
   isPublic: boolean;
@@ -55,12 +57,13 @@ interface UpdateBlueprintInput {
   steps: Json | null;
   mixNotes: string | null;
   reviewPrompt: string | null;
+  bannerUrl: string | null;
   llmReview: string | null;
   tags: string[];
   isPublic: boolean;
 }
 
-const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, steps, mix_notes, review_prompt, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
+const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, steps, mix_notes, review_prompt, banner_url, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
 
 async function ensureTags(slugs: string[], userId: string): Promise<BlueprintTag[]> {
   const normalized = normalizeTags(slugs);
@@ -152,6 +155,7 @@ export function useCreateBlueprint() {
           steps: input.steps,
           mix_notes: input.mixNotes,
           review_prompt: input.reviewPrompt,
+          banner_url: input.bannerUrl,
           llm_review: input.llmReview,
           is_public: input.isPublic,
           source_blueprint_id: input.sourceBlueprintId || null,
@@ -226,6 +230,7 @@ export function useUpdateBlueprint() {
           steps: input.steps,
           mix_notes: input.mixNotes,
           review_prompt: input.reviewPrompt,
+          banner_url: input.bannerUrl,
           llm_review: input.llmReview,
           is_public: input.isPublic,
         })

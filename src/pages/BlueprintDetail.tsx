@@ -122,6 +122,19 @@ export default function BlueprintDetail() {
               </div>
             </section>
 
+            {blueprint.banner_url && (
+              <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/30">
+                <div className="aspect-[4/1] w-full">
+                  <img
+                    src={blueprint.banner_url}
+                    alt="Blueprint banner"
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+            )}
+
             <Card>
               <CardHeader className="space-y-3">
                 <div className="flex items-center justify-between">

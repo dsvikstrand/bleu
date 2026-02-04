@@ -1,6 +1,8 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 import type {
+  BannerRequest,
+  BannerResult,
   BlueprintAnalysisRequest,
   InventoryRequest,
   InventorySchema,
@@ -32,6 +34,9 @@ export function createOpenAIClient(): LLMClient {
   }
 
   const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+  const imageModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
+  const imageSize = process.env.OPENAI_IMAGE_SIZE || '1536x1024';
+  const imageQuality = process.env.OPENAI_IMAGE_QUALITY || 'low';
   const client = new OpenAI({ apiKey });
 
   return {
@@ -64,5 +69,53 @@ export function createOpenAIClient(): LLMClient {
 
       return outputText;
     },
+    async generateBanner(input: BannerRequest): Promise<BannerResult> {
+      const prompt = buildBannerPrompt(input);
+      const response = await client.images.generate({
+        model: imageModel,
+        prompt,
+        size: imageSize,
+        quality: imageQuality,
+        response_format: 'b64_json',
+      });
+
+      const base64 = response.data?.[0]?.b64_json;
+      if (!base64) {
+        throw new Error('No image data returned');
+      }
+
+      return {
+        buffer: Buffer.from(base64, 'base64'),
+        mimeType: 'image/png',
+        prompt,
+      };
+    },
   };
+}
+
+function buildBannerPrompt(input: BannerRequest) {
+  const title = input.title.trim();
+  const inventoryTitle = input.inventoryTitle?.trim();
+  const tags = (input.tags || [])
+    .map((tag) => tag.replace(/^#/, '').trim())
+    .filter(Boolean)
+    .slice(0, 6);
+
+  const parts = [
+    `A clean, modern banner image for a community blueprint titled "${title}".`,
+  ];
+
+  if (inventoryTitle) {
+    parts.push(`Based on the inventory "${inventoryTitle}".`);
+  }
+
+  if (tags.length > 0) {
+    parts.push(`Theme keywords: ${tags.join(', ')}.`);
+  }
+
+  parts.push(
+    'Wide landscape composition, minimal, tasteful gradients, soft lighting, no text, no logos, no watermarks.'
+  );
+
+  return parts.join(' ');
 }
