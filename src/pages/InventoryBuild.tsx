@@ -842,7 +842,17 @@ export default function InventoryBuild() {
               </Card>
             </section>
 
-            {/* Advanced Options (Collapsed by default) */}
+            {/* Review Button */}
+            <section className="flex justify-center py-8 animate-fade-in" style={{ animationDelay: '0.2s' }} data-help-id="mix">
+              <MixButton
+                onClick={handleAnalyze}
+                disabled={totalSelected === 0}
+                isLoading={isAnalyzing}
+                itemCount={totalSelected}
+              />
+            </section>
+
+            {/* Review Options (Collapsed by default) */}
             <section className="animate-fade-in" style={{ animationDelay: '0.15s' }}>
               <Collapsible>
                 <Card className="bg-card/60 backdrop-blur-glass border-border/50">
@@ -851,7 +861,7 @@ export default function InventoryBuild() {
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-base flex items-center gap-2">
                           <Settings2 className="h-4 w-4 text-muted-foreground" />
-                          Advanced Options
+                          Review Options
                         </CardTitle>
                         <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
                       </div>
@@ -983,16 +993,6 @@ export default function InventoryBuild() {
                   </CollapsibleContent>
                 </Card>
               </Collapsible>
-            </section>
-
-            {/* Central MIX Button */}
-            <section className="flex justify-center py-8 animate-fade-in" style={{ animationDelay: '0.2s' }} data-help-id="mix">
-              <MixButton
-                onClick={handleAnalyze}
-                disabled={totalSelected === 0}
-                isLoading={isAnalyzing}
-                itemCount={totalSelected}
-              />
             </section>
 
             {/* Loading Animation */}

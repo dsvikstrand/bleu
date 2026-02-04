@@ -128,9 +128,9 @@ export function BlueprintItemPicker({
             <TabsTrigger
               key={cat.name}
               value={cat.name}
-              className="text-xs px-2 py-1 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              className="text-xs px-2 py-1 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-normal"
             >
-              {cat.name.length > 12 ? cat.name.slice(0, 12) + '…' : cat.name}
+              {cat.name}
             </TabsTrigger>
           ))}
         </TabsList>
