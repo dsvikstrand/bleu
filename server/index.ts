@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import { jwtVerify } from 'jose';
 import { z } from 'zod';
 import { createLLMClient } from './llm/client';
 import type { InventoryRequest } from './llm/types';
@@ -16,6 +17,8 @@ const corsOrigin = process.env.CORS_ORIGIN
 
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '1mb' }));
+
+const jwtSecret = process.env.SUPABASE_JWT_SECRET?.trim();
 
 const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000;
 const rateLimitMax = Number(process.env.RATE_LIMIT_MAX) || 60;
@@ -48,10 +51,24 @@ app.use((req, res, next) => {
 const apiKey = process.env.AGENTIC_API_KEY?.trim();
 
 app.use((req, res, next) => {
-  if (!apiKey) return next();
   if (req.method === 'OPTIONS') return next();
   if (req.path === '/api/health') return next();
 
+  if (jwtSecret) {
+    const authHeader = req.header('Authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const secretBytes = new TextEncoder().encode(jwtSecret);
+    jwtVerify(token, secretBytes, { algorithms: ['HS256'] })
+      .then(() => next())
+      .catch(() => res.status(401).json({ error: 'Unauthorized' }));
+    return;
+  }
+
+  if (!apiKey) return next();
   const providedKey = req.header('X-API-Key');
   if (providedKey !== apiKey) {
     return res.status(401).json({ error: 'Unauthorized' });

@@ -27,11 +27,11 @@ import { useRecentTags } from '@/hooks/useRecentTags';
 import { DEFAULT_ADDITIONAL_SECTIONS } from '@/lib/reviewSections';
 import { ChevronDown, Loader2, Settings2, Sparkles, Wand2, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 const SUPABASE_GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-inventory`;
 const AGENTIC_BASE_URL = import.meta.env.VITE_AGENTIC_BACKEND_URL;
 const USE_AGENTIC_BACKEND = import.meta.env.VITE_USE_AGENTIC_BACKEND === 'true';
-const AGENTIC_API_KEY = import.meta.env.VITE_AGENTIC_BACKEND_API_KEY;
 const AGENTIC_GENERATE_URL = AGENTIC_BASE_URL
   ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/generate-inventory`
   : '';
@@ -49,6 +49,7 @@ interface GeneratedSchema {
 export default function InventoryCreate() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { session } = useAuth();
   const createInventory = useCreateInventory();
   const { data: tagSuggestions } = useTagSuggestions();
   const { recentTags, addRecentTags } = useRecentTags();
@@ -97,6 +98,15 @@ export default function InventoryCreate() {
       return;
     }
 
+    if (USE_AGENTIC_BACKEND && !session?.access_token) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to generate an inventory.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsGenerating(true);
 
     try {
@@ -105,8 +115,8 @@ export default function InventoryCreate() {
       };
       if (!USE_AGENTIC_BACKEND) {
         headers.Authorization = `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`;
-      } else if (AGENTIC_API_KEY) {
-        headers['X-API-Key'] = AGENTIC_API_KEY;
+      } else if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
       }
 
       const response = await fetch(GENERATE_URL, {
