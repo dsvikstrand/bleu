@@ -42,6 +42,7 @@ const App = () => (
             <Route path="/inventory/create" element={<RequireAuth><InventoryCreate /></RequireAuth>} />
             <Route path="/inventory/:inventoryId" element={<RequireAuth><InventoryDetail /></RequireAuth>} />
             <Route path="/inventory/:inventoryId/build" element={<RequireAuth><InventoryBuild /></RequireAuth>} />
+            <Route path="/blueprint/:blueprintId/edit" element={<RequireAuth><InventoryBuild /></RequireAuth>} />
             <Route path="/blueprint/:blueprintId" element={<BlueprintDetail />} />
             <Route path="/blueprint/:blueprintId/remix" element={<RequireAuth><BlueprintRemix /></RequireAuth>} />
             <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />

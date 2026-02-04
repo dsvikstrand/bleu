@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +20,7 @@ import { StepAccordion, type BlueprintStep } from '@/components/blueprint/StepAc
 import { BuildHelpOverlay, HelpButton } from '@/components/blueprint/BuildHelpOverlay';
 import { BuildTour, TourBanner, TourButton, isTourCompleted } from '@/components/blueprint/BuildTour';
 import { useInventory } from '@/hooks/useInventories';
-import { useCreateBlueprint } from '@/hooks/useBlueprints';
+import { useBlueprint, useCreateBlueprint, useUpdateBlueprint } from '@/hooks/useBlueprints';
 import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
 import { useToast } from '@/hooks/use-toast';
@@ -50,6 +50,9 @@ interface InventoryCategory {
   items: string[];
 }
 
+type ItemValue = string | { name?: string; context?: string };
+type StepItem = { category?: string; name?: string; context?: string };
+
 function parseCategories(schema: Json): InventoryCategory[] {
   if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return [];
   const categories = (schema as { categories?: Array<{ name?: string; items?: string[] }> }).categories;
@@ -66,14 +69,18 @@ function parseCategories(schema: Json): InventoryCategory[] {
 }
 
 export default function InventoryBuild() {
-  const { inventoryId } = useParams();
+  const { inventoryId, blueprintId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { session } = useAuth();
-  const { data: inventory, isLoading } = useInventory(inventoryId);
+  const { session, user } = useAuth();
+  const isEditing = !!blueprintId;
+  const { data: blueprint, isLoading: blueprintLoading } = useBlueprint(blueprintId);
+  const inventoryLookupId = inventoryId || blueprint?.inventory_id || undefined;
+  const { data: inventory, isLoading: inventoryLoading } = useInventory(inventoryLookupId);
   const { data: tagSuggestions } = useTagSuggestions();
   const { recentTags, addRecentTags } = useRecentTags();
   const createBlueprint = useCreateBlueprint();
+  const updateBlueprint = useUpdateBlueprint();
 
   // Blueprint state
   const [title, setTitle] = useState('');
@@ -91,6 +98,7 @@ export default function InventoryBuild() {
   const [includeScore, setIncludeScore] = useState(true);
   const [steps, setSteps] = useState<BlueprintStep[]>([]);
   const [activeStepId, setActiveStepId] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Help & Tour state
   const [showHelp, setShowHelp] = useState(false);
@@ -100,19 +108,130 @@ export default function InventoryBuild() {
   // Categories with custom items
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
 
-  // Initialize categories when inventory loads
-  useMemo(() => {
-    if (inventory && categories.length === 0) {
-      setCategories(parseCategories(inventory.generated_schema));
+  const isOwner = !!(isEditing && blueprint && user && blueprint.creator_user_id === user.id);
+  const isLoading = inventoryLoading || (isEditing && blueprintLoading);
+
+  const parseSelectedItemsWithContext = useCallback((selected: Json) => {
+    const items: Record<string, string[]> = {};
+    const contexts: Record<string, string> = {};
+    if (!selected || typeof selected !== 'object' || Array.isArray(selected)) {
+      return { items, contexts };
+    }
+
+    Object.entries(selected as Record<string, ItemValue[]>).forEach(([category, list]) => {
+      if (!Array.isArray(list)) return;
+      const names: string[] = [];
+      list.forEach((entry) => {
+        if (typeof entry === 'string') {
+          names.push(entry);
+          return;
+        }
+        if (!entry || typeof entry !== 'object') return;
+        const name = typeof entry.name === 'string' ? entry.name : '';
+        if (!name) return;
+        names.push(name);
+        if (typeof entry.context === 'string' && entry.context.trim()) {
+          contexts[`${category}::${name}`] = entry.context.trim();
+        }
+      });
+      if (names.length > 0) items[category] = names;
+    });
+
+    return { items, contexts };
+  }, []);
+
+  const parseStepsForBuilder = useCallback((stepsJson: Json) => {
+    if (!stepsJson || typeof stepsJson !== 'object' || !Array.isArray(stepsJson)) return [] as BlueprintStep[];
+    return stepsJson
+      .filter((step) => step && typeof step === 'object')
+      .map((step, index) => {
+        const data = step as { id?: string; title?: string; description?: string | null; items?: StepItem[] };
+        const itemKeys = (data.items || [])
+          .map((item) => {
+            const category = typeof item.category === 'string' ? item.category : '';
+            const name = typeof item.name === 'string' ? item.name : '';
+            if (!category || !name) return null;
+            return `${category}::${name}`;
+          })
+          .filter((key): key is string => !!key);
+        return {
+          id: data.id || `step-${index}`,
+          title: data.title || '',
+          description: typeof data.description === 'string' ? data.description : '',
+          itemKeys,
+        } as BlueprintStep;
+      });
+  }, []);
+
+  const extractStepItems = useCallback((stepsJson: Json) => {
+    const items: Record<string, string[]> = {};
+    const contexts: Record<string, string> = {};
+    if (!stepsJson || typeof stepsJson !== 'object' || !Array.isArray(stepsJson)) {
+      return { items, contexts };
+    }
+    stepsJson.forEach((step) => {
+      const data = step as { items?: StepItem[] };
+      (data.items || []).forEach((item) => {
+        const category = typeof item.category === 'string' ? item.category : '';
+        const name = typeof item.name === 'string' ? item.name : '';
+        if (!category || !name) return;
+        if (!items[category]) items[category] = [];
+        if (!items[category].includes(name)) items[category].push(name);
+        if (typeof item.context === 'string' && item.context.trim()) {
+          contexts[`${category}::${name}`] = item.context.trim();
+        }
+      });
+    });
+    return { items, contexts };
+  }, []);
+
+  useEffect(() => {
+    if (!inventory || isInitialized) return;
+    if (isEditing && !blueprint) return;
+
+    setCategories(parseCategories(inventory.generated_schema));
+    setAdditionalSections(
+      normalizeAdditionalSections(inventory.review_sections).slice(0, MAX_ADDITIONAL_SECTIONS)
+    );
+    setIncludeScore(inventory.include_score ?? true);
+
+    if (isEditing && blueprint) {
+      const parsed = parseSelectedItemsWithContext(blueprint.selected_items);
+      const fromSteps = extractStepItems(blueprint.steps);
+      const mergedItems: Record<string, string[]> = { ...parsed.items };
+      Object.entries(fromSteps.items).forEach(([category, items]) => {
+        const existing = new Set(mergedItems[category] || []);
+        items.forEach((item) => existing.add(item));
+        mergedItems[category] = Array.from(existing);
+      });
+      const mergedContexts = { ...parsed.contexts, ...fromSteps.contexts };
+      setTitle(blueprint.title || inventory.title);
+      setSelectedItems(mergedItems);
+      setItemContexts(mergedContexts);
+      setMixNotes(blueprint.mix_notes || '');
+      setReviewPrompt(blueprint.review_prompt || '');
+      setReview(blueprint.llm_review || '');
+      setTags(blueprint.tags.map((tag) => tag.slug));
+      setIsPublic(blueprint.is_public);
+      const initialSteps = parseStepsForBuilder(blueprint.steps);
+      setSteps(initialSteps);
+      setActiveStepId(initialSteps[0]?.id || null);
+    } else {
       setTitle(inventory.title);
-      setAdditionalSections(
-        normalizeAdditionalSections(inventory.review_sections).slice(0, MAX_ADDITIONAL_SECTIONS)
-      );
-      setIncludeScore(inventory.include_score ?? true);
       setSteps([]);
       setActiveStepId(null);
     }
-  }, [inventory, categories.length]);
+
+    setIsInitialized(true);
+  }, [
+    inventory,
+    blueprint,
+    isEditing,
+    isInitialized,
+    parseSelectedItemsWithContext,
+    parseStepsForBuilder,
+    extractStepItems,
+  ]);
 
   const totalSelected = useMemo(
     () => Object.values(selectedItems).reduce((sum, items) => sum + items.length, 0),
@@ -123,6 +242,8 @@ export default function InventoryBuild() {
     () => buildReviewSections(additionalSections),
     [additionalSections]
   );
+
+  const heroTitle = (isEditing ? blueprint?.title : inventory?.title) || (isEditing ? 'EDIT' : 'BUILD');
 
   const getItemKey = useCallback((categoryName: string, item: string) => `${categoryName}::${item}`, []);
 
@@ -409,12 +530,23 @@ export default function InventoryBuild() {
   }, [inventory, selectedItems, itemContexts, title, mixNotes, reviewPrompt, reviewSections, includeScore, totalSelected, toast]);
 
   const handlePublish = async () => {
+    if (isEditing && blueprintId && !isOwner) {
+      toast({
+        title: 'Permission denied',
+        description: 'Only the blueprint owner can edit this blueprint.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!inventory) return;
 
     if (!title.trim()) {
       toast({
         title: 'Title required',
-        description: 'Add a blueprint title before publishing.',
+        description: isEditing
+          ? 'Add a blueprint title before saving changes.'
+          : 'Add a blueprint title before publishing.',
         variant: 'destructive',
       });
       return;
@@ -423,7 +555,9 @@ export default function InventoryBuild() {
     if (totalSelected === 0) {
       toast({
         title: 'Select items',
-        description: 'Pick at least one item before publishing.',
+        description: isEditing
+          ? 'Pick at least one item before saving changes.'
+          : 'Pick at least one item before publishing.',
         variant: 'destructive',
       });
       return;
@@ -501,29 +635,67 @@ export default function InventoryBuild() {
           ]
         : null;
 
-      const blueprint = await createBlueprint.mutateAsync({
-        inventoryId: inventory.id,
-        title: title.trim(),
-        selectedItems: payload,
-        steps: finalSteps,
-        mixNotes: mixNotes.trim() ? mixNotes.trim() : null,
-        reviewPrompt: reviewPrompt.trim() ? reviewPrompt.trim() : null,
-        llmReview: review,
-        tags,
-        isPublic,
-        sourceBlueprintId: null,
-      });
+      if (isEditing && blueprintId) {
+        const updated = await updateBlueprint.mutateAsync({
+          blueprintId,
+          title: title.trim(),
+          selectedItems: payload,
+          steps: finalSteps,
+          mixNotes: mixNotes.trim() ? mixNotes.trim() : null,
+          reviewPrompt: reviewPrompt.trim() ? reviewPrompt.trim() : null,
+          llmReview: review,
+          tags,
+          isPublic,
+        });
 
-      addRecentTags(tags);
-      navigate(`/blueprint/${blueprint.id}`);
+        addRecentTags(tags);
+        navigate(`/blueprint/${updated.id}`);
+      } else {
+        const created = await createBlueprint.mutateAsync({
+          inventoryId: inventory.id,
+          title: title.trim(),
+          selectedItems: payload,
+          steps: finalSteps,
+          mixNotes: mixNotes.trim() ? mixNotes.trim() : null,
+          reviewPrompt: reviewPrompt.trim() ? reviewPrompt.trim() : null,
+          llmReview: review,
+          tags,
+          isPublic,
+          sourceBlueprintId: null,
+        });
+
+        addRecentTags(tags);
+        navigate(`/blueprint/${created.id}`);
+      }
     } catch (error) {
       toast({
-        title: 'Publish failed',
+        title: isEditing ? 'Update failed' : 'Publish failed',
         description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
     }
   };
+
+  if (isEditing && blueprint && !isOwner) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <main className="max-w-3xl mx-auto px-4 py-12">
+          <Card className="bg-card/60 backdrop-blur-glass border-border/50">
+            <CardContent className="py-12 text-center space-y-3">
+              <h2 className="text-lg font-semibold">You cannot edit this blueprint</h2>
+              <p className="text-sm text-muted-foreground">
+                Only the original creator can make changes.
+              </p>
+              <Link to={`/blueprint/${blueprint.id}`}>
+                <Button>Back to blueprint</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -543,11 +715,11 @@ export default function InventoryBuild() {
         {/* Sub-header row: Back link + Help buttons */}
         <div className="flex items-center justify-between mb-6">
           <Link
-            to="/inventory"
+            to={isEditing && blueprintId ? `/blueprint/${blueprintId}` : '/inventory'}
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to inventory
+            {isEditing ? 'Back to blueprint' : 'Back to inventory'}
           </Link>
           <div className="flex items-center gap-1">
             <TourButton onClick={() => setShowTour(true)} />
@@ -570,23 +742,25 @@ export default function InventoryBuild() {
                 style={{ transform: 'translate(4px, 4px)' }}
                 aria-hidden="true"
               >
-                {inventory?.title.toUpperCase() || 'BUILD'}
+                {heroTitle.toUpperCase()}
               </span>
               <span
                 className="absolute inset-0 text-border/60"
                 style={{ transform: 'translate(2px, 2px)' }}
                 aria-hidden="true"
               >
-                {inventory?.title.toUpperCase() || 'BUILD'}
+                {heroTitle.toUpperCase()}
               </span>
               <span className="text-gradient-themed animate-shimmer bg-[length:200%_auto] relative">
-                {inventory?.title.toUpperCase() || 'BUILD'}
+                {heroTitle.toUpperCase()}
               </span>
             </span>
             <span className="absolute -inset-4 bg-primary/10 blur-2xl rounded-full animate-pulse-soft -z-10" />
           </h1>
           <p className="text-lg text-muted-foreground max-w-md mx-auto">
-            Build your blueprint from this inventory
+            {isEditing
+              ? 'Update your blueprint, regenerate the review, and save the changes.'
+              : 'Build your blueprint from this inventory'}
           </p>
         </div>
 
@@ -853,7 +1027,7 @@ export default function InventoryBuild() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Sparkles className="h-5 w-5 text-primary" />
-                      Publish Blueprint
+                      {isEditing ? 'Save changes' : 'Publish Blueprint'}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -885,12 +1059,12 @@ export default function InventoryBuild() {
                     </div>
                     <Button
                       onClick={handlePublish}
-                      disabled={createBlueprint.isPending}
+                      disabled={isEditing ? updateBlueprint.isPending : createBlueprint.isPending}
                       className="w-full gap-2"
                       size="lg"
                     >
                       <Sparkles className="h-4 w-4" />
-                      Publish Blueprint
+                      {isEditing ? 'Save Changes' : 'Publish Blueprint'}
                     </Button>
                   </CardContent>
                 </Card>

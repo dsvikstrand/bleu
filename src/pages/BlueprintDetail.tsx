@@ -13,6 +13,7 @@ import { useBlueprint, useBlueprintComments, useCreateBlueprintComment, useToggl
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Heart } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
@@ -53,8 +54,10 @@ export default function BlueprintDetail() {
   const createComment = useCreateBlueprintComment();
   const toggleLike = useToggleBlueprintLike();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [comment, setComment] = useState('');
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
+  const isOwner = !!(user && blueprint && user.id === blueprint.creator_user_id);
 
   const handleLike = async () => {
     if (!blueprint) return;
@@ -142,6 +145,13 @@ export default function BlueprintDetail() {
                     </div>
                   </Link>
                   <div className="flex items-center gap-2">
+                    {isOwner && (
+                      <Link to={`/blueprint/${blueprint.id}/edit`}>
+                        <Button variant="outline" size="sm">
+                          Edit
+                        </Button>
+                      </Link>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"

@@ -48,6 +48,18 @@ interface CreateBlueprintInput {
   sourceBlueprintId?: string | null;
 }
 
+interface UpdateBlueprintInput {
+  blueprintId: string;
+  title: string;
+  selectedItems: Json;
+  steps: Json | null;
+  mixNotes: string | null;
+  reviewPrompt: string | null;
+  llmReview: string | null;
+  tags: string[];
+  isPublic: boolean;
+}
+
 const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, steps, mix_notes, review_prompt, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
 
 async function ensureTags(slugs: string[], userId: string): Promise<BlueprintTag[]> {
@@ -194,6 +206,60 @@ export function useToggleBlueprintLike() {
       queryClient.invalidateQueries({ queryKey: ['blueprint'] });
       queryClient.invalidateQueries({ queryKey: ['blueprint-search'] });
       queryClient.invalidateQueries({ queryKey: ['suggested-blueprints'] });
+    },
+  });
+}
+
+export function useUpdateBlueprint() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: UpdateBlueprintInput) => {
+      if (!user) throw new Error('Must be logged in');
+
+      const { data: blueprint, error } = await supabase
+        .from('blueprints')
+        .update({
+          title: input.title,
+          selected_items: input.selectedItems,
+          steps: input.steps,
+          mix_notes: input.mixNotes,
+          review_prompt: input.reviewPrompt,
+          llm_review: input.llmReview,
+          is_public: input.isPublic,
+        })
+        .eq('id', input.blueprintId)
+        .eq('creator_user_id', user.id)
+        .select(BLUEPRINT_FIELDS)
+        .single();
+
+      if (error) throw error;
+
+      const tags = await ensureTags(input.tags, user.id);
+      const { error: clearError } = await supabase
+        .from('blueprint_tags')
+        .delete()
+        .eq('blueprint_id', input.blueprintId);
+      if (clearError) throw clearError;
+
+      if (tags.length > 0) {
+        const { error: tagError } = await supabase.from('blueprint_tags').insert(
+          tags.map((tag) => ({
+            blueprint_id: input.blueprintId,
+            tag_id: tag.id,
+          }))
+        );
+        if (tagError) throw tagError;
+      }
+
+      return blueprint as BlueprintRow;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['blueprint', variables.blueprintId] });
+      queryClient.invalidateQueries({ queryKey: ['blueprint-search'] });
+      queryClient.invalidateQueries({ queryKey: ['suggested-blueprints'] });
+      queryClient.invalidateQueries({ queryKey: ['blueprint-comments', variables.blueprintId] });
     },
   });
 }
