@@ -20,7 +20,7 @@ export function createOpenAIClient(): LLMClient {
     throw new Error('OPENAI_API_KEY is not set');
   }
 
-  const model = process.env.OPENAI_MODEL || 'gpt-5';
+  const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
   const client = new OpenAI({ apiKey });
 
   return {

@@ -6,7 +6,7 @@ Provide a thin, swappable backend client that can call OpenAI (or a mock) withou
 ## Local Dev
 1) Set env vars (in your shell):
 - `OPENAI_API_KEY`
-- `OPENAI_MODEL` (optional, default `gpt-5`)
+- `OPENAI_MODEL` (optional, default `gpt-4.1-mini`)
 - `PORT` (optional, default `8787`)
 - `CORS_ORIGIN` (optional, comma-separated)
 - `SUPABASE_URL` (required for auth introspection)
