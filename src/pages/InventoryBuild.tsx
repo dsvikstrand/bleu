@@ -44,9 +44,6 @@ const AGENTIC_ANALYZE_URL = AGENTIC_BASE_URL
 const AGENTIC_BANNER_URL = AGENTIC_BASE_URL
   ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/generate-banner`
   : '';
-const AGENTIC_BANNER_URL = AGENTIC_BASE_URL
-  ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/generate-banner`
-  : '';
 const ANALYZE_BLUEPRINT_URL = USE_AGENTIC_BACKEND && AGENTIC_ANALYZE_URL
   ? AGENTIC_ANALYZE_URL
   : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
@@ -95,9 +92,6 @@ export default function InventoryBuild() {
   const [mixNotes, setMixNotes] = useState('');
   const [reviewPrompt, setReviewPrompt] = useState('');
   const [review, setReview] = useState('');
-  const [generateBanner, setGenerateBanner] = useState(true);
-  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
-  const [isGeneratingBanner, setIsGeneratingBanner] = useState(false);
   const [generateBanner, setGenerateBanner] = useState(true);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [isGeneratingBanner, setIsGeneratingBanner] = useState(false);
