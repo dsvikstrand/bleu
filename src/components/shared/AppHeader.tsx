@@ -15,11 +15,11 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const { user } = useAuth();
   const navMode = user ? 'all' : 'public';
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
-  const isAgentic = pathname.startsWith('/remix-of-stackwise-advisor/agentic-backend');
+  const isAgentic = !pathname.startsWith('/remix-of-stackwise-advisor/lovable-backend');
   const switchTarget = isAgentic
-    ? 'https://dsvikstrand.github.io/remix-of-stackwise-advisor/'
-    : 'https://dsvikstrand.github.io/remix-of-stackwise-advisor/agentic-backend/';
-  const switchLabel = isAgentic ? 'Switch to Main' : 'Switch to Agentic';
+    ? 'https://dsvikstrand.github.io/remix-of-stackwise-advisor/lovable-backend/'
+    : 'https://dsvikstrand.github.io/remix-of-stackwise-advisor/';
+  const switchLabel = isAgentic ? 'Switch to Lovable' : 'Switch to Agentic';
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-border/50 bg-card/70 backdrop-blur-glass">
