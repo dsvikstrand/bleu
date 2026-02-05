@@ -24,12 +24,8 @@ app.use(express.json({ limit: '1mb' }));
 
 const supabaseUrl = process.env.SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY?.trim();
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 const supabaseClient = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } })
-  : null;
-const supabaseAdmin = supabaseUrl && supabaseServiceKey
-  ? createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } })
   : null;
 
 const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000;
@@ -80,6 +76,7 @@ app.use((req, res, next) => {
         return res.status(401).json({ error: 'Unauthorized' });
       }
       res.locals.user = data.user;
+      res.locals.authToken = token;
       return next();
     })
     .catch(() => res.status(401).json({ error: 'Unauthorized' }));
@@ -194,12 +191,13 @@ app.post('/api/generate-banner', async (req, res) => {
     return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
   }
 
-  if (!supabaseAdmin) {
-    return res.status(500).json({ error: 'Storage not configured' });
+  if (!supabaseUrl) {
+    return res.status(500).json({ error: 'Supabase not configured' });
   }
 
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
-  if (!userId) {
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -207,28 +205,34 @@ app.post('/api/generate-banner', async (req, res) => {
     const client = createLLMClient();
     const result = await client.generateBanner(parsed.data);
 
-    const bucket = process.env.SUPABASE_BANNER_BUCKET || 'blueprint-banners';
-    const extension = result.mimeType === 'image/png'
-      ? 'png'
-      : result.mimeType === 'image/jpeg'
-        ? 'jpg'
-        : result.mimeType === 'image/svg+xml'
-          ? 'svg'
-          : 'bin';
-    const filename = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+    const uploadUrl = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/upload-banner`;
+    const imageBase64 = result.buffer.toString('base64');
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        contentType: result.mimeType,
+        imageBase64,
+      }),
+    });
 
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from(bucket)
-      .upload(filename, result.buffer, { contentType: result.mimeType, upsert: true });
-
-    if (uploadError) {
-      return res.status(500).json({ error: uploadError.message });
+    if (!uploadResponse.ok) {
+      const errorData = await uploadResponse.json().catch(() => ({}));
+      return res.status(uploadResponse.status).json({
+        error: errorData.error || 'Banner upload failed',
+      });
     }
 
-    const { data: publicData } = supabaseAdmin.storage.from(bucket).getPublicUrl(filename);
+    const uploadData = await uploadResponse.json();
+    if (!uploadData?.bannerUrl) {
+      return res.status(500).json({ error: 'Banner URL missing from upload' });
+    }
 
     return res.json({
-      bannerUrl: publicData.publicUrl,
+      bannerUrl: uploadData.bannerUrl,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
