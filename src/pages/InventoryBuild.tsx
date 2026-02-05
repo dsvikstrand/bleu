@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -114,6 +114,7 @@ export default function InventoryBuild() {
   const [showHelp, setShowHelp] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [showTourBanner, setShowTourBanner] = useState(() => !isTourCompleted());
+  const hasLoggedEdit = useRef(false);
 
   // Categories with custom items
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
@@ -257,6 +258,24 @@ export default function InventoryBuild() {
     () => Object.values(selectedItems).reduce((sum, items) => sum + items.length, 0),
     [selectedItems]
   );
+
+  useEffect(() => {
+    if (hasLoggedEdit.current) return;
+    if (!inventory) return;
+    if (totalSelected <= 0) return;
+    hasLoggedEdit.current = true;
+    void logMvpEvent({
+      eventName: 'edit_blueprint',
+      userId: user?.id,
+      blueprintId: blueprintId ?? null,
+      path: location.pathname,
+      metadata: {
+        inventoryId: inventory.id,
+        selectedCount: totalSelected,
+        isEditing,
+      },
+    });
+  }, [inventory, totalSelected, user?.id, blueprintId, location.pathname, isEditing]);
 
   const reviewSections = useMemo(
     () => buildReviewSections(additionalSections),
@@ -811,6 +830,16 @@ export default function InventoryBuild() {
             tagCount: tags.length,
           },
         });
+        void logMvpEvent({
+          eventName: 'publish_blueprint',
+          userId: user?.id,
+          blueprintId: updated.id,
+          path: location.pathname,
+          metadata: {
+            isPublic,
+            isEditing: true,
+          },
+        });
         navigate(`/blueprint/${updated.id}`);
       } else {
         const created = await createBlueprint.mutateAsync({
@@ -837,6 +866,16 @@ export default function InventoryBuild() {
             isEditing: false,
             hasReview: !!review,
             tagCount: tags.length,
+          },
+        });
+        void logMvpEvent({
+          eventName: 'publish_blueprint',
+          userId: user?.id,
+          blueprintId: created.id,
+          path: location.pathname,
+          metadata: {
+            isPublic,
+            isEditing: false,
           },
         });
         navigate(`/blueprint/${created.id}`);

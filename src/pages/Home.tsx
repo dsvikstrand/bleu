@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Button } from '@/components/ui/button';
 import { CommunityStats } from '@/components/home/CommunityStats';
@@ -7,8 +8,41 @@ import { FeaturedTags } from '@/components/home/FeaturedTags';
 import { DemoInventory } from '@/components/home/DemoInventory';
 import { HowItWorks } from '@/components/home/HowItWorks';
 import { ArrowRight, Sparkles } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { logMvpEvent } from '@/lib/logEvent';
 
 export default function Home() {
+  const { user } = useAuth();
+  const hasLoggedVisit = useRef(false);
+
+  useEffect(() => {
+    if (hasLoggedVisit.current) return;
+    hasLoggedVisit.current = true;
+
+    const now = Date.now();
+    const lastVisitRaw = localStorage.getItem('mvp_last_visit');
+    const lastVisit = lastVisitRaw ? Number(lastVisitRaw) : null;
+
+    if (lastVisit && !Number.isNaN(lastVisit)) {
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      if (now - lastVisit <= sevenDaysMs) {
+        void logMvpEvent({
+          eventName: 'return_visit_7d',
+          userId: user?.id,
+          path: window.location.pathname,
+        });
+      }
+    }
+
+    localStorage.setItem('mvp_last_visit', String(now));
+
+    void logMvpEvent({
+      eventName: 'visit_home',
+      userId: user?.id,
+      path: window.location.pathname,
+    });
+  }, [user?.id]);
+
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Ambient background */}
