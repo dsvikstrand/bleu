@@ -454,7 +454,7 @@ export default function InventoryBuild() {
       return;
     }
 
-    if (USE_AGENTIC_BACKEND && !session?.access_token) {
+    if (!session?.access_token) {
       toast({
         title: 'Sign in required',
         description: 'Please sign in to generate a review.',
@@ -580,6 +580,7 @@ export default function InventoryBuild() {
     location.pathname,
     user?.id,
     isEditing,
+    session?.access_token,
   ]);
 
   const resolveAccessToken = useCallback(async () => {
@@ -665,6 +666,15 @@ export default function InventoryBuild() {
       toast({
         title: 'Permission denied',
         description: 'Only the blueprint owner can edit this blueprint.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!session?.access_token) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to publish your blueprint.',
         variant: 'destructive',
       });
       return;

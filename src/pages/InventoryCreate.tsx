@@ -50,7 +50,7 @@ interface GeneratedSchema {
 export default function InventoryCreate() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { session } = useAuth();
+  const { session, isLoading } = useAuth();
   const createInventory = useCreateInventory();
   const { data: tagSuggestions } = useTagSuggestions();
   const { recentTags, addRecentTags } = useRecentTags();
@@ -87,6 +87,47 @@ export default function InventoryCreate() {
 
   const [categoryItemInputs, setCategoryItemInputs] = useState<Record<number, string>>({});
   const [newCategoryName, setNewCategoryName] = useState('');
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <main className="max-w-3xl mx-auto px-4 py-12">
+          <Card className="bg-card/60 backdrop-blur-glass border-border/50">
+            <CardContent className="py-12 text-center">
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
+  if (!session?.access_token) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <main className="max-w-3xl mx-auto px-4 py-12">
+          <Card className="bg-card/60 backdrop-blur-glass border-border/50">
+            <CardHeader>
+              <CardTitle>Sign in required</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-center">
+              <p className="text-sm text-muted-foreground">
+                Creating a library requires an account. Sign in to generate and publish libraries.
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button onClick={() => navigate('/auth')}>Sign in</Button>
+                <Button variant="outline" onClick={() => navigate('/inventory')}>
+                  Back to Library
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
 
 
   const handleGenerate = async () => {
