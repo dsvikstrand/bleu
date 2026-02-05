@@ -20,6 +20,7 @@ import { logMvpEvent } from '@/lib/logEvent';
 export default function Inventory() {
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [showLibraryInfo, setShowLibraryInfo] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
   const hasLoggedView = useRef(false);
@@ -91,12 +92,39 @@ export default function Inventory() {
 
       <main className="relative max-w-6xl mx-auto px-4 py-8 space-y-8">
         <Card className="border-border/50 bg-card/60 backdrop-blur-sm">
-          <CardContent className="pt-6 space-y-2">
-            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Library</p>
-            <h2 className="text-xl font-semibold">Pick a collection, then build your blueprint</h2>
-            <p className="text-sm text-muted-foreground">
-              Browse libraries, open one, and start adding items into your routine.
-            </p>
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-primary uppercase tracking-wide">Library</p>
+                <h2 className="text-xl font-semibold">Pick a collection, then build your blueprint</h2>
+                <p className="text-sm text-muted-foreground">
+                  Browse libraries, open one, and start adding items into your routine.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowLibraryInfo((prev) => !prev)}
+              >
+                What is a Library?
+              </Button>
+            </div>
+            {showLibraryInfo && (
+              <div className="rounded-lg border border-border/40 bg-muted/20 p-4 text-sm text-muted-foreground leading-relaxed space-y-2">
+                <p>
+                  Think of a Library as a curated list of items you can use to build a routine.
+                  It is the ingredient shelf for a blueprint.
+                  Each library is organized into categories so you can scan quickly.
+                  You do not have to use everything; it is a toolbox, not a checklist.
+                  Good libraries save time by gathering the best options in one place.
+                  When you open a library, you can pick items that fit your goal.
+                  As you select items, you start shaping a blueprint.
+                  Libraries can be public so others can learn from them.
+                  You can also create your own library if something is missing.
+                  Start simple, then refine as you learn what works for you.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

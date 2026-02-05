@@ -23,6 +23,7 @@ export default function Blueprints() {
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [sort, setSort] = useState<BlueprintSort>('popular');
+  const [showBlueprintInfo, setShowBlueprintInfo] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -99,12 +100,39 @@ export default function Blueprints() {
 
       <main className="relative max-w-6xl mx-auto px-4 py-8 space-y-8">
         <Card className="border-border/50 bg-card/60 backdrop-blur-sm">
-          <CardContent className="pt-6 space-y-2">
-            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Blueprint Library</p>
-            <h2 className="text-xl font-semibold">Pick a collection, then build your blueprint</h2>
-            <p className="text-sm text-muted-foreground">
-              Browse blueprints, open one, and start shaping your routine.
-            </p>
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-primary uppercase tracking-wide">Blueprint Library</p>
+                <h2 className="text-xl font-semibold">Pick a collection, then build your blueprint</h2>
+                <p className="text-sm text-muted-foreground">
+                  Blueprints are step-by-step routines built from libraries. Open one to learn, adapt, or publish your own.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBlueprintInfo((prev) => !prev)}
+              >
+                What is a Blueprint?
+              </Button>
+            </div>
+            {showBlueprintInfo && (
+              <div className="rounded-lg border border-border/40 bg-muted/20 p-4 text-sm text-muted-foreground leading-relaxed space-y-2">
+                <p>
+                  A Blueprint is a step-by-step routine built from a library.
+                  It turns a list of items into an ordered plan.
+                  Each step can include multiple items and short context.
+                  Blueprints are meant to be practical and repeatable.
+                  You can follow a blueprint as-is or edit it to fit your style.
+                  The review helps you check gaps or risks before you publish.
+                  Banners and tags help others discover your blueprint.
+                  Public blueprints appear on the community wall.
+                  Saving a blueprint lets you return and improve it later.
+                  Think of it as a recipe for a routine you can share.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
