@@ -1,10 +1,12 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Beaker, Shuffle } from 'lucide-react';
+import { Beaker, HelpCircle, Shuffle } from 'lucide-react';
 import { AppNavigation } from '@/components/shared/AppNavigation';
 import { ThemeToggle } from '@/components/blend/ThemeToggle';
 import { UserMenu } from '@/components/shared/UserMenu';
 import { useAuth } from '@/contexts/AuthContext';
+import { HelpOverlay } from '@/components/shared/HelpOverlay';
+import { Button } from '@/components/ui/button';
 
 interface AppHeaderProps {
   actions?: ReactNode;
@@ -13,6 +15,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const { user } = useAuth();
+  const [showHelp, setShowHelp] = useState(false);
   const navMode = user ? 'all' : 'public';
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
   const isAgentic = !pathname.startsWith('/remix-of-stackwise-advisor/lovable-backend');
@@ -48,6 +51,16 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
           </div>
           <div className="flex items-center gap-2">
             {actions}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowHelp(true)}
+              className="h-9 w-9 rounded-full border border-border/60 bg-background/60 text-muted-foreground hover:text-foreground"
+              aria-label="Open help"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </Button>
             <ThemeToggle />
             <UserMenu />
           </div>
@@ -58,6 +71,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
           <AppNavigation variant="floating" mode={navMode} />
         </div>
       )}
+      <HelpOverlay open={showHelp} onOpenChange={setShowHelp} />
     </>
   );
 }
