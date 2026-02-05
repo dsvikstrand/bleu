@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getFriendlyErrorMessage } from '@/lib/errors';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { logMvpEvent } from '@/lib/logEvent';
 import {
   MAX_ADDITIONAL_SECTIONS,
   MAX_REVIEW_SECTIONS,
@@ -76,6 +77,7 @@ function parseCategories(schema: Json): InventoryCategory[] {
 export default function InventoryBuild() {
   const { inventoryId, blueprintId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const { session, user } = useAuth();
   const isEditing = !!blueprintId;
@@ -543,6 +545,17 @@ export default function InventoryBuild() {
         title: 'Analysis complete!',
         description: 'Your blueprint has been reviewed.',
       });
+      void logMvpEvent({
+        eventName: 'generate_ai_review',
+        userId: user?.id,
+        blueprintId: blueprintId ?? null,
+        path: location.pathname,
+        metadata: {
+          inventoryId: inventory?.id ?? null,
+          selectedCount: totalSelected,
+          isEditing,
+        },
+      });
     } catch (error) {
       toast({
         title: 'Analysis failed',
@@ -552,7 +565,22 @@ export default function InventoryBuild() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [inventory, selectedItems, itemContexts, title, mixNotes, reviewPrompt, reviewSections, includeScore, totalSelected, toast]);
+  }, [
+    inventory,
+    selectedItems,
+    itemContexts,
+    title,
+    mixNotes,
+    reviewPrompt,
+    reviewSections,
+    includeScore,
+    totalSelected,
+    toast,
+    blueprintId,
+    location.pathname,
+    user?.id,
+    isEditing,
+  ]);
 
   const resolveAccessToken = useCallback(async () => {
     if (session?.access_token) return session.access_token;
@@ -762,6 +790,17 @@ export default function InventoryBuild() {
         });
 
         addRecentTags(tags);
+        void logMvpEvent({
+          eventName: 'save_blueprint',
+          userId: user?.id,
+          blueprintId: updated.id,
+          path: location.pathname,
+          metadata: {
+            isEditing: true,
+            hasReview: !!review,
+            tagCount: tags.length,
+          },
+        });
         navigate(`/blueprint/${updated.id}`);
       } else {
         const created = await createBlueprint.mutateAsync({
@@ -779,6 +818,17 @@ export default function InventoryBuild() {
         });
 
         addRecentTags(tags);
+        void logMvpEvent({
+          eventName: 'save_blueprint',
+          userId: user?.id,
+          blueprintId: created.id,
+          path: location.pathname,
+          metadata: {
+            isEditing: false,
+            hasReview: !!review,
+            tagCount: tags.length,
+          },
+        });
         navigate(`/blueprint/${created.id}`);
       }
     } catch (error) {

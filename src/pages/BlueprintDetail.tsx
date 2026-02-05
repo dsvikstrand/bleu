@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,7 @@ import { useTagFollows } from '@/hooks/useTagFollows';
 import { ArrowLeft, Heart } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { logMvpEvent } from '@/lib/logEvent';
 
 type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
@@ -58,8 +59,22 @@ export default function BlueprintDetail() {
   const { user } = useAuth();
   const { followedIds, toggleFollow } = useTagFollows();
   const [comment, setComment] = useState('');
+  const location = useLocation();
+  const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
   const isOwner = !!(user && blueprint && user.id === blueprint.creator_user_id);
+
+  useEffect(() => {
+    if (!blueprint?.id) return;
+    if (loggedBlueprintId.current === blueprint.id) return;
+    loggedBlueprintId.current = blueprint.id;
+    void logMvpEvent({
+      eventName: 'view_blueprint',
+      userId: user?.id,
+      blueprintId: blueprint.id,
+      path: location.pathname,
+    });
+  }, [blueprint?.id, location.pathname, user?.id]);
 
   const handleLike = async () => {
     if (!blueprint) return;
