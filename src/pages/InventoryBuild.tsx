@@ -10,6 +10,16 @@ import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { TagInput } from '@/components/shared/TagInput';
 import { MixButton } from '@/components/blend/MixButton';
 import { BlueprintItemPicker } from '@/components/blueprint/BlueprintItemPicker';
@@ -47,6 +57,9 @@ const AGENTIC_ANALYZE_URL = AGENTIC_BASE_URL
 const AGENTIC_BANNER_URL = AGENTIC_BASE_URL
   ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/generate-banner`
   : '';
+const AGENTIC_GENERATE_BLUEPRINT_URL = AGENTIC_BASE_URL
+  ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/generate-blueprint`
+  : '';
 const ANALYZE_BLUEPRINT_URL = USE_AGENTIC_BACKEND && AGENTIC_ANALYZE_URL
   ? AGENTIC_ANALYZE_URL
   : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
@@ -58,6 +71,15 @@ interface InventoryCategory {
 
 type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
+type GeneratedStep = {
+  title: string;
+  description?: string | null;
+  items: Array<{ category: string; name: string; context?: string }>;
+};
+type GeneratedBlueprint = {
+  title: string;
+  steps: GeneratedStep[];
+};
 
 function parseCategories(schema: Json): InventoryCategory[] {
   if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return [];
@@ -109,6 +131,12 @@ export default function InventoryBuild() {
   const [steps, setSteps] = useState<BlueprintStep[]>([]);
   const [activeStepId, setActiveStepId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [showAutoGenerate, setShowAutoGenerate] = useState(false);
+  const [autoTitle, setAutoTitle] = useState('');
+  const [autoDescription, setAutoDescription] = useState('');
+  const [autoNotes, setAutoNotes] = useState('');
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+  const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
 
   // Help & Tour state
   const [showHelp, setShowHelp] = useState(false);
@@ -126,6 +154,11 @@ export default function InventoryBuild() {
     ? 'Banner generation requires the agentic backend.'
     : !user && !session?.access_token
       ? 'Sign in to generate a banner.'
+      : null;
+  const autoGenerateHelpText = !USE_AGENTIC_BACKEND
+    ? 'Auto-generation requires the agentic backend.'
+    : !session?.access_token
+      ? 'Sign in to auto-generate a blueprint.'
       : null;
 
   const parseSelectedItemsWithContext = useCallback((selected: Json) => {
@@ -254,10 +287,23 @@ export default function InventoryBuild() {
     extractStepItems,
   ]);
 
+  useEffect(() => {
+    if (!inventory) return;
+    setAutoTitle((prev) => prev || title || inventory.title);
+  }, [inventory, title]);
+
   const totalSelected = useMemo(
     () => Object.values(selectedItems).reduce((sum, items) => sum + items.length, 0),
     [selectedItems]
   );
+  const categoryItemMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    categories.forEach((category) => {
+      map.set(category.name, new Set(category.items));
+    });
+    return map;
+  }, [categories]);
+  const shouldConfirmOverwrite = totalSelected > 0 || steps.length > 0;
 
   useEffect(() => {
     if (hasLoggedEdit.current) return;
@@ -623,6 +669,149 @@ export default function InventoryBuild() {
     const { data: refreshed } = await supabase.auth.refreshSession();
     return refreshed.session?.access_token ?? null;
   }, [session?.access_token]);
+
+  const applyGeneratedBlueprint = useCallback((generated: GeneratedBlueprint) => {
+    const nextSelected: Record<string, string[]> = {};
+    const nextContexts: Record<string, string> = {};
+    const nextSteps: BlueprintStep[] = [];
+
+    (generated.steps || []).forEach((step) => {
+      const itemKeys: string[] = [];
+      (step.items || []).forEach((item) => {
+        const categoryName = item.category?.trim();
+        const itemName = item.name?.trim();
+        if (!categoryName || !itemName) return;
+        const allowedItems = categoryItemMap.get(categoryName);
+        if (!allowedItems || !allowedItems.has(itemName)) return;
+        if (!nextSelected[categoryName]) nextSelected[categoryName] = [];
+        if (!nextSelected[categoryName].includes(itemName)) {
+          nextSelected[categoryName].push(itemName);
+        }
+        const key = `${categoryName}::${itemName}`;
+        itemKeys.push(key);
+        if (item.context && item.context.trim()) {
+          nextContexts[key] = item.context.trim();
+        }
+      });
+
+      if (itemKeys.length > 0) {
+        nextSteps.push({
+          id: crypto.randomUUID(),
+          title: step.title?.trim() || '',
+          description: step.description?.trim() || '',
+          itemKeys,
+        });
+      }
+    });
+
+    if (generated.title?.trim()) {
+      setTitle(generated.title.trim());
+    }
+    setSelectedItems(nextSelected);
+    setItemContexts(nextContexts);
+    setSteps(nextSteps);
+    setActiveStepId(nextSteps[0]?.id ?? null);
+    setReview('');
+    setBannerUrl(null);
+  }, [categoryItemMap]);
+
+  const executeAutoGenerate = useCallback(async () => {
+    if (!inventory) return;
+    if (!USE_AGENTIC_BACKEND || !AGENTIC_GENERATE_BLUEPRINT_URL) {
+      toast({
+        title: 'Auto-generation unavailable',
+        description: 'The agentic backend is not configured.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!session?.access_token) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to auto-generate a blueprint.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsAutoGenerating(true);
+
+    try {
+      const response = await fetch(AGENTIC_GENERATE_BLUEPRINT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          title: autoTitle.trim() || undefined,
+          description: autoDescription.trim() || undefined,
+          notes: autoNotes.trim() || undefined,
+          inventoryTitle: inventory.title,
+          categories: categories.map((category) => ({
+            name: category.name,
+            items: category.items,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to auto-generate blueprint');
+      }
+
+      const data = await response.json() as GeneratedBlueprint;
+      if (!data?.steps || data.steps.length === 0) {
+        throw new Error('No steps were generated');
+      }
+
+      applyGeneratedBlueprint(data);
+      setShowAutoGenerate(false);
+      toast({
+        title: 'Blueprint generated',
+        description: 'Your steps and items have been updated.',
+      });
+      void logMvpEvent({
+        eventName: 'auto_generate_blueprint',
+        userId: user?.id,
+        blueprintId: blueprintId ?? null,
+        path: location.pathname,
+        metadata: {
+          inventoryId: inventory.id,
+          stepCount: data.steps.length,
+        },
+      });
+    } catch (error) {
+      toast({
+        title: 'Auto-generation failed',
+        description: getFriendlyErrorMessage(error, 'Please try again.'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAutoGenerating(false);
+    }
+  }, [
+    inventory,
+    categories,
+    autoTitle,
+    autoDescription,
+    autoNotes,
+    applyGeneratedBlueprint,
+    toast,
+    session?.access_token,
+    user?.id,
+    blueprintId,
+    location.pathname,
+  ]);
+
+  const handleAutoGenerateClick = useCallback(() => {
+    if (shouldConfirmOverwrite) {
+      setShowOverwriteDialog(true);
+      return;
+    }
+    void executeAutoGenerate();
+  }, [shouldConfirmOverwrite, executeAutoGenerate]);
 
   const handleGenerateBanner = useCallback(async () => {
     if (!inventory) return;
@@ -1018,13 +1207,72 @@ export default function InventoryBuild() {
             <section className="animate-fade-in" style={{ animationDelay: '0.05s' }}>
               <div className="bg-card/60 backdrop-blur-glass rounded-2xl border border-border/50 overflow-hidden">
                 {/* Blueprint Name Input */}
-                <div className="p-4 border-b border-border/30">
-                  <Input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Name your blueprint..."
-                    className="text-xl font-bold bg-transparent border-none focus-visible:ring-2 focus-visible:ring-primary/50 h-14"
-                  />
+                <div className="p-4 border-b border-border/30 space-y-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <Input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Name your blueprint..."
+                      className="text-xl font-bold bg-transparent border-none focus-visible:ring-2 focus-visible:ring-primary/50 h-14 flex-1"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => setShowAutoGenerate((prev) => !prev)}
+                        disabled={!USE_AGENTIC_BACKEND}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        Auto-generate Blueprint
+                      </Button>
+                    </div>
+                  </div>
+                  {autoGenerateHelpText && (
+                    <p className="text-xs text-muted-foreground">{autoGenerateHelpText}</p>
+                  )}
+                  {showAutoGenerate && (
+                    <div className="grid gap-3 rounded-lg border border-border/40 bg-muted/20 p-4">
+                      <div className="grid gap-2">
+                        <Label>Title</Label>
+                        <Input
+                          value={autoTitle}
+                          onChange={(e) => setAutoTitle(e.target.value)}
+                          placeholder="Home Workout Blueprint"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Description</Label>
+                        <Textarea
+                          value={autoDescription}
+                          onChange={(e) => setAutoDescription(e.target.value)}
+                          placeholder="What should this routine focus on?"
+                          rows={2}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Notes</Label>
+                        <Textarea
+                          value={autoNotes}
+                          onChange={(e) => setAutoNotes(e.target.value)}
+                          placeholder="Any constraints or preferences?"
+                          rows={2}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          This will replace your current steps and selected items.
+                        </p>
+                        <Button
+                          type="button"
+                          onClick={handleAutoGenerateClick}
+                          disabled={isAutoGenerating || !session?.access_token}
+                        >
+                          {isAutoGenerating ? 'Generating...' : 'Generate blueprint'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {/* Item Picker */}
                 <div className="p-4" data-help-id="picker">
@@ -1037,6 +1285,27 @@ export default function InventoryBuild() {
                 </div>
               </div>
             </section>
+            <AlertDialog open={showOverwriteDialog} onOpenChange={setShowOverwriteDialog}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Replace current blueprint?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will overwrite your current steps and selected items. You can’t undo this action.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      setShowOverwriteDialog(false);
+                      void executeAutoGenerate();
+                    }}
+                  >
+                    Replace and generate
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             {/* Steps Section - New Accordion */}
             <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>

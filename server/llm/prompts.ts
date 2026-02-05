@@ -1,4 +1,4 @@
-import type { BlueprintAnalysisRequest, InventoryRequest } from './types';
+import type { BlueprintAnalysisRequest, BlueprintGenerationRequest, InventoryRequest } from './types';
 
 export const INVENTORY_SYSTEM_PROMPT = `You are an expert curator who creates comprehensive inventory schemas for various domains.
 
@@ -89,6 +89,51 @@ Selected items:
 ${items}
 
 Write the review now following the format rules.`;
+}
+
+export const BLUEPRINT_GENERATION_SYSTEM_PROMPT = `You are an expert routine designer.
+
+Your job is to generate a complete step-by-step blueprint using ONLY the items provided in the inventory list.
+
+Guidelines:
+- Create 4-8 steps total.
+- Each step must have a short title and 1-2 sentence description.
+- Each step must include 1-4 items.
+- Items must match the inventory items exactly (category + item name).
+- Add short context for items when helpful (timing, dosage, reps, duration).
+- If a title is provided, use it. Otherwise, create a concise, descriptive title.
+
+Response format (STRICT JSON - no markdown, no explanation):
+{
+  "title": "Blueprint Title",
+  "steps": [
+    {
+      "title": "Step title",
+      "description": "1-2 sentence description",
+      "items": [
+        { "category": "Category Name", "name": "Item Name", "context": "optional" }
+      ]
+    }
+  ]
+}`;
+
+export function buildBlueprintGenerationUserPrompt(input: BlueprintGenerationRequest) {
+  const lines = input.categories
+    .map((category) => {
+      const items = category.items.map((item) => `- ${item}`).join('\n');
+      return `${category.name}:\n${items}`;
+    })
+    .join('\n\n');
+
+  return `Inventory title: ${input.inventoryTitle.trim()}
+${input.title?.trim() ? `Requested title: ${input.title.trim()}` : ''}
+${input.description?.trim() ? `Description: ${input.description.trim()}` : ''}
+${input.notes?.trim() ? `Notes: ${input.notes.trim()}` : ''}
+
+Inventory items (use only these):
+${lines}
+
+Generate the blueprint now in the required JSON format.`;
 }
 
 export function extractJson(text: string) {

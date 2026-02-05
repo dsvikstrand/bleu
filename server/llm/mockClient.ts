@@ -2,6 +2,8 @@ import type {
   BannerRequest,
   BannerResult,
   BlueprintAnalysisRequest,
+  BlueprintGenerationRequest,
+  BlueprintGenerationResult,
   InventoryRequest,
   InventorySchema,
   LLMClient,
@@ -60,6 +62,38 @@ export function createMockClient(): LLMClient {
         buffer: Buffer.from(svg),
         mimeType: 'image/svg+xml',
         prompt: 'mock-banner',
+      };
+    },
+    async generateBlueprint(input: BlueprintGenerationRequest): Promise<BlueprintGenerationResult> {
+      const title = input.title?.trim() || `${input.inventoryTitle.trim()} Blueprint`;
+      const categories = input.categories || [];
+      const pickItem = (index: number) => {
+        const category = categories[index % categories.length];
+        const item = category?.items?.[0];
+        if (!category || !item) return null;
+        return { category: category.name, name: item, context: 'Mock context' };
+      };
+      const steps = [
+        {
+          title: 'Step 1',
+          description: 'Mock step description.',
+          items: [pickItem(0)].filter(Boolean) as NonNullable<ReturnType<typeof pickItem>>[],
+        },
+        {
+          title: 'Step 2',
+          description: 'Mock step description.',
+          items: [pickItem(1)].filter(Boolean) as NonNullable<ReturnType<typeof pickItem>>[],
+        },
+        {
+          title: 'Step 3',
+          description: 'Mock step description.',
+          items: [pickItem(2)].filter(Boolean) as NonNullable<ReturnType<typeof pickItem>>[],
+        },
+      ].filter((step) => step.items.length > 0);
+
+      return {
+        title,
+        steps,
       };
     },
   };
