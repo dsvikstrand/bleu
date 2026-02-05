@@ -16,7 +16,7 @@ export function InventoryCard({ inventory, onLike }: InventoryCardProps) {
 
   return (
     <Link to={`/inventory/${inventory.id}/build`} className="block group">
-      <Card className="h-full transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 group-focus-visible:ring-2 group-focus-visible:ring-primary">
+      <Card className="h-full bg-card/60 backdrop-blur-sm border-border/50 transition-all duration-300 hover:border-border/80 hover:shadow-md hover:shadow-black/5 group-focus-visible:ring-2 group-focus-visible:ring-primary">
         <CardContent className="p-5 flex flex-col h-full">
           {/* Title */}
           <h3 className="font-semibold text-lg line-clamp-1 mb-1">{inventory.title}</h3>

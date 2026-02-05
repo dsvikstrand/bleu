@@ -28,7 +28,7 @@ export function BlueprintCard({ blueprint, onLike, followedTagIds, onToggleTag }
 
   return (
     <Link to={`/blueprint/${blueprint.id}`} className="block group">
-      <Card className="h-full transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 group-focus-visible:ring-2 group-focus-visible:ring-primary">
+      <Card className="h-full bg-card/60 backdrop-blur-sm border-border/50 transition-all duration-300 hover:border-border/80 hover:shadow-md hover:shadow-black/5 group-focus-visible:ring-2 group-focus-visible:ring-primary">
         <CardContent className="p-5 flex flex-col h-full">
           <div className="flex items-start justify-between gap-2 mb-2">
             <h3 className="font-semibold text-lg line-clamp-1">{blueprint.title}</h3>

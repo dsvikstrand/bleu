@@ -16,8 +16,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { BlueprintCard } from '@/components/blueprint/BlueprintCard';
 import { TagFilterChips } from '@/components/inventory/TagFilterChips';
-import { SuggestedBlueprints } from '@/components/blueprint/SuggestedBlueprints';
-import { Layers, Search } from 'lucide-react';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Filter, Layers, Search } from 'lucide-react';
 
 export default function Blueprints() {
   const [query, setQuery] = useState('');
@@ -88,6 +88,13 @@ export default function Blueprints() {
 
   const showSuggestions = !effectiveQuery && user;
 
+  const displayBlueprints = useMemo(() => {
+    if (!showSuggestions) return mainBlueprints;
+    if (!suggestedBlueprints || suggestedBlueprints.length === 0) return mainBlueprints;
+    if (suggestedLoading) return mainBlueprints;
+    return [...suggestedBlueprints, ...mainBlueprints];
+  }, [showSuggestions, suggestedBlueprints, suggestedLoading, mainBlueprints]);
+
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -98,17 +105,22 @@ export default function Blueprints() {
 
       <AppHeader />
 
-      <main className="relative max-w-6xl mx-auto px-4 py-8 space-y-8">
-        <Card className="border-border/50 bg-card/60 backdrop-blur-sm">
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-primary uppercase tracking-wide">Blueprint Library</p>
-                <h2 className="text-xl font-semibold">Pick a collection, then build your blueprint</h2>
-                <p className="text-sm text-muted-foreground">
-                  Blueprints are step-by-step routines built from libraries. Open one to learn, adapt, or publish your own.
-                </p>
-              </div>
+      <main className="relative max-w-6xl mx-auto px-4 py-8 space-y-6">
+        <section className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-primary uppercase tracking-wide">Blueprints</p>
+              <h1 className="text-3xl font-semibold tracking-tight">Blueprint Library</h1>
+              <p className="text-sm text-muted-foreground">
+                Step-by-step routines built from libraries. Open one to learn, adapt, or publish your own.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {!user && (
+                <Link to="/auth">
+                  <Button variant="outline" size="sm">Sign in</Button>
+                </Link>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -116,42 +128,34 @@ export default function Blueprints() {
               >
                 What is a Blueprint?
               </Button>
+              <Link to="/inventory">
+                <Button size="sm" className="gap-2">
+                  <Layers className="h-4 w-4" />
+                  Build from Library
+                </Button>
+              </Link>
             </div>
-            {showBlueprintInfo && (
-              <div className="rounded-lg border border-border/40 bg-muted/20 p-4 text-sm text-muted-foreground leading-relaxed space-y-2">
-                <p>
-                  A Blueprint is a step-by-step routine built from a library.
-                  It turns a list of items into an ordered plan.
-                  Each step can include multiple items and short context.
-                  Blueprints are meant to be practical and repeatable.
-                  You can follow a blueprint as-is or edit it to fit your style.
-                  The review helps you check gaps or risks before you publish.
-                  Banners and tags help others discover your blueprint.
-                  Public blueprints appear on the community wall.
-                  Saving a blueprint lets you return and improve it later.
-                  Think of it as a recipe for a routine you can share.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <section className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-semibold">Blueprint Library</h1>
-            <Link to="/inventory">
-              <Button size="sm" className="gap-2">
-                <Layers className="h-4 w-4" />
-                Build from Library
-              </Button>
-            </Link>
           </div>
-          <p className="text-muted-foreground">
-            Search, sort, and explore the best blueprints from the community.
-          </p>
+
+          {showBlueprintInfo && (
+            <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 text-sm text-muted-foreground leading-relaxed">
+              <p>
+                A Blueprint is a step-by-step routine built from a library.
+                It turns a list of items into an ordered plan.
+                Each step can include multiple items and short context.
+                Blueprints are meant to be practical and repeatable.
+                You can follow a blueprint as-is or edit it to fit your style.
+                The review helps you check gaps or risks before you publish.
+                Banners and tags help others discover your blueprint.
+                Public blueprints appear on the community wall.
+                Saving a blueprint lets you return and improve it later.
+                Think of it as a recipe for a routine you can share.
+              </p>
+            </div>
+          )}
         </section>
 
-        <Card className="bg-card/60 backdrop-blur-sm">
+        <Card className="bg-card/60 backdrop-blur-sm border-border/50">
           <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2 flex-1">
               <Search className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -165,65 +169,86 @@ export default function Blueprints() {
                 className="border-none shadow-none focus-visible:ring-0 bg-transparent"
               />
             </div>
-            <div className="w-full sm:w-56">
-              <Select value={sort} onValueChange={(value) => setSort(value as BlueprintSort)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="popular">Most liked</SelectItem>
-                  <SelectItem value="latest">Newest</SelectItem>
-                </SelectContent>
-              </Select>
+
+            <div className="flex items-center gap-2">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Filter className="h-4 w-4" />
+                    Filters
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-full sm:max-w-md">
+                  <SheetHeader>
+                    <SheetTitle>Filters</SheetTitle>
+                    <SheetDescription>Filter by tag and follow tags to personalize.</SheetDescription>
+                  </SheetHeader>
+                  <div className="mt-6 space-y-4">
+                    {!tagsLoading && popularTags.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold">Popular tags</p>
+                        <TagFilterChips
+                          tags={popularTags}
+                          selectedTag={selectedTag}
+                          onSelectTag={handleTagSelect}
+                          followedTagIds={followedIds}
+                          onToggleFollow={handleTagToggle}
+                          variant="wrap"
+                        />
+                        {!user && (
+                          <p className="text-xs text-muted-foreground">
+                            Sign in to follow tags.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Loading tags…</p>
+                    )}
+                  </div>
+                </SheetContent>
+              </Sheet>
+
+              <div className="w-full sm:w-56">
+                <Select value={sort} onValueChange={(value) => setSort(value as BlueprintSort)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="popular">Most liked</SelectItem>
+                    <SelectItem value="latest">Newest</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {!tagsLoading && popularTags.length > 0 && (
-          <TagFilterChips
-            tags={popularTags}
-            selectedTag={selectedTag}
-            onSelectTag={handleTagSelect}
-            followedTagIds={followedIds}
-            onToggleFollow={handleTagToggle}
-          />
-        )}
-
-        {!user && (
-          <Card className="bg-card/60 backdrop-blur-sm">
-            <CardContent className="py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold">Sign in to personalize</p>
-                <p className="text-xs text-muted-foreground">
-                  Follow tags and like blueprints to shape what you see.
-                </p>
-              </div>
-              <Link to="/auth">
-                <Button size="sm">Sign in</Button>
-              </Link>
-            </CardContent>
-          </Card>
-        )}
-
-        {showSuggestions && (
-          <SuggestedBlueprints
-            blueprints={suggestedBlueprints}
-            isLoading={suggestedLoading}
-            onLike={handleLike}
-            followedTagIds={followedIds}
-            onToggleTag={handleTagToggle}
-          />
-        )}
-
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">
-            {effectiveQuery ? `Results for "${effectiveQuery}"` : 'All Blueprints'}
-          </h2>
+          {effectiveQuery ? (
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                Results for <span className="text-foreground">"{effectiveQuery}"</span>
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => {
+                  setQuery('');
+                  setSelectedTag(null);
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+          ) : (
+            <h2 className="text-sm font-semibold text-muted-foreground">Popular blueprints</h2>
+          )}
 
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
-                <Card key={i}>
+                <Card key={i} className="bg-card/60 backdrop-blur-sm border-border/50">
                   <CardContent className="p-5 space-y-3">
                     <Skeleton className="h-5 w-3/4" />
                     <Skeleton className="h-10 w-full" />
@@ -236,9 +261,9 @@ export default function Blueprints() {
                 </Card>
               ))}
             </div>
-          ) : mainBlueprints.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {mainBlueprints.map((blueprint) => (
+          ) : displayBlueprints.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {displayBlueprints.map((blueprint) => (
                 <BlueprintCard
                   key={blueprint.id}
                   blueprint={blueprint}

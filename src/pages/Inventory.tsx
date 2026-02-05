@@ -13,8 +13,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { InventoryCard } from '@/components/inventory/InventoryCard';
 import { TagFilterChips } from '@/components/inventory/TagFilterChips';
-import { SuggestedInventories } from '@/components/inventory/SuggestedInventories';
-import { Search, Plus } from 'lucide-react';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Filter, Search, Plus } from 'lucide-react';
 import { logMvpEvent } from '@/lib/logEvent';
 
 export default function Inventory() {
@@ -79,6 +79,13 @@ export default function Inventory() {
 
   const showSuggestions = !effectiveQuery && user;
 
+  const displayInventories = useMemo(() => {
+    if (!showSuggestions) return mainInventories;
+    if (!suggestedInventories || suggestedInventories.length === 0) return mainInventories;
+    if (suggestedLoading) return mainInventories;
+    return [...suggestedInventories, ...mainInventories];
+  }, [showSuggestions, suggestedInventories, suggestedLoading, mainInventories]);
+
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Ambient background effects */}
@@ -90,17 +97,17 @@ export default function Inventory() {
 
       <AppHeader />
 
-      <main className="relative max-w-6xl mx-auto px-4 py-8 space-y-8">
-        <Card className="border-border/50 bg-card/60 backdrop-blur-sm">
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-primary uppercase tracking-wide">Library</p>
-                <h2 className="text-xl font-semibold">Pick a collection, then build your blueprint</h2>
-                <p className="text-sm text-muted-foreground">
-                  Browse libraries, open one, and start adding items into your routine.
-                </p>
-              </div>
+      <main className="relative max-w-6xl mx-auto px-4 py-8 space-y-6">
+        <section className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-primary uppercase tracking-wide">Library</p>
+              <h1 className="text-3xl font-semibold tracking-tight">Libraries</h1>
+              <p className="text-sm text-muted-foreground">
+                Pick a collection, then build your blueprint.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -108,86 +115,106 @@ export default function Inventory() {
               >
                 What is a Library?
               </Button>
+              <Link to="/inventory/create">
+                <Button size="sm" className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create
+                </Button>
+              </Link>
             </div>
-            {showLibraryInfo && (
-              <div className="rounded-lg border border-border/40 bg-muted/20 p-4 text-sm text-muted-foreground leading-relaxed space-y-2">
-                <p>
-                  Think of a Library as a curated list of items you can use to build a routine.
-                  It is the ingredient shelf for a blueprint.
-                  Each library is organized into categories so you can scan quickly.
-                  You do not have to use everything; it is a toolbox, not a checklist.
-                  Good libraries save time by gathering the best options in one place.
-                  When you open a library, you can pick items that fit your goal.
-                  As you select items, you start shaping a blueprint.
-                  Libraries can be public so others can learn from them.
-                  You can also create your own library if something is missing.
-                  Start simple, then refine as you learn what works for you.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Hero Section */}
-        <section className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-semibold">Library</h1>
-            <Link to="/inventory/create">
-              <Button size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                Create
-              </Button>
-            </Link>
           </div>
-          <p className="text-muted-foreground">
-            Discover libraries to build your perfect blueprint.
-          </p>
+
+          {showLibraryInfo && (
+            <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 text-sm text-muted-foreground leading-relaxed">
+              <p>
+                Think of a Library as a curated list of items you can use to build a routine.
+                It is the ingredient shelf for a blueprint.
+                Each library is organized into categories so you can scan quickly.
+                You do not have to use everything; it is a toolbox, not a checklist.
+                Good libraries save time by gathering the best options in one place.
+                When you open a library, you can pick items that fit your goal.
+                As you select items, you start shaping a blueprint.
+                Libraries can be public so others can learn from them.
+                You can also create your own library if something is missing.
+                Start simple, then refine as you learn what works for you.
+              </p>
+            </div>
+          )}
         </section>
 
-        {/* Search Bar */}
-        <Card className="bg-card/60 backdrop-blur-sm">
-          <CardContent className="p-4 flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-            <Input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                if (e.target.value) setSelectedTag(null); // Clear tag filter when typing
-              }}
-              placeholder="Search libraries by title or tag..."
-              className="border-none shadow-none focus-visible:ring-0 bg-transparent"
-            />
+        <Card className="bg-card/60 backdrop-blur-sm border-border/50">
+          <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2 flex-1">
+              <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+              <Input
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  if (e.target.value) setSelectedTag(null);
+                }}
+                placeholder="Search libraries by title or tag..."
+                className="border-none shadow-none focus-visible:ring-0 bg-transparent"
+              />
+            </div>
+
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Filter className="h-4 w-4" />
+                  Filters
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-full sm:max-w-md">
+                <SheetHeader>
+                  <SheetTitle>Filters</SheetTitle>
+                  <SheetDescription>Filter by tag to narrow down libraries.</SheetDescription>
+                </SheetHeader>
+                <div className="mt-6 space-y-4">
+                  {!tagsLoading && popularTags.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold">Popular tags</p>
+                      <TagFilterChips
+                        tags={popularTags}
+                        selectedTag={selectedTag}
+                        onSelectTag={handleTagSelect}
+                        variant="wrap"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Loading tags…</p>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
           </CardContent>
         </Card>
 
-        {/* Tag Filter Chips */}
-        {!tagsLoading && popularTags.length > 0 && (
-          <TagFilterChips
-            tags={popularTags}
-            selectedTag={selectedTag}
-            onSelectTag={handleTagSelect}
-          />
-        )}
-
-        {/* Suggested Section (only for logged-in users without active search) */}
-        {showSuggestions && (
-          <SuggestedInventories
-            inventories={suggestedInventories}
-            isLoading={suggestedLoading}
-            onLike={handleLike}
-          />
-        )}
-
-        {/* All Libraries Section */}
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">
-            {effectiveQuery ? `Results for "${effectiveQuery}"` : 'All Libraries'}
-          </h2>
+          {effectiveQuery ? (
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                Results for <span className="text-foreground">"{effectiveQuery}"</span>
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => {
+                  setQuery('');
+                  setSelectedTag(null);
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+          ) : (
+            <h2 className="text-sm font-semibold text-muted-foreground">Popular libraries</h2>
+          )}
 
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
-                <Card key={i}>
+                <Card key={i} className="bg-card/60 backdrop-blur-sm border-border/50">
                   <CardContent className="p-5 space-y-3">
                     <Skeleton className="h-5 w-3/4" />
                     <Skeleton className="h-10 w-full" />
@@ -200,9 +227,9 @@ export default function Inventory() {
                 </Card>
               ))}
             </div>
-          ) : mainInventories.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {mainInventories.map((inventory) => (
+          ) : displayInventories.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {displayInventories.map((inventory) => (
                 <InventoryCard
                   key={inventory.id}
                   inventory={inventory}
@@ -221,7 +248,13 @@ export default function Inventory() {
                 </p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {effectiveQuery ? (
-                    <Button variant="outline" onClick={() => setQuery('')}>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setQuery('');
+                        setSelectedTag(null);
+                      }}
+                    >
                       Clear search
                     </Button>
                   ) : (
