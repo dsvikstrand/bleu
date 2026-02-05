@@ -76,21 +76,41 @@ export function createOpenAIClient(): LLMClient {
         prompt,
         size: imageSize,
         quality: imageQuality,
-        response_format: 'b64_json',
       });
 
-      const base64 = response.data?.[0]?.b64_json;
-      if (!base64) {
+      const imagePayload = response.data?.[0];
+      const base64 = imagePayload?.b64_json;
+      if (base64) {
+        return {
+          buffer: Buffer.from(base64, 'base64'),
+          mimeType: 'image/png',
+          prompt,
+        };
+      }
+
+      const imageUrl = imagePayload?.url;
+      if (!imageUrl) {
         throw new Error('No image data returned');
       }
 
+      const downloaded = await fetchImageBuffer(imageUrl);
       return {
-        buffer: Buffer.from(base64, 'base64'),
-        mimeType: 'image/png',
+        buffer: downloaded.buffer,
+        mimeType: downloaded.mimeType,
         prompt,
       };
     },
   };
+}
+
+async function fetchImageBuffer(url: string) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download image: ${response.status}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  const contentType = response.headers.get('content-type') || 'image/png';
+  return { buffer: Buffer.from(arrayBuffer), mimeType: contentType };
 }
 
 function buildBannerPrompt(input: BannerRequest) {
