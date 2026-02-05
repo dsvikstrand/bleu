@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { IntroCallout } from '@/components/shared/IntroCallout';
 import { useBlueprintSearch, type BlueprintSort } from '@/hooks/useBlueprintSearch';
 import { usePopularBlueprintTags } from '@/hooks/usePopularBlueprintTags';
 import { useSuggestedBlueprints } from '@/hooks/useSuggestedBlueprints';
@@ -98,11 +97,15 @@ export default function Blueprints() {
       <AppHeader />
 
       <main className="relative max-w-6xl mx-auto px-4 py-8 space-y-8">
-        <IntroCallout
-          storageKey="blueprints_library_intro_dismissed"
-          title="Welcome to Blueprints!"
-          description="Blueprints are step-by-step routines built from inventories. Pick one to learn, remix, or share."
-        />
+        <Card className="border-border/50 bg-card/60 backdrop-blur-sm">
+          <CardContent className="pt-6 space-y-2">
+            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Blueprint Library</p>
+            <h2 className="text-xl font-semibold">Pick a collection, then build your blueprint</h2>
+            <p className="text-sm text-muted-foreground">
+              Browse blueprints, open one, and start shaping your routine.
+            </p>
+          </CardContent>
+        </Card>
 
         <section className="space-y-2">
           <div className="flex items-center justify-between">
