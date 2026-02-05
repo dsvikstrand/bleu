@@ -36,7 +36,7 @@
 - [ ] `POST https://piszvseyaefxekubphhf.supabase.co/functions/v1/upload-banner` returns 200
 - [ ] Banner URL renders on blueprint page
 - [ ] **2.4 Minimal first-win logging**
-- [ ] Log `view_blueprint`, `click_remix`, `save_blueprint`, `generate_ai_review`
+- [ ] Log `view_blueprint`, `save_blueprint`, `generate_ai_review`
 - [ ] Owner: ________  Target date: ________
 
 ---
@@ -48,8 +48,7 @@
 - [ ] Blueprint detail pages are viewable without login
 - [ ] Library list is viewable without login (`/inventory`)
 - [ ] **2.2 Gate only creation**
-- [ ] Login required only for: Save / Remix / Publish / Comment / Like / Follow tag
-- [ ] If user clicks Remix while logged out → show login modal, then continue action post-login
+- [ ] Login required only for: Save / Publish / Comment / Like / Follow tag
 - [ ] Owner: ________  Target date: ________
 
 ---
@@ -87,11 +86,10 @@
 
 ## 6) First Win Definition + Instrumentation
 - [ ] **5.1 Define first win**
-- [ ] First Win = Remix → edit 1 thing → Save OR AI review
+- [ ] First Win = View Blueprint → Generate AI Review OR Save Blueprint
 - [ ] **5.2 Track funnel events**
 - [ ] `visit_home`
 - [ ] `view_blueprint`
-- [ ] `click_remix`
 - [ ] `edit_blueprint` (change count >= 1)
 - [ ] `save_blueprint`
 - [ ] `generate_ai_review`
@@ -116,13 +114,7 @@
 ---
 
 ## 8) Frictionless First-Win UI Path
-- [ ] **7.1 Remix is primary CTA**
-- [ ] “Remix this” button prominent on blueprint pages
-- [ ] “Remix” appears on cards in Wall/Explore
-- [ ] **7.2 One-click remix**
-- [ ] Remix creates a copy and opens editor immediately
-- [ ] Attribution preserved (original author + link)
-- [ ] **7.3 Quick success**
+- [ ] **7.1 Quick success**
 - [ ] Add/remove item is obvious
 - [ ] Save is obvious and fast
 - [ ] Owner: ________  Target date: ________

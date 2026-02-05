@@ -1,5 +1,5 @@
-import { useMemo, useEffect, useRef } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import { useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -7,8 +7,6 @@ import { useBlueprint } from '@/hooks/useBlueprints';
 import { useInventory } from '@/hooks/useInventories';
 import { BlueprintBuilder } from '@/components/blueprint/BlueprintBuilder';
 import type { Json } from '@/integrations/supabase/types';
-import { useAuth } from '@/contexts/AuthContext';
-import { logMvpEvent } from '@/lib/logEvent';
 
 function parseSelectedItems(selected: Json) {
   if (!selected || typeof selected !== 'object' || Array.isArray(selected)) return {} as Record<string, string[]>;
@@ -21,9 +19,6 @@ export default function BlueprintRemix() {
   const { blueprintId } = useParams();
   const { data: blueprint, isLoading: blueprintLoading } = useBlueprint(blueprintId);
   const { data: inventory, isLoading: inventoryLoading } = useInventory(blueprint?.inventory_id || undefined);
-  const { user } = useAuth();
-  const location = useLocation();
-  const loggedBlueprintId = useRef<string | null>(null);
 
   const initialSelectedItems = useMemo(
     () => (blueprint ? parseSelectedItems(blueprint.selected_items) : {}),
@@ -31,18 +26,6 @@ export default function BlueprintRemix() {
   );
 
   const isLoading = blueprintLoading || inventoryLoading;
-
-  useEffect(() => {
-    if (!blueprint?.id) return;
-    if (loggedBlueprintId.current === blueprint.id) return;
-    loggedBlueprintId.current = blueprint.id;
-    void logMvpEvent({
-      eventName: 'click_remix',
-      userId: user?.id,
-      blueprintId: blueprint.id,
-      path: location.pathname,
-    });
-  }, [blueprint?.id, location.pathname, user?.id]);
 
   return (
     <div className="min-h-screen bg-background">
