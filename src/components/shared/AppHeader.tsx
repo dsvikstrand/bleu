@@ -1,6 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Beaker, HelpCircle, Shuffle } from 'lucide-react';
+import { Beaker, HelpCircle } from 'lucide-react';
 import { AppNavigation } from '@/components/shared/AppNavigation';
 import { ThemeToggle } from '@/components/blend/ThemeToggle';
 import { UserMenu } from '@/components/shared/UserMenu';
@@ -17,12 +17,6 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const { user } = useAuth();
   const [showHelp, setShowHelp] = useState(false);
   const navMode = user ? 'all' : 'public';
-  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
-  const isAgentic = !pathname.startsWith('/remix-of-stackwise-advisor/lovable-backend');
-  const switchTarget = isAgentic
-    ? 'https://dsvikstrand.github.io/remix-of-stackwise-advisor/lovable-backend/'
-    : 'https://dsvikstrand.github.io/remix-of-stackwise-advisor/';
-  const switchLabel = isAgentic ? 'Switch to Lovable' : 'Switch to Agentic';
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-border/50 bg-card/70 backdrop-blur-glass">
@@ -37,14 +31,6 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
                 V_1
               </span>
             </Link>
-            <a
-              href={switchTarget}
-              className="ml-1 inline-flex items-center justify-center rounded-full border border-border/60 bg-background/60 p-1 text-muted-foreground transition hover:text-foreground"
-              aria-label={switchLabel}
-              title={switchLabel}
-            >
-              <Shuffle className="h-3.5 w-3.5" />
-            </a>
             <div className="hidden sm:block ml-3">
               <AppNavigation variant="header" mode={navMode} />
             </div>
