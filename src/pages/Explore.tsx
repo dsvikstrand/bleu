@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AppHeader } from '@/components/shared/AppHeader';
+import { AppFooter } from '@/components/shared/AppFooter';
 import { ExploreResultCard } from '@/components/explore/ExploreResultCard';
 import { useExploreSearch, useTrendingTags, type ExploreFilter, type ExploreResult } from '@/hooks/useExploreSearch';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -271,6 +272,7 @@ export default function Explore() {
             )}
           </div>
         )}
+        <AppFooter />
       </main>
     </div>
   );

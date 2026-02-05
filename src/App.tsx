@@ -19,6 +19,7 @@ import InventoryDetail from "./pages/InventoryDetail";
 import InventoryBuild from "./pages/InventoryBuild";
 import BlueprintDetail from "./pages/BlueprintDetail";
 import BlueprintRemix from "./pages/BlueprintRemix";
+import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "@/components/shared/RequireAuth";
 
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
             <Route path="/u/:userId" element={<UserProfile />} />
             <Route path="/tags" element={<Tags />} />
+            <Route path="/about" element={<About />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

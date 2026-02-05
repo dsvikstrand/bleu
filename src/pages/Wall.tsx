@@ -5,6 +5,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader } from '@/components/shared/AppHeader';
+import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -470,6 +471,7 @@ export default function Wall() {
             )}
           </TabsContent>
         </Tabs>
+        <AppFooter />
       </main>
     </div>
   );

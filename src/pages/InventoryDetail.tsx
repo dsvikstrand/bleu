@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
+import { AppFooter } from '@/components/shared/AppFooter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -273,6 +274,7 @@ export default function InventoryDetail() {
             <CardContent className="py-12 text-center">Library not found.</CardContent>
           </Card>
         )}
+        <AppFooter />
       </main>
     </div>
   );

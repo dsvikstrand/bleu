@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeTag } from '@/lib/tagging';
 import { AppHeader } from '@/components/shared/AppHeader';
+import { AppFooter } from '@/components/shared/AppFooter';
 import { Hash, Plus, Search, Sparkles, TrendingUp, Users, Check } from 'lucide-react';
 
 export default function Tags() {
@@ -257,6 +258,7 @@ export default function Tags() {
             </div>
           )}
         </section>
+        <AppFooter />
       </main>
     </div>
   );

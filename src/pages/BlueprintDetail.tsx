@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { AppHeader } from '@/components/shared/AppHeader';
+import { AppFooter } from '@/components/shared/AppFooter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -349,6 +350,7 @@ export default function BlueprintDetail() {
             <CardContent className="py-12 text-center">Blueprint not found.</CardContent>
           </Card>
         )}
+        <AppFooter />
       </main>
     </div>
   );

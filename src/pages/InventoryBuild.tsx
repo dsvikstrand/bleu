@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
+import { AppFooter } from '@/components/shared/AppFooter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1629,6 +1630,7 @@ export default function InventoryBuild() {
                 Blueprint analysis is for informational purposes only. Always do your own research.
               </p>
             </footer>
+            <AppFooter />
           </div>
         ) : (
           <Card className="bg-card/60 backdrop-blur-glass border-border/50">

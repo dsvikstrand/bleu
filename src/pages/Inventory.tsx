@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
+import { AppFooter } from '@/components/shared/AppFooter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -205,6 +206,7 @@ export default function Inventory() {
             </Card>
           )}
         </section>
+        <AppFooter />
       </main>
     </div>
   );

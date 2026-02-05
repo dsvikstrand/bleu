@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, LogOut, Settings } from 'lucide-react';
+import { User, LogOut, Settings, LifeBuoy } from 'lucide-react';
 import { useAiCredits } from '@/hooks/useAiCredits';
 
 export function UserMenu() {
@@ -102,6 +102,12 @@ export function UserMenu() {
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href="mailto:hi@vdsai.cloud" className="flex items-center cursor-pointer">
+            <LifeBuoy className="mr-2 h-4 w-4" />
+            Support
+          </a>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
