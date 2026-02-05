@@ -11,9 +11,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, LogOut, Settings } from 'lucide-react';
+import { useAiCredits } from '@/hooks/useAiCredits';
 
 export function UserMenu() {
   const { user, profile, signOut, isLoading } = useAuth();
+  const creditsQuery = useAiCredits(!!user);
 
   if (isLoading) {
     return (
@@ -34,6 +36,10 @@ export function UserMenu() {
 
   const displayName = profile?.display_name || user.email?.split('@')[0] || 'User';
   const initials = displayName.slice(0, 2).toUpperCase();
+  const credits = creditsQuery.data;
+  const creditsPercent = credits
+    ? Math.min(100, Math.max(0, (credits.remaining / Math.max(1, credits.limit)) * 100))
+    : 0;
 
   return (
     <DropdownMenu>
@@ -56,6 +62,28 @@ export function UserMenu() {
             </p>
           </div>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <div className="px-3 py-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>AI credits</span>
+            <span>
+              {credits ? `${credits.remaining}/${credits.limit}` : '—'}
+            </span>
+          </div>
+          <div className="mt-2 h-2 w-full rounded-full bg-muted">
+            <div
+              className="h-2 rounded-full bg-primary transition-all"
+              style={{ width: `${creditsPercent}%` }}
+            />
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {creditsQuery.isLoading
+              ? 'Loading credits…'
+              : creditsQuery.isError
+              ? 'Credits unavailable'
+              : 'Resets daily'}
+          </p>
+        </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to={`/u/${user.id}`} className="flex items-center cursor-pointer">

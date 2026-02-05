@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { createLLMClient } from './llm/client';
+import { consumeCredit, getCredits } from './credits';
 import type {
   BlueprintAnalysisRequest,
   BlueprintSelectedItem,
@@ -118,6 +119,14 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/credits', (_req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  return res.json(getCredits(userId));
+});
+
 app.post('/api/generate-inventory', async (req, res) => {
   const parsed = InventoryRequestSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -125,6 +134,25 @@ app.post('/api/generate-inventory', async (req, res) => {
   }
 
   const payload: InventoryRequest = parsed.data;
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const creditCheck = consumeCredit(userId);
+  if (!creditCheck.ok) {
+    if (creditCheck.reason === 'global') {
+      return res.status(429).json({
+        error: 'We’re at capacity right now. Please try again in a few minutes.',
+        retryAfterSeconds: creditCheck.retryAfterSeconds,
+      });
+    }
+    return res.status(429).json({
+      error: 'Daily AI credits used. Please try again tomorrow.',
+      remaining: creditCheck.remaining,
+      limit: creditCheck.limit,
+      resetAt: creditCheck.resetAt,
+    });
+  }
 
   try {
     const client = createLLMClient();
@@ -140,6 +168,25 @@ app.post('/api/analyze-blueprint', async (req, res) => {
   const parsed = BlueprintReviewSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+  }
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const creditCheck = consumeCredit(userId);
+  if (!creditCheck.ok) {
+    if (creditCheck.reason === 'global') {
+      return res.status(429).json({
+        error: 'We’re at capacity right now. Please try again in a few minutes.',
+        retryAfterSeconds: creditCheck.retryAfterSeconds,
+      });
+    }
+    return res.status(429).json({
+      error: 'Daily AI credits used. Please try again tomorrow.',
+      remaining: creditCheck.remaining,
+      limit: creditCheck.limit,
+      resetAt: creditCheck.resetAt,
+    });
   }
 
   const normalizedItems: Record<string, BlueprintSelectedItem[]> = {};
@@ -199,6 +246,21 @@ app.post('/api/generate-banner', async (req, res) => {
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId || !authToken) {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const creditCheck = consumeCredit(userId);
+  if (!creditCheck.ok) {
+    if (creditCheck.reason === 'global') {
+      return res.status(429).json({
+        error: 'We’re at capacity right now. Please try again in a few minutes.',
+        retryAfterSeconds: creditCheck.retryAfterSeconds,
+      });
+    }
+    return res.status(429).json({
+      error: 'Daily AI credits used. Please try again tomorrow.',
+      remaining: creditCheck.remaining,
+      limit: creditCheck.limit,
+      resetAt: creditCheck.resetAt,
+    });
   }
 
   try {
