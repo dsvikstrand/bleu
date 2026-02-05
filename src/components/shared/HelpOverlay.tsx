@@ -50,7 +50,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
       <DialogContent className="max-w-5xl w-[95vw] h-[88vh] overflow-hidden border border-border/60 bg-background/95 p-0">
         <div className="relative h-full w-full">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-accent/10" />
-          <div className="relative h-full w-full flex flex-col">
+          <div className="relative h-full w-full flex flex-col min-h-0">
             <div className="px-8 pt-8 pb-4 border-b border-border/60 bg-background/60 backdrop-blur">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-2xl bg-primary/15 text-primary flex items-center justify-center">
@@ -71,7 +71,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-8 py-6">
+            <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6">
               <div className="space-y-8">
                 <Card className="border border-border/60 bg-background/80">
                   <CardContent className="p-6 space-y-2">
