@@ -15,7 +15,7 @@ type UsageState = {
 
 const DAILY_CREDITS = Number(process.env.AI_DAILY_CREDITS) || 10;
 const GLOBAL_WINDOW_MS = Number(process.env.AI_GLOBAL_WINDOW_MS) || 10 * 60 * 1000;
-const GLOBAL_MAX = Number(process.env.AI_GLOBAL_MAX) || 5;
+const GLOBAL_MAX = Number(process.env.AI_GLOBAL_MAX) || 25;
 const CREDITS_BYPASS = /^(1|true|yes)$/i.test(process.env.AI_CREDITS_BYPASS ?? '');
 const USAGE_FILE =
   process.env.AI_USAGE_FILE ||
