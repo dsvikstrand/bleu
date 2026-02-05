@@ -88,15 +88,15 @@
 - [ ] **5.1 Define first win**
 - [ ] First Win = View Blueprint → Generate AI Review OR Save Blueprint
 - [ ] **5.2 Track funnel events**
-- [ ] `visit_home`
+- [x] `visit_home`
 - [x] `view_blueprint`
-- [ ] `edit_blueprint` (change count >= 1)
+- [x] `edit_blueprint` (change count >= 1)
 - [x] `save_blueprint`
 - [x] `generate_ai_review`
-- [ ] `publish_blueprint`
+- [x] `publish_blueprint`
 - [ ] `return_visit_7d`
-- [ ] **5.3 Basic dashboard**
-- [ ] Can see counts per step (even simple logs)
+- [x] **5.3 Basic dashboard**
+- [x] Can see counts per step (even simple logs)
 - [ ] Owner: ________  Target date: ________
 
 ---
