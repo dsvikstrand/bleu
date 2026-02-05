@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 import { useBlueprint, useBlueprintComments, useCreateBlueprintComment, useToggleBlueprintLike } from '@/hooks/useBlueprints';
 import { useToast } from '@/hooks/use-toast';
+import { useTagFollows } from '@/hooks/useTagFollows';
 import { ArrowLeft, Heart } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
@@ -55,6 +56,7 @@ export default function BlueprintDetail() {
   const toggleLike = useToggleBlueprintLike();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { followedIds, toggleFollow } = useTagFollows();
   const [comment, setComment] = useState('');
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
   const isOwner = !!(user && blueprint && user.id === blueprint.creator_user_id);
@@ -81,6 +83,25 @@ export default function BlueprintDetail() {
     } catch (error) {
       toast({
         title: 'Comment failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleTagToggle = async (tag: { id: string; slug: string }) => {
+    if (!user) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to follow tags.',
+      });
+      return;
+    }
+    try {
+      await toggleFollow(tag);
+    } catch (error) {
+      toast({
+        title: 'Tag update failed',
         description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
@@ -117,7 +138,18 @@ export default function BlueprintDetail() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {blueprint.tags.map((tag) => (
-                  <Badge key={tag.id} variant="outline">#{tag.slug}</Badge>
+                  <Badge
+                    key={tag.id}
+                    variant="outline"
+                    className={`text-xs cursor-pointer transition-colors border ${
+                      followedIds.has(tag.id)
+                        ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                        : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+                    }`}
+                    onClick={() => handleTagToggle(tag)}
+                  >
+                    #{tag.slug}
+                  </Badge>
                 ))}
               </div>
             </section>
