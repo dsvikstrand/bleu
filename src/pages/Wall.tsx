@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
@@ -54,6 +54,13 @@ export default function Wall() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<FeedTab>('for-you');
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user && activeTab === 'for-you') {
+      setActiveTab('trending');
+    }
+  }, [authLoading, user, activeTab]);
   
   // Popular tags for empty state
   const { data: popularTags = [] } = usePopularInventoryTags(6);
