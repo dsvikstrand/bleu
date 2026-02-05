@@ -42,13 +42,13 @@
 ---
 
 ## 3) Remove Early Login Friction (public browsing)
-- [ ] **2.1 Public access**
-- [ ] Wall is viewable without login
-- [ ] Explore/search is viewable without login
-- [ ] Blueprint detail pages are viewable without login
-- [ ] Library list is viewable without login (`/inventory`)
-- [ ] **2.2 Gate only creation**
-- [ ] Login required only for: Save / Publish / Comment / Like / Follow tag
+- [x] **2.1 Public access**
+- [x] Wall is viewable without login
+- [x] Explore/search is viewable without login
+- [x] Blueprint detail pages are viewable without login
+- [x] Library list is viewable without login (`/inventory`)
+- [x] **2.2 Gate only creation**
+- [x] Login required only for: Save / Publish / Comment / Like / Follow tag
 - [ ] Owner: ________  Target date: ________
 
 ---
