@@ -12,18 +12,20 @@ export function AppNavigation({ variant = 'header', mode = 'all' }: AppNavigatio
   const location = useLocation();
   const currentPath = location.pathname;
 
-  const navItems = [
-    { path: '/', label: 'Home', icon: Home, isPublic: true },
-  { path: '/inventory', label: 'Library', icon: Layers, isPublic: true },
-    { path: '/blueprints', label: 'Blueprints', icon: FileText, isPublic: true },
-    { path: '/wall', label: 'Wall', icon: Users, isPublic: true },
-    { path: '/explore', label: 'Explore', icon: Search, isPublic: true },
-    { path: '/tags', label: 'Tags', icon: Tag, isPublic: false },
+  const allNavItems = [
+    { path: '/', label: 'Home', icon: Home, showWhen: 'public-only' as const },
+    { path: '/wall', label: 'Feed', icon: Users, showWhen: 'auth-only' as const },
+    { path: '/inventory', label: 'Library', icon: Layers, showWhen: 'always' as const },
+    { path: '/blueprints', label: 'Blueprints', icon: FileText, showWhen: 'always' as const },
+    { path: '/explore', label: 'Explore', icon: Search, showWhen: 'always' as const },
+    { path: '/tags', label: 'Tags', icon: Tag, showWhen: 'auth-only' as const },
   ];
 
-  const visibleItems = mode === 'public'
-    ? navItems.filter((item) => item.isPublic)
-    : navItems;
+  const visibleItems = allNavItems.filter((item) => {
+    if (mode === 'public') return item.showWhen === 'public-only' || item.showWhen === 'always';
+    // logged-in: show auth-only + always, but not public-only
+    return item.showWhen === 'auth-only' || item.showWhen === 'always';
+  });
 
   if (variant === 'floating') {
     return (

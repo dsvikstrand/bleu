@@ -37,8 +37,13 @@ export function HowItWorks() {
             style={{ animationDelay: `${i * 0.1}s` }}
           >
             <CardContent className="p-5 space-y-3">
-              <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${step.color}`}>
-                <step.icon className="h-5 w-5" />
+              <div className="flex items-center gap-3">
+                <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${step.color}`}>
+                  <step.icon className="h-5 w-5" />
+                </div>
+                <span className="text-xs font-bold text-muted-foreground/60 uppercase tracking-widest">
+                  Step {i + 1}
+                </span>
               </div>
               <h3 className="font-semibold">{step.title}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
