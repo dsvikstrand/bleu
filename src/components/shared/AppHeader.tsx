@@ -27,9 +27,6 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
                 <Beaker className="h-4 w-4 text-primary-foreground" />
               </div>
               <span className="text-lg font-semibold tracking-tight">Blueprints</span>
-              <span className="ml-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                V_1
-              </span>
             </Link>
             <div className="hidden sm:block ml-3">
               <AppNavigation variant="header" mode={navMode} />

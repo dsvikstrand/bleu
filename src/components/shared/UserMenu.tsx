@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, LogOut, Settings, LifeBuoy } from 'lucide-react';
+import { User, LogOut, Settings, LifeBuoy, Home } from 'lucide-react';
 import { useAiCredits } from '@/hooks/useAiCredits';
 
 export function UserMenu() {
@@ -91,6 +91,12 @@ export function UserMenu() {
           </p>
         </div>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/" className="flex items-center cursor-pointer">
+            <Home className="mr-2 h-4 w-4" />
+            Home
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link to={`/u/${user.id}`} className="flex items-center cursor-pointer">
             <User className="mr-2 h-4 w-4" />
