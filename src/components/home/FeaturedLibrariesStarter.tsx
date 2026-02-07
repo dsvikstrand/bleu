@@ -68,6 +68,29 @@ function findItemsByNeedle(categories: InventoryCategory[], needles: string[]) {
   return hits;
 }
 
+function noteify(parts: string[]) {
+  return parts.filter((p) => p.trim().length > 0).slice(0, 2).join(', ');
+}
+
+function buildContext(featureKey: (typeof FEATURED)[number]['key'], stepTitle: string, item: string) {
+  const lower = item.toLowerCase();
+  const notes: string[] = [];
+
+  if (featureKey === 'skincare') {
+    if (lower.includes('spf') || lower.includes('sunscreen')) notes.push('AM');
+    if (lower.includes('retinol')) notes.push('PM');
+    if (lower.includes('cleanser') || lower.includes('wash')) notes.push('daily');
+  } else {
+    if (lower.includes('water') || lower.includes('hydrate')) notes.push('first');
+    if (lower.includes('alarm') || lower.includes('light')) notes.push('wake-up');
+    if (lower.includes('journal') || lower.includes('planner') || lower.includes('calendar')) notes.push('focus');
+  }
+
+  // Always include a lightweight grouping hint, but keep it short.
+  notes.push(stepTitle);
+  return noteify(notes);
+}
+
 function buildExampleSelection(
   featureKey: (typeof FEATURED)[number]['key'],
   inventoryId: string,
@@ -95,15 +118,27 @@ function buildExampleSelection(
   const spec = featureKey === 'skincare' ? skincareSteps : morningSteps;
 
   const selectedItems: Record<string, string[]> = {};
+  const itemContexts: Record<string, string> = {};
 
   spec.forEach((step) => {
     const matches = findItemsByNeedle(categories, step.needles);
     const picked = (matches.length > 0 ? matches : fallback).slice(0, 3);
-    picked.forEach((p) => pushSelected(selectedItems, p.category, p.item));
+    picked.forEach((p) => {
+      pushSelected(selectedItems, p.category, p.item);
+      const key = `${p.category}::${p.item}`;
+      itemContexts[key] = buildContext(featureKey, step.title, p.item);
+    });
   });
 
   const titleBase = featureKey === 'skincare' ? 'Skincare Routine Blueprint' : 'Morning Routine Blueprint';
-  return { version: 1 as const, inventoryId, title: titleBase, selectedItems, source: 'home-example' as const };
+  return {
+    version: 1 as const,
+    inventoryId,
+    title: titleBase,
+    selectedItems,
+    itemContexts,
+    source: 'home-example' as const,
+  };
 }
 
 export function FeaturedLibrariesStarter() {
@@ -164,12 +199,39 @@ export function FeaturedLibrariesStarter() {
     if (!activeInventory) return;
     setStateByInventoryId((prev) => {
       if (prev[activeInventory.id]) return prev;
+
+      // Prefill (2-3 items + short notes) to reduce "blank slate" for first-time visitors.
+      // Non-destructive: only applies on first init per inventory id.
+      const prefill = buildExampleSelection(
+        activeInventory.featureKey,
+        activeInventory.id,
+        activeInventory.title,
+        activeInventoryCategories
+      );
+      const trimmedSelected: Record<string, string[]> = {};
+      let remaining = 3;
+      for (const [category, items] of Object.entries(prefill.selectedItems)) {
+        if (remaining <= 0) break;
+        const slice = items.slice(0, remaining);
+        if (slice.length > 0) {
+          trimmedSelected[category] = slice;
+          remaining -= slice.length;
+        }
+      }
+      const trimmedContexts: Record<string, string> = {};
+      Object.entries(trimmedSelected).forEach(([category, items]) => {
+        items.forEach((item) => {
+          const key = `${category}::${item}`;
+          if (prefill.itemContexts?.[key]) trimmedContexts[key] = prefill.itemContexts[key];
+        });
+      });
+
       return {
         ...prev,
         [activeInventory.id]: {
           categories: activeInventoryCategories,
-          selectedItems: {},
-          itemContexts: {},
+          selectedItems: trimmedSelected,
+          itemContexts: trimmedContexts,
           title: activeInventory.title,
         },
       };
@@ -272,7 +334,7 @@ export function FeaturedLibrariesStarter() {
       title: draft.title,
       categories: activeInventoryCategories,
       selectedItems: draft.selectedItems,
-      itemContexts: {},
+      itemContexts: draft.itemContexts || {},
     });
     toast({
       title: 'Example loaded',
