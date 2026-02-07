@@ -1,4 +1,10 @@
 flowchart TD
+  ST0([STAGE: Inputs]) -.-> A
+  ST1([STAGE: Generate Library]) -.-> H
+  ST2([STAGE: Generate Blueprints]) -.-> I
+  ST3([STAGE: Stage 0.5 Execute AI]) -.-> R
+  ST4([STAGE: Stage 1 Apply Mode TODO]) -.-> T0
+
   A["ID:A seed/seed_spec_v0.json (Seed Spec) TESTED_OK"] --> B["ID:B seed_stage0.ts (parse args + validate spec) TESTED_OK"]
   B --> C["ID:C Create run folder seed/outputs/RUN_ID/ TESTED_OK"]
   C --> G["ID:G Read SEED_USER_ACCESS_TOKEN TESTED_OK"]
