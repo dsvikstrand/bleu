@@ -1,0 +1,34 @@
+%% Stage 0 LAS (Linear Agentic Seeding) runner visualization
+%% Source of truth: codex/skills/seed-blueprints/scripts/seed_stage0.ts
+
+flowchart TD
+  A[Seed Spec\nseed/seed_spec_v0.json] --> B[seed_stage0.ts\nparse args + validate spec]
+  B --> C[Create run folder\nseed/outputs/<run_id>/]
+  C --> D{--no-backend?}
+
+  D -- Yes --> E[Skip backend calls\n(offline mode)]
+  E --> F[Write run_log.json\nconfig.backendCalls=false]
+  F --> Z[Done (artifacts only)]
+
+  D -- No --> G[Read SEED_USER_ACCESS_TOKEN\n(Supabase access_token)]
+  G --> H[Node n1: generate_library\nPOST bapi /api/generate-inventory\nbody: { keywords: library.topic }]
+  H --> H1[Write library.json\n{summary,categories[]}]
+
+  H1 --> I[Node n2: generate_blueprints\nFor each blueprint variant in spec:\nPOST bapi /api/generate-blueprint\nbody: { title, description, notes, tags, library }]
+  I --> I1[Write blueprints.json\n{title,steps[]...}[]]
+
+  I1 --> J[Node n3: generate_review_requests\n(No network)\nPrepare payloads for /api/analyze-blueprint]
+  J --> J1[Write review_requests.json]
+
+  J1 --> K[Node n4: generate_banner_requests\n(No network)\nPrepare payloads for /api/generate-banner]
+  K --> K1[Write banner_requests.json]
+
+  K1 --> L[Node n5: validate\nCheck every (category,item) referenced exists in library]
+  L --> L1[Write validation.json\nok/errors/warnings/stats]
+
+  L1 --> M[Node n6: publish_payload\n(No writes)\nAssemble 'would publish' blueprint payload]
+  M --> M1[Write publish_payload.json]
+
+  M1 --> N[Append run_log.json\nstep timings + status]
+  N --> Z[Done (artifacts only)]
+
