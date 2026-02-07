@@ -57,8 +57,8 @@ If a message ends with `UDO`, treat it as approval to execute the actions you pr
 Set `AI_CREDITS_BYPASS=true` in the backend environment to bypass credit limits while building/testing. Keep it off in production.
 
 ## 10) REC (go with your recommendations)
-If I type REC, is means "use/go with your recommendations"
-for example: you give me a follow up question:
-(codex) - "Would you like option A or B?"
+If I type REC -> "use/go with your recommendations"
+for example: if you give me a follow up question:
+(codex) - "Would you like option A or B?"/"How should I do X"
 (me) - "REC" -> "Please use/go with your recommendations"
 

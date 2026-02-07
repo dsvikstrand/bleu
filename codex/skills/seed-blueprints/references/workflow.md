@@ -67,3 +67,45 @@ tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
 Additional outputs:
 - `seed/outputs/<run_id>/reviews.json`
 - `seed/outputs/<run_id>/banners.json`
+
+## Run (Stage 1: Apply Mode - Writes To Supabase)
+
+Stage 1 takes the Stage 0/0.5 artifacts and **writes real rows** to Supabase:
+
+- Inserts the generated library as an `inventories` row.
+- Inserts each generated blueprint as a `blueprints` row.
+- Writes tag joins (`inventory_tags`, `blueprint_tags`).
+- If `reviews.json` exists: persists `llm_review` per blueprint.
+- If `banners.json` exists: calls the `upload-banner` edge function and updates `banner_url`.
+- Publishes by setting `is_public=true` on the created rows.
+- Writes rollback + apply logs into the run folder.
+
+Prereqs:
+- A real Supabase access token for a user (same as Stage 0).
+- Supabase URL + anon key available to the runner:
+  - `SUPABASE_URL` or `VITE_SUPABASE_URL`
+  - `SUPABASE_ANON_KEY` or `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Recommended (testing): limit to 1 blueprint to keep writes/cost small.
+
+Command (Stage 0.5 + Stage 1 in one run):
+```bash
+TMPDIR=/tmp \
+SEED_USER_ACCESS_TOKEN="$(cat access_tok.txt)" \
+SUPABASE_URL="https://piszvseyaefxekubphhf.supabase.co" \
+SUPABASE_ANON_KEY="(paste VITE_SUPABASE_PUBLISHABLE_KEY)" \
+tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
+  --spec seed/seed_spec_v0.json \
+  --limit-blueprints 1 \
+  --do-review \
+  --do-banner \
+  --apply \
+  --yes APPLY_STAGE1
+```
+
+Stage 1 outputs (additional):
+- `seed/outputs/<run_id>/apply_log.json`
+- `seed/outputs/<run_id>/rollback.sql`
+
+Notes:
+- Stage 1 has been exercised successfully with `--limit-blueprints 1` (happy path).

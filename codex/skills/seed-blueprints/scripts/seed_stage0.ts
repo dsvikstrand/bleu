@@ -67,6 +67,37 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function decodeBase64Url(input: string) {
+  const base64 = input.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = base64.length % 4 === 0 ? '' : '='.repeat(4 - (base64.length % 4));
+  return Buffer.from(base64 + pad, 'base64').toString('utf8');
+}
+
+function getJwtSub(accessToken: string): string {
+  const parts = accessToken.split('.');
+  if (parts.length < 2) return '';
+  try {
+    const payloadJson = decodeBase64Url(parts[1] || '');
+    const payload = JSON.parse(payloadJson) as { sub?: string };
+    return typeof payload.sub === 'string' ? payload.sub : '';
+  } catch {
+    return '';
+  }
+}
+
+function normalizeSlug(tag: string) {
+  return String(tag || '')
+    .trim()
+    .replace(/^#/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function uniqStrings(list: string[]) {
+  return Array.from(new Set(list.map((s) => String(s || '').trim()).filter(Boolean)));
+}
+
 type ValidationResult = {
   ok: boolean;
   errors: string[];
@@ -87,6 +118,8 @@ type RunLog = {
     outDir: string;
     agenticBaseUrl: string;
     backendCalls: boolean;
+    applyStage1?: boolean;
+    limitBlueprints?: number;
   };
   steps: Array<{
     name: string;
@@ -108,7 +141,7 @@ function die(message: string): never {
 }
 
 function parseArgs(argv: string[]) {
-  const out: Record<string, string | boolean> = {};
+  const out: Record<string, string | boolean | number> = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a) continue;
@@ -121,6 +154,9 @@ function parseArgs(argv: string[]) {
     else if (a === '--do-review') out.doReview = true;
     else if (a === '--review-focus') out.reviewFocus = argv[++i] ?? '';
     else if (a === '--do-banner') out.doBanner = true;
+    else if (a === '--apply') out.apply = true;
+    else if (a === '--yes') out.yes = argv[++i] ?? '';
+    else if (a === '--limit-blueprints') out.limitBlueprints = Number(argv[++i] ?? 0);
     else if (a.startsWith('--')) die(`Unknown flag: ${a}`);
   }
   return out;
@@ -137,6 +173,10 @@ function readJsonFile<T>(filePath: string): T {
 
 function writeJsonFile(filePath: string, data: unknown) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf-8');
+}
+
+function writeTextFile(filePath: string, text: string) {
+  fs.writeFileSync(filePath, text.endsWith('\n') ? text : text + '\n', 'utf-8');
 }
 
 function sanitizeRunId(input: string) {
@@ -358,6 +398,9 @@ async function main() {
         '  --do-review                Execute /api/analyze-blueprint (Stage 0.5)',
         '  --review-focus <text>      Optional reviewPrompt for /api/analyze-blueprint',
         '  --do-banner                Execute /api/generate-banner in dryRun mode (Stage 0.5; no Storage upload)',
+        '  --apply                    Stage 1 apply mode (writes to Supabase)',
+        '  --yes <token>              Stage 1 guard token (must be APPLY_STAGE1)',
+        '  --limit-blueprints <n>     Limit generated/apply blueprints to N (useful for testing Stage 1)',
       ].join('\n') + '\n'
     );
     return;
@@ -382,6 +425,10 @@ async function main() {
   const runDir = path.join(outBase, runId);
   ensureDir(runDir);
 
+  const yes = String(args.yes || '').trim();
+  const applyStage1 = Boolean(args.apply);
+  const limitBlueprints = Number(args.limitBlueprints || 0) || 0;
+
   const runLog: RunLog = {
     runId,
     startedAt: nowIso(),
@@ -390,6 +437,8 @@ async function main() {
       outDir: runDir,
       agenticBaseUrl,
       backendCalls,
+      applyStage1,
+      limitBlueprints,
     },
     steps: [],
   };
@@ -417,6 +466,11 @@ async function main() {
   const accessToken = process.env.SEED_USER_ACCESS_TOKEN?.trim() || '';
   if (backendCalls && !accessToken) {
     die('Missing SEED_USER_ACCESS_TOKEN. Set it in your shell before running Stage 0.');
+  }
+
+  const seedUserId = accessToken ? getJwtSub(accessToken) : '';
+  if (applyStage1 && !seedUserId) {
+    die('Could not derive seed user id from SEED_USER_ACCESS_TOKEN (JWT sub missing).');
   }
 
   const inventory = await step('generate_library', async () => {
@@ -448,7 +502,8 @@ async function main() {
       generated: GeneratedBlueprint;
     }> = [];
 
-    for (const bp of spec.blueprints) {
+    const blueprintSpecs = limitBlueprints > 0 ? spec.blueprints.slice(0, limitBlueprints) : spec.blueprints;
+    for (const bp of blueprintSpecs) {
       const body = {
         title: bp.title,
         description: bp.description || '',
@@ -467,7 +522,8 @@ async function main() {
       libraryTitle: spec.library.title,
       blueprints: results,
     });
-    return results.map((r) => r.generated);
+    const list = results.map((r) => r.generated);
+    return list;
   });
 
   const reviewPayloads = await step('generate_review_requests', async () => {
@@ -566,6 +622,270 @@ async function main() {
     writeJsonFile(path.join(runDir, 'validation.json'), result);
     return result;
   });
+
+  if (applyStage1) {
+    if (!validation.ok) {
+      throw new Error('Refusing Stage 1 apply: validation.ok is false. Fix generation/selection first.');
+    }
+
+    await step('apply_stage1_guard', async () => {
+      if (yes !== 'APPLY_STAGE1') {
+        throw new Error('Stage 1 apply is gated. Re-run with: --apply --yes APPLY_STAGE1');
+      }
+      return { ok: true };
+    });
+
+    const supabaseUrl =
+      String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+    const supabaseAnonKey = String(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '');
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing SUPABASE_URL/VITE_SUPABASE_URL or SUPABASE_ANON_KEY/VITE_SUPABASE_PUBLISHABLE_KEY for Stage 1.');
+    }
+
+    const restBase = `${supabaseUrl}/rest/v1`;
+    const restHeaders = {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    } as const;
+
+    const restInsert = async <T>(table: string, row: unknown, select: string) => {
+      const url = `${restBase}/${table}?select=${encodeURIComponent(select)}`;
+      const res = await fetch(url, { method: 'POST', headers: restHeaders as any, body: JSON.stringify(row) });
+      const text = await res.text().catch(() => '');
+      if (!res.ok) throw new Error(`Supabase insert ${table} failed (${res.status}): ${text.slice(0, 800)}`);
+      const data = JSON.parse(text) as T[];
+      if (!Array.isArray(data) || data.length === 0) throw new Error(`Supabase insert ${table} returned no rows`);
+      return data[0]!;
+    };
+
+    const restUpdate = async <T>(table: string, filter: string, patch: unknown, select: string) => {
+      const url = `${restBase}/${table}?${filter}&select=${encodeURIComponent(select)}`;
+      const res = await fetch(url, { method: 'PATCH', headers: restHeaders as any, body: JSON.stringify(patch) });
+      const text = await res.text().catch(() => '');
+      if (!res.ok) throw new Error(`Supabase update ${table} failed (${res.status}): ${text.slice(0, 800)}`);
+      const data = JSON.parse(text) as T[];
+      return Array.isArray(data) ? data : [];
+    };
+
+    const restGet = async <T>(table: string, query: string) => {
+      const url = `${restBase}/${table}?${query}`;
+      const res = await fetch(url, { method: 'GET', headers: restHeaders as any });
+      const text = await res.text().catch(() => '');
+      if (!res.ok) throw new Error(`Supabase get ${table} failed (${res.status}): ${text.slice(0, 800)}`);
+      return JSON.parse(text) as T[];
+    };
+
+    const ensureTags = async (slugs: string[]) => {
+      const normalized = uniqStrings(slugs.map(normalizeSlug)).filter(Boolean);
+      if (normalized.length === 0) return [] as Array<{ id: string; slug: string }>;
+
+      const existing = await restGet<{ id: string; slug: string }>(
+        'tags',
+        `select=id,slug&slug=in.(${normalized.map(encodeURIComponent).join(',')})`
+      );
+      const existingSlugs = new Set((existing || []).map((t) => t.slug));
+      const missing = normalized.filter((s) => !existingSlugs.has(s));
+
+      let created: Array<{ id: string; slug: string }> = [];
+      for (const slug of missing) {
+        const row = await restInsert<{ id: string; slug: string }>('tags', { slug, created_by: seedUserId }, 'id,slug');
+        created.push(row);
+      }
+      return [...(existing || []), ...created];
+    };
+
+    const applyLog: Record<string, unknown> = {
+      runId,
+      supabaseUrl,
+      startedAt: nowIso(),
+      inventoryId: null,
+      blueprintIds: [] as string[],
+      bannerUploads: [] as Array<{ blueprintTitle: string; ok: boolean; bannerUrl?: string; error?: string }>,
+    };
+
+    const invTags = ensureTags(spec.library.tags || []);
+    const inventoryRow = await step('apply_T1_insert_inventory', async () => {
+      const categories = (inventory.categories || []).map((c) => c.name).filter(Boolean);
+      const promptCategories = categories.join(', ');
+      const row = await restInsert<{ id: string }>(
+        'inventories',
+        {
+          title: spec.library.title,
+          prompt_inventory: spec.library.topic,
+          prompt_categories: promptCategories,
+          generated_schema: inventory,
+          review_sections: ['Overview', 'Strengths', 'Gaps', 'Suggestions'],
+          include_score: true,
+          creator_user_id: seedUserId,
+          is_public: false,
+        },
+        'id'
+      );
+      applyLog.inventoryId = row.id;
+      return row;
+    });
+
+    await step('apply_T1_tag_inventory', async () => {
+      const tags = await invTags;
+      if (tags.length === 0) return { count: 0 };
+      const rows = tags.map((t) => ({ inventory_id: (inventoryRow as any).id, tag_id: t.id }));
+      // Insert join rows one-by-one to keep failure mode obvious.
+      for (const r of rows) {
+        await restInsert('inventory_tags', r, 'inventory_id,tag_id');
+      }
+      return { count: rows.length };
+    });
+
+    const blueprintIds: string[] = [];
+    const blueprintIdByTitle = new Map<string, string>();
+
+    await step('apply_T2_insert_blueprints', async () => {
+      let idx = 0;
+      for (const bp of generatedBlueprints) {
+        const variant = spec.blueprints[idx] || {};
+        idx += 1;
+
+        const selectedItems: Record<string, Array<string | { name: string; context?: string }>> = {};
+        for (const st of bp.steps || []) {
+          for (const it of st.items || []) {
+            const cat = String(it.category || '').trim();
+            const name = String(it.name || '').trim();
+            if (!cat || !name) continue;
+            const list = selectedItems[cat] || [];
+            list.push(it.context ? { name, context: it.context } : name);
+            selectedItems[cat] = list;
+          }
+        }
+
+        const mixNotes = String(variant.notes || spec.library.notes || '').trim() || null;
+        const row = await restInsert<{ id: string }>(
+          'blueprints',
+          {
+            inventory_id: (inventoryRow as any).id,
+            creator_user_id: seedUserId,
+            title: bp.title,
+            selected_items: selectedItems,
+            steps: bp.steps,
+            mix_notes: mixNotes,
+            review_prompt: reviewFocus || null,
+            llm_review: null,
+            banner_url: null,
+            is_public: false,
+            source_blueprint_id: null,
+          },
+          'id'
+        );
+        blueprintIds.push(row.id);
+        blueprintIdByTitle.set(bp.title, row.id);
+      }
+      applyLog.blueprintIds = blueprintIds;
+      return { count: blueprintIds.length };
+    });
+
+    await step('apply_T2_tag_blueprints', async () => {
+      let idx = 0;
+      for (const bp of generatedBlueprints) {
+        const variant = spec.blueprints[idx] || {};
+        idx += 1;
+        const title = bp.title;
+        const bpId = blueprintIdByTitle.get(title);
+        if (!bpId) continue;
+        const tags = await ensureTags([...(spec.library.tags || []), ...((variant as any).tags || [])]);
+        for (const t of tags) {
+          await restInsert('blueprint_tags', { blueprint_id: bpId, tag_id: t.id }, 'blueprint_id,tag_id');
+        }
+      }
+      return { ok: true };
+    });
+
+    await step('apply_T4_persist_reviews', async () => {
+      const reviewsPath = path.join(runDir, 'reviews.json');
+      if (!fs.existsSync(reviewsPath)) return { skipped: true };
+      const reviews = readJsonFile<Array<{ title: string; review: string }>>(reviewsPath);
+      for (const r of reviews) {
+        const bpId = blueprintIdByTitle.get(r.title);
+        if (!bpId) continue;
+        await restUpdate('blueprints', `id=eq.${bpId}`, { llm_review: r.review }, 'id');
+      }
+      return { count: reviews.length };
+    });
+
+    await step('apply_T3_upload_banners', async () => {
+      const bannersPath = path.join(runDir, 'banners.json');
+      if (!fs.existsSync(bannersPath)) return { skipped: true };
+      const banners = readJsonFile<
+        Array<{ title: string; ok: true; contentType: string; imageBase64: string } | { title: string; ok: false; error: string }>
+      >(bannersPath);
+
+      const uploadUrl = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/upload-banner`;
+      for (const b of banners) {
+        const bpId = blueprintIdByTitle.get(b.title);
+        if (!bpId) continue;
+
+        if (!('ok' in b) || !b.ok) {
+          (applyLog.bannerUploads as any).push({ blueprintTitle: b.title, ok: false, error: (b as any).error || 'no banner' });
+          continue;
+        }
+
+        const res = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contentType: b.contentType,
+            imageBase64: b.imageBase64,
+          }),
+        });
+
+        const text = await res.text().catch(() => '');
+        if (!res.ok) {
+          (applyLog.bannerUploads as any).push({ blueprintTitle: b.title, ok: false, error: text.slice(0, 800) });
+          continue;
+        }
+        const data = JSON.parse(text) as { bannerUrl?: string };
+        const bannerUrl = String(data.bannerUrl || '');
+        if (!bannerUrl) {
+          (applyLog.bannerUploads as any).push({ blueprintTitle: b.title, ok: false, error: 'missing bannerUrl' });
+          continue;
+        }
+        await restUpdate('blueprints', `id=eq.${bpId}`, { banner_url: bannerUrl }, 'id');
+        (applyLog.bannerUploads as any).push({ blueprintTitle: b.title, ok: true, bannerUrl });
+      }
+
+      return { count: (applyLog.bannerUploads as any).length };
+    });
+
+    await step('apply_T5_publish', async () => {
+      // Publish blueprints first, then the inventory.
+      for (const id of blueprintIds) {
+        await restUpdate('blueprints', `id=eq.${id}`, { is_public: true }, 'id');
+      }
+      await restUpdate('inventories', `id=eq.${(inventoryRow as any).id}`, { is_public: true }, 'id');
+      return { blueprintCount: blueprintIds.length };
+    });
+
+    applyLog.finishedAt = nowIso();
+    writeJsonFile(path.join(runDir, 'apply_log.json'), applyLog);
+
+    // Best-effort rollback artifacts (user runs manually in SQL console if needed).
+    const rollbackSql = [
+      '-- Rollback for seed run',
+      `-- run_id: ${runId}`,
+      '',
+      'BEGIN;',
+      `DELETE FROM public.blueprint_tags WHERE blueprint_id IN (${blueprintIds.map((id) => `'${id}'`).join(',')});`,
+      `DELETE FROM public.blueprints WHERE id IN (${blueprintIds.map((id) => `'${id}'`).join(',')});`,
+      `DELETE FROM public.inventory_tags WHERE inventory_id = '${(inventoryRow as any).id}';`,
+      `DELETE FROM public.inventories WHERE id = '${(inventoryRow as any).id}';`,
+      'COMMIT;',
+      '',
+    ].join('\n');
+    writeTextFile(path.join(runDir, 'rollback.sql'), rollbackSql);
+  }
 
   await step('publish_payload', async () => {
     const payload = {

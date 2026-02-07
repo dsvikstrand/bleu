@@ -1,9 +1,9 @@
 flowchart TD
-  ST0([STAGE: Inputs]) -.-> A
-  ST1([STAGE: Generate Library]) -.-> H
-  ST2([STAGE: Generate Blueprints]) -.-> I
-  ST3([STAGE: Stage 0.5 Execute AI]) -.-> R
-  ST4([STAGE: Stage 1 Apply Mode TODO]) -.-> T0
+  ST0([STAGE Inputs]) -.-> A
+  ST1([STAGE Generate Library]) -.-> H
+  ST2([STAGE Generate Blueprints]) -.-> I
+  ST3([STAGE Stage 0.5 Execute AI]) -.-> R
+  ST4([STAGE Stage 1 Apply Mode]) -.-> T0
 
   A["ID:A seed/seed_spec_v0.json (Seed Spec) TESTED_OK"] --> B["ID:B seed_stage0.ts (parse args + validate spec) TESTED_OK"]
   B --> C["ID:C Create run folder seed/outputs/RUN_ID/ TESTED_OK"]
@@ -39,16 +39,20 @@ flowchart TD
   Z["ID:Z Done (artifacts only) TESTED_OK"]
 
   %% Notes (hexagons) - point into nodes with key context
-  NX1{{"NOTE: access token expires, refresh often"}} --> G
-  NX2{{"NOTE: /api/analyze-blueprint is SSE, runner stitches text"}} --> R
-  NX3{{"NOTE: /api/generate-banner dryRun returns base64, no Storage"}} --> S
-  NX4{{"NOTE: image generation can be rate limited or safety rejected"}} --> S
-  NX5{{"NOTE: seed/outputs is ignored, do not commit artifacts"}} --> C
+  NX1{{NOTE access token expires refresh often}} --> G
+  NX2{{NOTE analyze-blueprint is SSE runner stitches text}} --> R
+  NX3{{NOTE generate-banner dryRun returns base64 no Storage}} --> S
+  NX4{{NOTE image generation can be rate limited or safety rejected}} --> S
+  NX5{{NOTE seed outputs ignored do not commit artifacts}} --> C
 
-  %% TODO nodes for the complete graph (Stage 1 apply mode, still simple)
-  M1 -.-> T0["ID:T0 Stage 1 apply mode TODO"]
-  T0 --> T1["ID:T1 Insert library/inventory into DB TODO"]
-  T1 --> T2["ID:T2 Insert blueprint drafts into DB TODO"]
-  T2 --> T3["ID:T3 Upload banner to Supabase Storage via upload-banner TODO"]
-  T3 --> T4["ID:T4 Persist review text to blueprint row TODO"]
-  T4 --> T5["ID:T5 Publish public blueprint (finalize) TODO"]
+  %% Stage 1 apply mode nodes (implemented in seed_stage0.ts)
+  M1 -.-> T0["ID:T0 Stage 1 apply mode TESTED_OK"]
+  T0 --> T1["ID:T1 Insert library/inventory into DB TESTED_OK"]
+  T1 --> T2["ID:T2 Insert blueprint drafts into DB TESTED_OK"]
+  T2 --> T3["ID:T3 Upload banner via upload-banner edge function TESTED_OK"]
+  T3 --> T4["ID:T4 Persist review text to blueprint row TESTED_OK"]
+  T4 --> T5["ID:T5 Publish public blueprint finalize TESTED_OK"]
+
+  NX6{{NOTE apply mode gated with --apply and --yes APPLY_STAGE1}} --> T0
+  NX7{{NOTE writes apply_log json and rollback sql in the run folder}} --> T0
+  NX8{{NOTE publish sets is_public true on created rows}} --> T5
