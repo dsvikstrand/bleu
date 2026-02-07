@@ -114,6 +114,8 @@ const BannerRequestSchema = z.object({
   title: z.string().min(1),
   inventoryTitle: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  // Seed pipelines may want to generate without writing to Storage.
+  dryRun: z.boolean().optional(),
 });
 
 const BlueprintGenerationSchema = z.object({
@@ -370,6 +372,13 @@ app.post('/api/generate-banner', async (req, res) => {
   try {
     const client = createLLMClient();
     const result = await client.generateBanner(parsed.data);
+
+    if (parsed.data.dryRun) {
+      return res.json({
+        contentType: result.mimeType,
+        imageBase64: result.buffer.toString('base64'),
+      });
+    }
 
     const uploadUrl = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/upload-banner`;
     const imageBase64 = result.buffer.toString('base64');

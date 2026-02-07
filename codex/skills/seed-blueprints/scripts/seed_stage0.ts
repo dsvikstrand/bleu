@@ -46,6 +46,23 @@ type GeneratedBlueprint = {
   }>;
 };
 
+type ReviewPayload = {
+  title: string;
+  inventoryTitle: string;
+  selectedItems: Record<string, Array<string | { name: string; context?: string }>>;
+  mixNotes?: string;
+  reviewPrompt?: string;
+  reviewSections?: string[];
+  includeScore?: boolean;
+};
+
+type BannerPayload = {
+  title: string;
+  inventoryTitle: string;
+  tags: string[];
+  dryRun?: boolean;
+};
+
 type ValidationResult = {
   ok: boolean;
   errors: string[];
@@ -97,6 +114,9 @@ function parseArgs(argv: string[]) {
     else if (a === '--agentic-base-url') out.agenticBaseUrl = argv[++i] ?? '';
     else if (a === '--run-id') out.runId = argv[++i] ?? '';
     else if (a === '--no-backend') out.noBackend = true;
+    else if (a === '--do-review') out.doReview = true;
+    else if (a === '--review-focus') out.reviewFocus = argv[++i] ?? '';
+    else if (a === '--do-banner') out.doBanner = true;
     else if (a.startsWith('--')) die(`Unknown flag: ${a}`);
   }
   return out;
@@ -146,6 +166,49 @@ async function postJson<T>(
 
   const data = (await res.json()) as T;
   return { ok: true, data };
+}
+
+async function postSseText(
+  url: string,
+  token: string,
+  body: unknown
+): Promise<{ ok: true; text: string } | { ok: false; status: number; text: string }> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    return { ok: false, status: res.status, text };
+  }
+
+  const raw = await res.text().catch(() => '');
+  let out = '';
+  type SseFrame = {
+    choices?: Array<{
+      delta?: { content?: string };
+    }>;
+  };
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) continue;
+    const payload = trimmed.replace(/^data:\s*/, '');
+    if (!payload) continue;
+    if (payload === '[DONE]') break;
+    try {
+      const frame = JSON.parse(payload) as SseFrame;
+      const delta = frame.choices?.[0]?.delta?.content;
+      if (typeof delta === 'string') out += delta;
+    } catch {
+      // ignore malformed frames
+    }
+  }
+  return { ok: true, text: out };
 }
 
 function validateSeedSpec(spec: SeedSpec): string[] {
@@ -234,6 +297,44 @@ function validateBlueprints(inventory: InventorySchema, blueprints: GeneratedBlu
   };
 }
 
+function buildReviewPayload(spec: SeedSpec, bp: GeneratedBlueprint): ReviewPayload {
+  const selectedItems: Record<string, Array<string | { name: string; context?: string }>> = {};
+  for (const step of bp.steps || []) {
+    for (const it of step.items || []) {
+      const cat = (it.category || '').trim();
+      const name = (it.name || '').trim();
+      if (!cat || !name) continue;
+      const list = selectedItems[cat] || [];
+      list.push(it.context ? { name, context: it.context } : name);
+      selectedItems[cat] = list;
+    }
+  }
+
+  return {
+    title: bp.title,
+    inventoryTitle: spec.library.title,
+    selectedItems,
+    mixNotes: spec.library.notes || '',
+    reviewPrompt: '',
+    reviewSections: [],
+    includeScore: true,
+  };
+}
+
+function buildBannerPayload(spec: SeedSpec, bp: GeneratedBlueprint, idx: number): BannerPayload {
+  const variantTags = spec.blueprints[idx]?.tags || [];
+  const combined = [...(spec.library.tags || []), ...variantTags]
+    .map((t) => String(t || '').trim())
+    .filter(Boolean);
+  const uniq = Array.from(new Set(combined));
+  return {
+    title: bp.title,
+    inventoryTitle: spec.library.title,
+    tags: uniq,
+    dryRun: true,
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -250,6 +351,9 @@ async function main() {
         '  --agentic-base-url <url>   Agentic backend base URL (default: env VITE_AGENTIC_BACKEND_URL or https://bapi.vdsai.cloud)',
         '  --run-id <id>              Override run_id folder name',
         '  --no-backend               Do not call backend (future use)',
+        '  --do-review                Execute /api/analyze-blueprint (Stage 0.5)',
+        '  --review-focus <text>      Optional reviewPrompt for /api/analyze-blueprint',
+        '  --do-banner                Execute /api/generate-banner in dryRun mode (Stage 0.5; no Storage upload)',
       ].join('\n') + '\n'
     );
     return;
@@ -260,6 +364,9 @@ async function main() {
   const agenticBaseUrl =
     String(args.agenticBaseUrl || process.env.VITE_AGENTIC_BACKEND_URL || 'https://bapi.vdsai.cloud').replace(/\/$/, '');
   const backendCalls = !args.noBackend;
+  const doReview = !!args.doReview;
+  const doBanner = !!args.doBanner;
+  const reviewFocus = String(args.reviewFocus || '').trim();
 
   if (!fs.existsSync(specPath)) die(`Spec not found: ${specPath}`);
 
@@ -359,52 +466,61 @@ async function main() {
     return results.map((r) => r.generated);
   });
 
-  await step('generate_review_requests', async () => {
+  const reviewPayloads = await step('generate_review_requests', async () => {
     // Stage 0: do not call review endpoint (cost + credits). Produce payloads only.
-    const payloads = generatedBlueprints.map((bp) => {
-      const selectedItems: Record<string, Array<string | { name: string; context?: string }>> = {};
-      for (const step of bp.steps || []) {
-        for (const it of step.items || []) {
-          const cat = (it.category || '').trim();
-          const name = (it.name || '').trim();
-          if (!cat || !name) continue;
-          const list = selectedItems[cat] || [];
-          list.push(it.context ? { name, context: it.context } : name);
-          selectedItems[cat] = list;
+    const payloads = generatedBlueprints.map((bp) => buildReviewPayload(spec, bp));
+    writeJsonFile(path.join(runDir, 'review_requests.json'), payloads);
+    return payloads;
+  });
+
+  const bannerPayloads = await step('generate_banner_requests', async () => {
+    // Stage 0: do not call banner endpoint (would upload to Storage). Produce payloads only.
+    const payloads = generatedBlueprints.map((bp, idx) => buildBannerPayload(spec, bp, idx));
+    writeJsonFile(path.join(runDir, 'banner_requests.json'), payloads);
+    return payloads;
+  });
+
+  if (doReview) {
+    await step('execute_review', async () => {
+      if (!backendCalls) throw new Error('Backend calls disabled');
+      const url = `${agenticBaseUrl}/api/analyze-blueprint`;
+      const results: Array<{ title: string; review: string }> = [];
+
+      for (const payload of reviewPayloads) {
+        const body = {
+          ...payload,
+          reviewPrompt: reviewFocus || payload.reviewPrompt || '',
+        };
+        const res = await postSseText(url, accessToken, body);
+        if (!res.ok) {
+          throw new Error(`analyze-blueprint failed (${res.status}): ${res.text.slice(0, 500)}`);
         }
+        results.push({ title: payload.title, review: res.text });
       }
 
-      return {
-        title: bp.title,
-        inventoryTitle: spec.library.title,
-        selectedItems,
-        mixNotes: spec.library.notes || '',
-        reviewPrompt: '',
-        reviewSections: [],
-        includeScore: true,
-      };
+      writeJsonFile(path.join(runDir, 'reviews.json'), results);
+      return { count: results.length };
     });
-    writeJsonFile(path.join(runDir, 'review_requests.json'), payloads);
-    return { count: payloads.length };
-  });
+  }
 
-  await step('generate_banner_requests', async () => {
-    // Stage 0: do not call banner endpoint (would upload to Storage). Produce payloads only.
-    const payloads = generatedBlueprints.map((bp, idx) => {
-      const variantTags = spec.blueprints[idx]?.tags || [];
-      const combined = [...(spec.library.tags || []), ...variantTags]
-        .map((t) => String(t || '').trim())
-        .filter(Boolean);
-      const uniq = Array.from(new Set(combined));
-      return {
-        title: bp.title,
-        inventoryTitle: spec.library.title,
-        tags: uniq,
-      };
+  if (doBanner) {
+    await step('execute_banner', async () => {
+      if (!backendCalls) throw new Error('Backend calls disabled');
+      const url = `${agenticBaseUrl}/api/generate-banner`;
+      const results: Array<{ title: string; contentType: string; imageBase64: string }> = [];
+
+      for (const payload of bannerPayloads) {
+        const res = await postJson<{ contentType: string; imageBase64: string }>(url, accessToken, payload);
+        if (!res.ok) {
+          throw new Error(`generate-banner failed (${res.status}): ${res.text.slice(0, 500)}`);
+        }
+        results.push({ title: payload.title, contentType: res.data.contentType, imageBase64: res.data.imageBase64 });
+      }
+
+      writeJsonFile(path.join(runDir, 'banners.json'), results);
+      return { count: results.length };
     });
-    writeJsonFile(path.join(runDir, 'banner_requests.json'), payloads);
-    return { count: payloads.length };
-  });
+  }
 
   const validation = await step('validate', async () => {
     const result = validateBlueprints(inventory, generatedBlueprints);

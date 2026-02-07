@@ -39,3 +39,31 @@ Outputs:
 - `seed/outputs/<run_id>/validation.json`
 - `seed/outputs/<run_id>/publish_payload.json` (payload only, no writes)
 - `seed/outputs/<run_id>/run_log.json`
+
+## Run (Stage 0.5: Execute Review + Banner Dry Run)
+
+Stage 0.5 is still "no writes", but it *does* execute two expensive calls so you can validate the happy path end-to-end:
+
+- Review: `POST /api/analyze-blueprint` (returns SSE streamed text; runner collects into a single string per blueprint)
+- Banner: `POST /api/generate-banner` with `dryRun: true` (returns `{ contentType, imageBase64 }`, no Storage upload)
+
+Command:
+```bash
+tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
+  --spec seed/seed_spec_v0.json \
+  --do-review \
+  --do-banner
+```
+
+Optional (nudge the review):
+```bash
+tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
+  --spec seed/seed_spec_v0.json \
+  --do-review \
+  --review-focus "Keep it short, practical, and safety-minded." \
+  --do-banner
+```
+
+Additional outputs:
+- `seed/outputs/<run_id>/reviews.json`
+- `seed/outputs/<run_id>/banners.json`

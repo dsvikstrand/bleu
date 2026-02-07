@@ -1,33 +1,32 @@
-%% Stage 0 LAS (Linear Agentic Seeding) runner visualization
-%% Source of truth: codex/skills/seed-blueprints/scripts/seed_stage0.ts
-
 flowchart TD
-  A[Seed Spec<br/>seed/seed_spec_v0.json] --> B[seed_stage0.ts<br/>parse args + validate spec]
-  B --> C[Create run folder<br/>seed/outputs/RUN_ID/]
-  C --> D{no backend?}
+  A["ID:A seed/seed_spec_v0.json (Seed Spec) TESTED_OK"] --> B["ID:B seed_stage0.ts (parse args + validate spec) TESTED_OK"]
+  B --> C["ID:C Create run folder seed/outputs/RUN_ID/ TESTED_OK"]
+  C --> D{"ID:D no backend NOT_TESTED"}
 
-  D -- Yes --> E[Skip backend calls<br/>(offline mode)]
-  E --> F[Write run_log.json<br/>config.backendCalls=false]
-  F --> Z[Done (artifacts only)]
+  D -- Yes --> E["ID:E Offline mode (skip backend calls) NOT_TESTED"]
+  E --> F["ID:F Write run_log.json backendCalls=false NOT_TESTED"]
+  F --> Z
 
-  D -- No --> G[Read SEED_USER_ACCESS_TOKEN<br/>(Supabase access_token)]
-  G --> H[Node n1: generate_library<br/>POST bapi /api/generate-inventory<br/>body: { keywords: library.topic }]
-  H --> H1[Write library.json<br/>{summary, categories (array)}]
+  D -- No --> G["ID:G Read SEED_USER_ACCESS_TOKEN TESTED_OK"]
+  G --> H["ID:H n1 generate_library POST /api/generate-inventory TESTED_OK"]
+  H --> H1["ID:H1 Write library.json TESTED_OK"]
 
-  H1 --> I[Node n2: generate_blueprints<br/>For each blueprint variant in spec:<br/>POST bapi /api/generate-blueprint<br/>body: { title, description, notes, tags, library }]
-  I --> I1[Write blueprints.json<br/>{title, steps (array)} (array)]
+  H1 --> I["ID:I n2 generate_blueprints POST /api/generate-blueprint TESTED_OK"]
+  I --> I1["ID:I1 Write blueprints.json TESTED_OK"]
 
-  I1 --> J[Node n3: generate_review_requests<br/>(No network)<br/>Prepare payloads for /api/analyze-blueprint]
-  J --> J1[Write review_requests.json]
+  I1 --> J["ID:J n3 build review_requests (no network) TESTED_OK"]
+  J --> J1["ID:J1 Write review_requests.json TESTED_OK"]
 
-  J1 --> K[Node n4: generate_banner_requests<br/>(No network)<br/>Prepare payloads for /api/generate-banner]
-  K --> K1[Write banner_requests.json]
+  J1 --> K["ID:K n4 build banner_requests (no network) TESTED_OK"]
+  K --> K1["ID:K1 Write banner_requests.json TESTED_OK"]
 
-  K1 --> L[Node n5: validate<br/>Check every (category,item) referenced exists in library]
-  L --> L1[Write validation.json<br/>ok/errors/warnings/stats]
+  K1 --> L["ID:L n5 validate category+item references TESTED_OK"]
+  L --> L1["ID:L1 Write validation.json TESTED_OK"]
 
-  L1 --> M[Node n6: publish_payload<br/>(No writes)<br/>Assemble 'would publish' blueprint payload]
-  M --> M1[Write publish_payload.json]
+  L1 --> M["ID:M n6 publish_payload (no writes) TESTED_OK"]
+  M --> M1["ID:M1 Write publish_payload.json TESTED_OK"]
 
-  M1 --> N[Append run_log.json<br/>step timings + status]
-  N --> Z[Done (artifacts only)]
+  M1 --> N["ID:N Append run_log.json timings+status TESTED_OK"]
+  N --> Z
+
+  Z["ID:Z Done (artifacts only) TESTED_OK"]
