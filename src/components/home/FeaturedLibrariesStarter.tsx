@@ -372,10 +372,10 @@ export function FeaturedLibrariesStarter() {
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Interactive demo</p>
           <h2 className="text-3xl font-semibold tracking-tight leading-tight">TRY THE BUILDER</h2>
           <p className="text-base font-medium text-foreground/90">
-            Build a routine in minutes.
+            Build a Blueprint in minutes.
           </p>
           <p className="text-sm text-muted-foreground max-w-[60ch]">
-            Pick a library, tap items, and shape a blueprint. Use AI review and banners when you're ready.
+            Pick a library, tap items, and shape a blueprint. Use AI review and banners when you're ready. Just click on your favorite items to get started.
           </p>
         </div>
         <Badge variant="secondary" className="w-fit text-xs">Starter</Badge>

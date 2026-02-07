@@ -74,7 +74,7 @@ export default function Home() {
             Create & share recipes for life routines
           </p>
           <p className="text-base text-muted-foreground max-w-md mx-auto leading-relaxed">
-            Build routines from shared libraries, get AI reviews, and publish when you're ready.
+            Build routines from shared libraries, get AI reviews, and publish your own when you're ready.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <Link to="/explore">
