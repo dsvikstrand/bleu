@@ -251,8 +251,6 @@ export function FeaturedLibrariesStarter() {
     return Object.values(selectedItems).reduce((sum, items) => sum + items.length, 0);
   }, [selectedItems]);
 
-  const demoProgress = Math.min(selectedCount, 3);
-
   const setActiveState = (updates: Partial<NonNullable<typeof activeState>>) => {
     if (!activeInventory) return;
     setStateByInventoryId((prev) => ({
@@ -371,10 +369,11 @@ export function FeaturedLibrariesStarter() {
     <section className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-primary uppercase tracking-wide">Build your first blueprint</p>
-          <h2 className="text-xl font-semibold tracking-tight">Featured libraries</h2>
+          <p className="text-sm font-semibold text-primary uppercase tracking-wide">Interactive demo</p>
+          <h2 className="text-xl font-semibold tracking-tight">Try the Builder</h2>
           <p className="text-sm text-muted-foreground">
-            Pick a library, tap items to add them, and try a quick demo build. Sign in only when you're ready to use AI review, banners, and publishing.
+            Tap items to shape a routine. Load an example, tweak it, and see how Blueprints are built.
+            Sign in only when you want AI review, banners, or publishing.
           </p>
         </div>
         <Badge variant="secondary" className="w-fit text-xs">Starter</Badge>
@@ -415,12 +414,6 @@ export function FeaturedLibrariesStarter() {
             <Sparkles className="h-4 w-4 text-primary" />
             {activeInventory?.title || 'Loading…'}
           </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Demo progress: {demoProgress}/3 items selected
-          </p>
-          <p className="text-xs text-muted-foreground/80">
-            Tip: pick any 3 items, then continue in the full builder when you're ready.
-          </p>
         </CardHeader>
 
         <CardContent className="space-y-4">
@@ -488,7 +481,7 @@ export function FeaturedLibrariesStarter() {
                 </p>
                 {selectedCount < 3 ? (
                   <p className="text-xs text-muted-foreground">
-                    Select {3 - demoProgress} more item{3 - demoProgress === 1 ? '' : 's'} to continue.
+                    Select {3 - selectedCount} more item{3 - selectedCount === 1 ? '' : 's'} to continue.
                   </p>
                 ) : (
                   <Button
