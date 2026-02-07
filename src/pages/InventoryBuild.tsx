@@ -28,6 +28,7 @@ import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisV
 import { BlueprintLoadingAnimation } from '@/components/blueprint/BlueprintLoadingAnimation';
 import { BuildPageGuide } from '@/components/blueprint/BuildPageGuide';
 import { StepAccordion, type BlueprintStep } from '@/components/blueprint/StepAccordion';
+import { BlueprintRecipeAccordion } from '@/components/blueprint/BlueprintRecipeAccordion';
 import { BuildHelpOverlay, HelpButton } from '@/components/blueprint/BuildHelpOverlay';
 import { BuildTour, TourBanner, TourButton, isTourCompleted } from '@/components/blueprint/BuildTour';
 import { useInventory } from '@/hooks/useInventories';
@@ -89,7 +90,9 @@ type HomeDraftV1 = {
   inventoryId: string;
   title: string;
   selectedItems: Record<string, string[]>;
-  steps: BlueprintStep[];
+  steps?: BlueprintStep[];
+  itemContexts?: Record<string, string>;
+  modeHint?: 'simple' | 'full';
   source: 'home-starter' | 'home-example';
 };
 
@@ -125,6 +128,7 @@ export default function InventoryBuild() {
 
   // Blueprint state
   const [title, setTitle] = useState('');
+  const [builderMode, setBuilderMode] = useState<'full' | 'simple'>('full');
   const [selectedItems, setSelectedItems] = useState<Record<string, string[]>>({});
   const [itemContexts, setItemContexts] = useState<Record<string, string>>({});
   const [mixNotes, setMixNotes] = useState('');
@@ -280,12 +284,14 @@ export default function InventoryBuild() {
       const initialSteps = parseStepsForBuilder(blueprint.steps);
       setSteps(initialSteps);
       setActiveStepId(initialSteps[0]?.id || null);
+      setBuilderMode('full');
     } else {
       setTitle(inventory.title);
       setSteps([]);
       setActiveStepId(null);
       setBannerUrl(null);
       setGenerateBanner(true);
+      setBuilderMode('full');
 
       // One-time Home prefill bridge (non-LLM): lets Home load starter items or a full example blueprint.
       // Intentional behavior: if present, it overwrites the current build state.
@@ -302,8 +308,12 @@ export default function InventoryBuild() {
             parsed.inventoryId === inventory.id
           ) {
             setTitle(typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title : inventory.title);
-            setSelectedItems(parsed.selectedItems && typeof parsed.selectedItems === 'object' ? parsed.selectedItems : {});
-            setItemContexts({});
+            const draftSelected =
+              parsed.selectedItems && typeof parsed.selectedItems === 'object' ? parsed.selectedItems : {};
+            setSelectedItems(draftSelected);
+            const draftContexts =
+              parsed.itemContexts && typeof parsed.itemContexts === 'object' ? parsed.itemContexts : {};
+            setItemContexts(draftContexts);
             setMixNotes('');
             setReviewPrompt('');
             setReview('');
@@ -312,9 +322,29 @@ export default function InventoryBuild() {
             setBannerUrl(null);
             setGenerateBanner(true);
 
+            const modeHint = parsed.modeHint === 'simple' ? 'simple' : parsed.modeHint === 'full' ? 'full' : null;
+            if (modeHint) setBuilderMode(modeHint);
+
             const nextSteps = Array.isArray(parsed.steps) ? parsed.steps : [];
-            setSteps(nextSteps);
-            setActiveStepId(nextSteps[0]?.id || null);
+            if (nextSteps.length > 0) {
+              setSteps(nextSteps);
+              setActiveStepId(nextSteps[0]?.id || null);
+            } else if (modeHint !== 'simple') {
+              const itemKeys = Object.entries(draftSelected).flatMap(([category, items]) =>
+                (items || []).map((item) => `${category}::${item}`)
+              );
+              if (itemKeys.length > 0) {
+                const id = crypto.randomUUID();
+                setSteps([{ id, title: '', description: '', itemKeys }]);
+                setActiveStepId(id);
+              } else {
+                setSteps([]);
+                setActiveStepId(null);
+              }
+            } else {
+              setSteps([]);
+              setActiveStepId(null);
+            }
           }
         }
       } catch {
@@ -436,17 +466,25 @@ export default function InventoryBuild() {
       } else {
         existing.add(item);
       }
-      if (wasSelected) {
-        removeItemFromSteps(itemKey);
-      } else {
-        addItemToActiveStep(itemKey);
+      if (builderMode === 'full') {
+        if (wasSelected) {
+          removeItemFromSteps(itemKey);
+        } else {
+          addItemToActiveStep(itemKey);
+        }
+      } else if (wasSelected) {
+        setItemContexts((prevContexts) => {
+          const next = { ...prevContexts };
+          delete next[itemKey];
+          return next;
+        });
       }
       return {
         ...prev,
         [categoryName]: Array.from(existing),
       };
     });
-  }, [addItemToActiveStep, getItemKey, removeItemFromSteps]);
+  }, [addItemToActiveStep, builderMode, getItemKey, removeItemFromSteps]);
 
   const addCustomItem = useCallback((categoryName: string, itemName: string) => {
     setCategories((prev) =>
@@ -464,8 +502,10 @@ export default function InventoryBuild() {
       ...prev,
       [categoryName]: [...(prev[categoryName] || []), itemName],
     }));
-    addItemToActiveStep(getItemKey(categoryName, itemName));
-  }, [addItemToActiveStep, getItemKey]);
+    if (builderMode === 'full') {
+      addItemToActiveStep(getItemKey(categoryName, itemName));
+    }
+  }, [addItemToActiveStep, builderMode, getItemKey]);
 
   const removeItem = useCallback((categoryName: string, item: string) => {
     const itemKey = getItemKey(categoryName, item);
@@ -478,8 +518,10 @@ export default function InventoryBuild() {
       delete newContexts[itemKey];
       return newContexts;
     });
-    removeItemFromSteps(itemKey);
-  }, [getItemKey, removeItemFromSteps]);
+    if (builderMode === 'full') {
+      removeItemFromSteps(itemKey);
+    }
+  }, [builderMode, getItemKey, removeItemFromSteps]);
 
   const updateItemContext = useCallback((categoryName: string, item: string, context: string) => {
     setItemContexts((prev) => ({
@@ -1030,19 +1072,22 @@ export default function InventoryBuild() {
         .filter(([key]) => !assignedKeys.has(key))
         .map(([, item]) => item);
 
-      const finalSteps = stepsPayload.length > 0
-        ? [
-            ...stepsPayload,
-            ...(unassignedItems.length > 0
-              ? [{
-                  id: 'unassigned',
-                  title: 'Unassigned',
-                  description: null,
-                  items: unassignedItems,
-                }]
-              : []),
-          ]
-        : null;
+      const finalSteps =
+        builderMode === 'simple'
+          ? null
+          : stepsPayload.length > 0
+            ? [
+                ...stepsPayload,
+                ...(unassignedItems.length > 0
+                  ? [{
+                      id: 'unassigned',
+                      title: 'Unassigned',
+                      description: null,
+                      items: unassignedItems,
+                    }]
+                  : []),
+              ]
+            : null;
 
       let resolvedBannerUrl = bannerUrl;
       if (generateBanner && !resolvedBannerUrl) {
@@ -1356,29 +1401,107 @@ export default function InventoryBuild() {
             {/* Steps Section - New Accordion */}
             <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
               <Card className="bg-card/60 backdrop-blur-glass border-border/50">
-                <CardHeader>
-                  <CardTitle>Steps</CardTitle>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                  <div className="space-y-1">
+                    <CardTitle>{builderMode === 'simple' ? 'Selected items' : 'Steps'}</CardTitle>
+                    {builderMode === 'simple' && (
+                      <p className="text-xs text-muted-foreground">
+                        Simple mode hides steps. If you publish in simple mode, your blueprint will be published without steps.
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs ${builderMode === 'full' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      Full
+                    </span>
+                    <Switch
+                      checked={builderMode === 'simple'}
+                      onCheckedChange={(checked) => {
+                        const nextMode = checked ? 'simple' : 'full';
+                        setBuilderMode(nextMode);
+                        if (nextMode !== 'full') return;
+
+                        const selectedKeys = Object.entries(selectedItems).flatMap(([category, items]) =>
+                          items.map((item) => `${category}::${item}`)
+                        );
+                        const selectedSet = new Set(selectedKeys);
+
+                        // Reconcile steps to match the current selection (keeps structure, adds missing items to active step).
+                        let nextSteps = steps.map((step) => ({
+                          ...step,
+                          itemKeys: step.itemKeys.filter((key) => selectedSet.has(key)),
+                        }));
+
+                        const assigned = new Set(nextSteps.flatMap((step) => step.itemKeys));
+                        const missing = selectedKeys.filter((key) => !assigned.has(key));
+
+                        if (missing.length > 0) {
+                          if (nextSteps.length === 0) {
+                            const id = crypto.randomUUID();
+                            nextSteps = [{ id, title: '', description: '', itemKeys: missing }];
+                            setActiveStepId(id);
+                          } else {
+                            const targetId =
+                              nextSteps.find((s) => s.id === activeStepId)?.id || nextSteps[nextSteps.length - 1].id;
+                            nextSteps = nextSteps.map((step) => {
+                              if (step.id !== targetId) return step;
+                              return { ...step, itemKeys: Array.from(new Set([...step.itemKeys, ...missing])) };
+                            });
+                          }
+                        }
+
+                        setSteps(nextSteps);
+                        if (nextSteps.length === 0) {
+                          setActiveStepId(null);
+                        } else if (!nextSteps.some((s) => s.id === activeStepId)) {
+                          setActiveStepId(nextSteps[nextSteps.length - 1].id);
+                        }
+                      }}
+                    />
+                    <span className={`text-xs ${builderMode === 'simple' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      Simple
+                    </span>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <StepAccordion
-                    steps={steps}
-                    activeStepId={activeStepId}
-                    onSetActive={setActiveStepId}
-                    onUpdateStep={handleUpdateStep}
-                    onRemoveStep={handleRemoveStep}
-                    onAddStep={handleAddStep}
-                    onReorderSteps={handleReorderSteps}
-                    onRemoveItem={removeItem}
-                    onUpdateItemContext={updateItemContext}
-                    itemContexts={itemContexts}
-                  />
+                  {builderMode === 'simple' ? (
+                    totalSelected > 0 ? (
+                      <BlueprintRecipeAccordion
+                        title="Build Blueprint"
+                        selectedItems={selectedItems}
+                        itemContexts={itemContexts}
+                        onRemoveItem={removeItem}
+                        onUpdateContext={updateItemContext}
+                        onClear={clearSelection}
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        Select items from the library above to start building.
+                      </p>
+                    )
+                  ) : (
+                    <>
+                      <StepAccordion
+                        steps={steps}
+                        activeStepId={activeStepId}
+                        onSetActive={setActiveStepId}
+                        onUpdateStep={handleUpdateStep}
+                        onRemoveStep={handleRemoveStep}
+                        onAddStep={handleAddStep}
+                        onReorderSteps={handleReorderSteps}
+                        onRemoveItem={removeItem}
+                        onUpdateItemContext={updateItemContext}
+                        itemContexts={itemContexts}
+                      />
 
-                  {totalSelected > 0 && (
-                    <div className="flex justify-end pt-2">
-                      <Button type="button" variant="ghost" onClick={clearSelection}>
-                        Clear all selections
-                      </Button>
-                    </div>
+                      {totalSelected > 0 && (
+                        <div className="flex justify-end pt-2">
+                          <Button type="button" variant="ghost" onClick={clearSelection}>
+                            Clear all selections
+                          </Button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </CardContent>
               </Card>

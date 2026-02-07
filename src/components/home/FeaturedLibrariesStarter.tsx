@@ -6,11 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BlueprintItemPicker } from '@/components/blueprint/BlueprintItemPicker';
-import { StepAccordion, type BlueprintStep } from '@/components/blueprint/StepAccordion';
+import { BlueprintSimpleBuilder } from '@/components/blueprint/BlueprintSimpleBuilder';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, ArrowRight, RotateCcw, Wand2, Lock } from 'lucide-react';
+import { Sparkles, RotateCcw, Wand2, Lock } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 type InventoryCategory = { name: string; items: string[] };
@@ -20,7 +19,8 @@ type HomeDraftV1 = {
   inventoryId: string;
   title: string;
   selectedItems: Record<string, string[]>;
-  steps: BlueprintStep[];
+  itemContexts?: Record<string, string>;
+  modeHint?: 'simple' | 'full';
   source: 'home-starter' | 'home-example';
 };
 
@@ -46,10 +46,6 @@ function parseCategories(schema: Json): InventoryCategory[] {
     .filter((category) => category.name.trim().length > 0 && category.items.length > 0);
 }
 
-function uniqStrings(values: string[]) {
-  return Array.from(new Set(values));
-}
-
 function pushSelected(map: Record<string, string[]>, category: string, item: string) {
   const existing = new Set(map[category] || []);
   existing.add(item);
@@ -72,7 +68,12 @@ function findItemsByNeedle(categories: InventoryCategory[], needles: string[]) {
   return hits;
 }
 
-function buildExampleDraft(featureKey: (typeof FEATURED)[number]['key'], inventoryId: string, inventoryTitle: string, categories: InventoryCategory[]): HomeDraftV1 {
+function buildExampleSelection(
+  featureKey: (typeof FEATURED)[number]['key'],
+  inventoryId: string,
+  inventoryTitle: string,
+  categories: InventoryCategory[]
+) {
   // Best-effort: prefer meaningful items, but fall back to "first N items" if nothing matches.
   const allItems = categories.flatMap((c) => c.items.map((item) => ({ category: c.name, item })));
   const fallback = allItems.slice(0, 10);
@@ -94,31 +95,15 @@ function buildExampleDraft(featureKey: (typeof FEATURED)[number]['key'], invento
   const spec = featureKey === 'skincare' ? skincareSteps : morningSteps;
 
   const selectedItems: Record<string, string[]> = {};
-  const steps: BlueprintStep[] = [];
 
-  spec.forEach((step, index) => {
+  spec.forEach((step) => {
     const matches = findItemsByNeedle(categories, step.needles);
     const picked = (matches.length > 0 ? matches : fallback).slice(0, 3);
-    const itemKeys = picked.map((p) => `${p.category}::${p.item}`);
     picked.forEach((p) => pushSelected(selectedItems, p.category, p.item));
-
-    steps.push({
-      id: `home-step-${index + 1}`,
-      title: step.title,
-      description: '',
-      itemKeys: uniqStrings(itemKeys),
-    });
   });
 
   const titleBase = featureKey === 'skincare' ? 'Skincare Routine Blueprint' : 'Morning Routine Blueprint';
-  return {
-    version: 1,
-    inventoryId,
-    title: titleBase,
-    selectedItems,
-    steps,
-    source: 'home-example',
-  };
+  return { version: 1 as const, inventoryId, title: titleBase, selectedItems, source: 'home-example' as const };
 }
 
 export function FeaturedLibrariesStarter() {
@@ -133,8 +118,6 @@ export function FeaturedLibrariesStarter() {
         categories: InventoryCategory[];
         selectedItems: Record<string, string[]>;
         itemContexts: Record<string, string>;
-        steps: BlueprintStep[];
-        activeStepId: string | null;
         title: string;
       }
     >
@@ -187,8 +170,6 @@ export function FeaturedLibrariesStarter() {
           categories: activeInventoryCategories,
           selectedItems: {},
           itemContexts: {},
-          steps: [],
-          activeStepId: null,
           title: activeInventory.title,
         },
       };
@@ -203,8 +184,6 @@ export function FeaturedLibrariesStarter() {
   const categories = activeState?.categories || activeInventoryCategories;
   const selectedItems = activeState?.selectedItems || {};
   const itemContexts = activeState?.itemContexts || {};
-  const steps = activeState?.steps || [];
-  const activeStepId = activeState?.activeStepId || null;
 
   const selectedCount = useMemo(() => {
     return Object.values(selectedItems).reduce((sum, items) => sum + items.length, 0);
@@ -219,8 +198,6 @@ export function FeaturedLibrariesStarter() {
           categories: parseCategories(activeInventory.generated_schema as Json),
           selectedItems: {},
           itemContexts: {},
-          steps: [],
-          activeStepId: null,
           title: activeInventory.title,
         }),
         ...updates,
@@ -230,32 +207,6 @@ export function FeaturedLibrariesStarter() {
 
   const getItemKey = (categoryName: string, item: string) => `${categoryName}::${item}`;
 
-  const removeItemFromSteps = (itemKey: string) => {
-    setActiveState({
-      steps: steps.map((step) => ({ ...step, itemKeys: step.itemKeys.filter((k) => k !== itemKey) })),
-    });
-  };
-
-  const addItemToActiveStep = (itemKey: string) => {
-    if (steps.length === 0) {
-      const newId = crypto.randomUUID();
-      setActiveState({
-        activeStepId: newId,
-        steps: [{ id: newId, title: '', description: '', itemKeys: [itemKey] }],
-      });
-      return;
-    }
-
-    const targetId = steps.find((s) => s.id === activeStepId)?.id || steps[steps.length - 1].id;
-    setActiveState({
-      steps: steps.map((step) => {
-        if (step.id !== targetId) return step;
-        if (step.itemKeys.includes(itemKey)) return step;
-        return { ...step, itemKeys: [...step.itemKeys, itemKey] };
-      }),
-    });
-  };
-
   const toggleItem = (categoryName: string, item: string) => {
     const itemKey = getItemKey(categoryName, item);
     const nextSelected: Record<string, string[]> = { ...selectedItems };
@@ -264,10 +215,9 @@ export function FeaturedLibrariesStarter() {
     if (wasSelected) existing.delete(item);
     else existing.add(item);
     nextSelected[categoryName] = Array.from(existing);
-    setActiveState({ selectedItems: nextSelected });
-
-    if (wasSelected) removeItemFromSteps(itemKey);
-    else addItemToActiveStep(itemKey);
+    const nextContexts = { ...itemContexts };
+    if (wasSelected) delete nextContexts[itemKey];
+    setActiveState({ selectedItems: nextSelected, itemContexts: nextContexts });
   };
 
   const addCustomItem = (categoryName: string, itemName: string) => {
@@ -281,58 +231,6 @@ export function FeaturedLibrariesStarter() {
       [categoryName]: [...(selectedItems[categoryName] || []), itemName],
     };
     setActiveState({ categories: nextCategories, selectedItems: nextSelected });
-    addItemToActiveStep(getItemKey(categoryName, itemName));
-  };
-
-  const handleAddStep = () => {
-    const newStep: BlueprintStep = {
-      id: crypto.randomUUID(),
-      title: '',
-      description: '',
-      itemKeys: [],
-    };
-    setActiveState({ steps: [...steps, newStep], activeStepId: newStep.id });
-  };
-
-  const handleUpdateStep = (stepId: string, updates: Partial<BlueprintStep>) => {
-    setActiveState({ steps: steps.map((s) => (s.id === stepId ? { ...s, ...updates } : s)) });
-  };
-
-  const handleRemoveStep = (stepId: string) => {
-    const stepToRemove = steps.find((s) => s.id === stepId);
-    const itemKeysToRemove = new Set(stepToRemove?.itemKeys || []);
-
-    const nextSelected: Record<string, string[]> = {};
-    Object.entries(selectedItems).forEach(([category, items]) => {
-      const filtered = items.filter((it) => !itemKeysToRemove.has(getItemKey(category, it)));
-      if (filtered.length > 0) nextSelected[category] = filtered;
-    });
-
-    const nextContexts = { ...itemContexts };
-    itemKeysToRemove.forEach((key) => delete nextContexts[key]);
-
-    const remaining = steps.filter((s) => s.id !== stepId);
-    const nextActive =
-      activeStepId === stepId
-        ? remaining.length > 0
-          ? remaining[remaining.length - 1].id
-          : null
-        : activeStepId;
-
-    setActiveState({
-      selectedItems: nextSelected,
-      itemContexts: nextContexts,
-      steps: remaining,
-      activeStepId: nextActive,
-    });
-  };
-
-  const handleReorderSteps = (fromIndex: number, toIndex: number) => {
-    if (fromIndex === toIndex) return;
-    const next = [...steps];
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moved);
-    setActiveState({ steps: next });
   };
 
   const removeItem = (categoryName: string, item: string) => {
@@ -344,7 +242,6 @@ export function FeaturedLibrariesStarter() {
     const nextContexts = { ...itemContexts };
     delete nextContexts[itemKey];
     setActiveState({ selectedItems: nextSelected, itemContexts: nextContexts });
-    removeItemFromSteps(itemKey);
   };
 
   const updateItemContext = (categoryName: string, item: string, context: string) => {
@@ -360,13 +257,12 @@ export function FeaturedLibrariesStarter() {
     setActiveState({
       selectedItems: {},
       itemContexts: {},
-      steps: steps.map((s) => ({ ...s, itemKeys: [] })),
     });
   };
 
   const applyExampleToLocal = () => {
     if (!activeInventory) return;
-    const draft = buildExampleDraft(
+    const draft = buildExampleSelection(
       activeInventory.featureKey,
       activeInventory.id,
       activeInventory.title,
@@ -377,23 +273,30 @@ export function FeaturedLibrariesStarter() {
       categories: activeInventoryCategories,
       selectedItems: draft.selectedItems,
       itemContexts: {},
-      steps: draft.steps,
-      activeStepId: draft.steps[0]?.id || null,
     });
     toast({
       title: 'Example loaded',
-      description: 'Your blueprint has been pre-filled with steps and items.',
+      description: 'Your blueprint has been pre-filled with selected items.',
     });
   };
 
   const openBuilderWithDraft = (source: HomeDraftV1['source']) => {
     if (!activeInventory) return;
+    if (!session?.access_token) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to use the full builder.',
+      });
+      navigate('/auth');
+      return;
+    }
     const draft: HomeDraftV1 = {
       version: 1,
       inventoryId: activeInventory.id,
       title: activeState?.title || activeInventory.title,
       selectedItems,
-      steps,
+      itemContexts,
+      modeHint: 'full',
       source,
     };
     sessionStorage.setItem(HOME_DRAFT_KEY, JSON.stringify(draft));
@@ -460,8 +363,8 @@ export function FeaturedLibrariesStarter() {
                 onClick={() => openBuilderWithDraft('home-starter')}
                 disabled={!activeInventory}
               >
-                Open Builder
-                <ArrowRight className="h-4 w-4" />
+                <Lock className="h-4 w-4" />
+                Use full builder
               </Button>
             </div>
           </div>
@@ -502,7 +405,7 @@ export function FeaturedLibrariesStarter() {
                       {activeKey === 'morning' ? 'Morning routine' : 'Skincare'}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Search items, tap to add them, and build steps automatically.
+                      Search items, tap to add them, and build your selection.
                     </p>
                   </div>
                   <Button
@@ -516,77 +419,34 @@ export function FeaturedLibrariesStarter() {
                   </Button>
                 </div>
                 <div className="p-4">
-                  <BlueprintItemPicker
+                  <BlueprintSimpleBuilder
                     categories={categories}
                     selectedItems={selectedItems}
+                    itemContexts={itemContexts}
                     onToggleItem={toggleItem}
                     onAddCustomItem={addCustomItem}
+                    onRemoveItem={removeItem}
+                    onUpdateItemContext={updateItemContext}
+                    onClear={clearSelection}
+                    selectionTitle="Build Blueprint"
                   />
                 </div>
               </div>
 
-              <div className="bg-card/60 backdrop-blur-glass rounded-2xl border border-border/50 overflow-hidden">
-                <div className="p-4 border-b border-border/30 flex items-center justify-between">
-                  <p className="text-sm font-semibold tracking-tight">Steps</p>
-                  <Button type="button" variant="ghost" size="sm" className="gap-2" onClick={clearSelection}>
-                    <RotateCcw className="h-4 w-4" />
-                    Clear all selections
-                  </Button>
+              <div className="rounded-2xl border border-border/50 bg-card/50 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Lock className="h-4 w-4" />
+                  <span>Sign in to unlock AI review, banner generation, and publishing.</span>
                 </div>
-                <div className="p-4">
-                  <StepAccordion
-                    steps={steps}
-                    activeStepId={activeStepId}
-                    onSetActive={(id) => setActiveState({ activeStepId: id })}
-                    onUpdateStep={(id, updates) => handleUpdateStep(id, updates)}
-                    onRemoveStep={(id) => handleRemoveStep(id)}
-                    onAddStep={handleAddStep}
-                    onReorderSteps={handleReorderSteps}
-                    onRemoveItem={(cat, item) => removeItem(cat, item)}
-                    onUpdateItemContext={(cat, item, context) => updateItemContext(cat, item, context)}
-                    itemContexts={itemContexts}
-                  />
-                </div>
-                <div className="p-4 border-t border-border/30 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-xs text-muted-foreground">
-                    {user || session?.access_token ? (
-                      <span>Continue to unlock AI review, banners, and publishing.</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5">
-                        <Lock className="h-3.5 w-3.5" />
-                        Sign in to use AI review, banners, and publishing.
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => openBuilderWithDraft('home-starter')}
-                    >
-                      Continue building
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        if (!session?.access_token) {
-                          openBuilderWithDraft('home-starter');
-                          toast({
-                            title: 'Sign in required',
-                            description: 'Please sign in on the build page to generate an AI review.',
-                            variant: 'destructive',
-                          });
-                          return;
-                        }
-                        openBuilderWithDraft('home-starter');
-                      }}
-                      className="gap-2"
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      Review with AI
-                    </Button>
-                  </div>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => openBuilderWithDraft('home-starter')}
+                >
+                  <Lock className="h-4 w-4" />
+                  Use full builder
+                </Button>
               </div>
             </div>
           )}
