@@ -20,7 +20,14 @@ flowchart TD
   J1 --> K["ID:K n4 build banner_requests (no network) TESTED_OK"]
   K --> K1["ID:K1 Write banner_requests.json TESTED_OK"]
 
+  K1 -.-> R["ID:R n3.5 execute_review POST /api/analyze-blueprint TESTED_OK"]
+  R --> R1["ID:R1 Write reviews.json TESTED_OK"]
+
+  R1 -.-> S["ID:S n4.5 execute_banner POST /api/generate-banner dryRun TESTED_OK"]
+  S --> S1["ID:S1 Write banners.json TESTED_OK"]
+
   K1 --> L["ID:L n5 validate category+item references TESTED_OK"]
+  S1 -.-> L
   L --> L1["ID:L1 Write validation.json TESTED_OK"]
 
   L1 --> M["ID:M n6 publish_payload (no writes) TESTED_OK"]

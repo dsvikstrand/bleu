@@ -63,6 +63,10 @@ type BannerPayload = {
   dryRun?: boolean;
 };
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 type ValidationResult = {
   ok: boolean;
   errors: string[];
@@ -507,18 +511,53 @@ async function main() {
     await step('execute_banner', async () => {
       if (!backendCalls) throw new Error('Backend calls disabled');
       const url = `${agenticBaseUrl}/api/generate-banner`;
-      const results: Array<{ title: string; contentType: string; imageBase64: string }> = [];
+      const maxAttempts = 3;
+      const results: Array<
+        | { title: string; ok: true; attempts: number; contentType: string; imageBase64: string }
+        | { title: string; ok: false; attempts: number; status?: number; error: string }
+      > = [];
 
       for (const payload of bannerPayloads) {
-        const res = await postJson<{ contentType: string; imageBase64: string }>(url, accessToken, payload);
-        if (!res.ok) {
-          throw new Error(`generate-banner failed (${res.status}): ${res.text.slice(0, 500)}`);
+        let attempts = 0;
+        let lastErr: { status?: number; text: string } | null = null;
+
+        while (attempts < maxAttempts) {
+          attempts += 1;
+          const res = await postJson<{ contentType: string; imageBase64: string }>(url, accessToken, payload);
+          if (res.ok) {
+            results.push({
+              title: payload.title,
+              ok: true,
+              attempts,
+              contentType: res.data.contentType,
+              imageBase64: res.data.imageBase64,
+            });
+            lastErr = null;
+            break;
+          }
+
+          lastErr = { status: res.status, text: res.text };
+
+          const shouldRetry = res.status === 429 || res.status >= 500;
+          if (!shouldRetry || attempts >= maxAttempts) break;
+          await sleep(800 * attempts);
         }
-        results.push({ title: payload.title, contentType: res.data.contentType, imageBase64: res.data.imageBase64 });
+
+        if (lastErr) {
+          results.push({
+            title: payload.title,
+            ok: false,
+            attempts,
+            status: lastErr.status,
+            error: lastErr.text.slice(0, 1000),
+          });
+        }
       }
 
       writeJsonFile(path.join(runDir, 'banners.json'), results);
-      return { count: results.length };
+      const okCount = results.filter((r) => r.ok).length;
+      const failCount = results.length - okCount;
+      return { okCount, failCount, count: results.length };
     });
   }
 
