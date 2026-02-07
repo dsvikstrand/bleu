@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -172,15 +172,19 @@ export function FeaturedLibrariesStarter() {
     return data.find((row) => row.featureKey === activeKey) ?? data[0];
   }, [data, activeKey]);
 
-  const ensureStateForActive = () => {
+  const activeInventoryCategories = useMemo(() => {
+    if (!activeInventory) return [] as InventoryCategory[];
+    return parseCategories(activeInventory.generated_schema as Json);
+  }, [activeInventory]);
+
+  useEffect(() => {
     if (!activeInventory) return;
     setStateByInventoryId((prev) => {
       if (prev[activeInventory.id]) return prev;
-      const cats = parseCategories(activeInventory.generated_schema as Json);
       return {
         ...prev,
         [activeInventory.id]: {
-          categories: cats,
+          categories: activeInventoryCategories,
           selectedItems: {},
           itemContexts: {},
           steps: [],
@@ -189,14 +193,14 @@ export function FeaturedLibrariesStarter() {
         },
       };
     });
-  };
+  }, [activeInventory?.id, activeInventoryCategories, activeInventory?.title]);
 
   const activeState = useMemo(() => {
     if (!activeInventory) return null;
     return stateByInventoryId[activeInventory.id] || null;
   }, [activeInventory, stateByInventoryId]);
 
-  const categories = activeState?.categories || [];
+  const categories = activeState?.categories || activeInventoryCategories;
   const selectedItems = activeState?.selectedItems || {};
   const itemContexts = activeState?.itemContexts || {};
   const steps = activeState?.steps || [];
@@ -362,9 +366,15 @@ export function FeaturedLibrariesStarter() {
 
   const applyExampleToLocal = () => {
     if (!activeInventory) return;
-    const draft = buildExampleDraft(activeInventory.featureKey, activeInventory.id, activeInventory.title, categories);
+    const draft = buildExampleDraft(
+      activeInventory.featureKey,
+      activeInventory.id,
+      activeInventory.title,
+      activeInventoryCategories
+    );
     setActiveState({
       title: draft.title,
+      categories: activeInventoryCategories,
       selectedItems: draft.selectedItems,
       itemContexts: {},
       steps: draft.steps,
@@ -437,10 +447,7 @@ export function FeaturedLibrariesStarter() {
                 size="sm"
                 variant="outline"
                 className="gap-2"
-                onClick={() => {
-                  ensureStateForActive();
-                  applyExampleToLocal();
-                }}
+                onClick={applyExampleToLocal}
                 disabled={!activeInventory}
               >
                 <Wand2 className="h-4 w-4" />
@@ -450,10 +457,7 @@ export function FeaturedLibrariesStarter() {
                 type="button"
                 size="sm"
                 className="gap-2"
-                onClick={() => {
-                  ensureStateForActive();
-                  openBuilderWithDraft('home-starter');
-                }}
+                onClick={() => openBuilderWithDraft('home-starter')}
                 disabled={!activeInventory}
               >
                 Open Builder
@@ -505,10 +509,7 @@ export function FeaturedLibrariesStarter() {
                     type="button"
                     variant="outline"
                     className="gap-2"
-                    onClick={() => {
-                      ensureStateForActive();
-                      applyExampleToLocal();
-                    }}
+                    onClick={applyExampleToLocal}
                   >
                     <Sparkles className="h-4 w-4" />
                     Auto-generate Blueprint
@@ -518,14 +519,8 @@ export function FeaturedLibrariesStarter() {
                   <BlueprintItemPicker
                     categories={categories}
                     selectedItems={selectedItems}
-                    onToggleItem={(cat, item) => {
-                      ensureStateForActive();
-                      toggleItem(cat, item);
-                    }}
-                    onAddCustomItem={(cat, item) => {
-                      ensureStateForActive();
-                      addCustomItem(cat, item);
-                    }}
+                    onToggleItem={toggleItem}
+                    onAddCustomItem={addCustomItem}
                   />
                 </div>
               </div>
