@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useBlueprintSearch } from '@/hooks/useBlueprintSearch';
 import { useBlueprint, useToggleBlueprintLike } from '@/hooks/useBlueprints';
 import { useTagFollows } from '@/hooks/useTagFollows';
@@ -12,6 +12,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 const TAGS = ['morning', 'skincare', 'workout', 'productivity'] as const;
+const CAROUSEL_LIMIT = 5;
+const SWIPE_THRESHOLD_PX = 50;
 
 function reviewPreview(text: string) {
   const cleaned = (text || '').trim();
@@ -55,12 +57,40 @@ export function DiscoverRoutines() {
   const toggleLike = useToggleBlueprintLike();
 
   const { data: blueprints, isLoading } = useBlueprintSearch('', 'popular');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
 
-  const featuredBlueprint = useMemo(() => {
-    return blueprints && blueprints.length > 0 ? blueprints[0] : null;
+  const carouselBlueprints = useMemo(() => {
+    return (blueprints || []).slice(0, CAROUSEL_LIMIT);
   }, [blueprints]);
 
+  useEffect(() => {
+    // Reset when data changes so we don't index out of bounds.
+    setActiveIndex(0);
+  }, [carouselBlueprints.length]);
+
+  const featuredBlueprint = useMemo(() => {
+    if (!carouselBlueprints || carouselBlueprints.length === 0) return null;
+    const safeIndex = ((activeIndex % carouselBlueprints.length) + carouselBlueprints.length) % carouselBlueprints.length;
+    return carouselBlueprints[safeIndex] || null;
+  }, [carouselBlueprints, activeIndex]);
+
   const { data: featuredDetail, isLoading: detailLoading } = useBlueprint(featuredBlueprint?.id);
+
+  const hasMany = carouselBlueprints.length > 1;
+  const safeIndex = hasMany
+    ? ((activeIndex % carouselBlueprints.length) + carouselBlueprints.length) % carouselBlueprints.length
+    : 0;
+
+  const goPrev = () => {
+    if (!hasMany) return;
+    setActiveIndex((i) => i - 1);
+  };
+
+  const goNext = () => {
+    if (!hasMany) return;
+    setActiveIndex((i) => i + 1);
+  };
 
   const handleLike = async (blueprintId: string, liked: boolean) => {
     if (!user) {
@@ -129,88 +159,151 @@ export function DiscoverRoutines() {
             </CardContent>
           </Card>
         ) : featuredBlueprint && featuredDetail ? (
-          <Link
-            to={`/blueprint/${featuredBlueprint.id}`}
-            className="block group"
-            aria-label={`Open blueprint ${featuredBlueprint.title}`}
-          >
-            <Card className="bg-card/60 backdrop-blur-sm border-border/50 transition-all duration-300 hover:border-border/80 hover:shadow-md hover:shadow-black/5 group-focus-visible:ring-2 group-focus-visible:ring-primary overflow-hidden">
-              {featuredDetail.banner_url && (
-                <div className="aspect-[4/1] w-full bg-muted/20">
-                  <img
-                    src={featuredDetail.banner_url}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                </div>
-              )}
-              <CardContent className="p-5 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <h3 className="text-lg font-semibold leading-tight line-clamp-2 group-hover:text-primary transition-colors">
-                      {featuredBlueprint.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {featuredBlueprint.inventory_title ? `From ${featuredBlueprint.inventory_title}` : 'Community blueprint'}
-                    </p>
-                  </div>
+          <div className="space-y-3">
+            <div className="relative">
+              {hasMany && (
+                <>
                   <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`h-8 px-2 shrink-0 ${featuredBlueprint.user_liked ? 'text-red-500 hover:text-red-600' : 'text-muted-foreground hover:text-foreground'}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      void handleLike(featuredBlueprint.id, featuredBlueprint.user_liked);
-                    }}
-                    aria-label={featuredBlueprint.user_liked ? 'Unlike blueprint' : 'Like blueprint'}
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-background/70 backdrop-blur-sm border-border/60 hover:bg-background/90"
+                    onClick={goPrev}
+                    aria-label="Previous blueprint"
                   >
-                    <span className="text-xs tabular-nums">{featuredBlueprint.likes_count}</span>
+                    <ChevronLeft className="h-4 w-4" />
                   </Button>
-                </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-background/70 backdrop-blur-sm border-border/60 hover:bg-background/90"
+                    onClick={goNext}
+                    aria-label="Next blueprint"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
 
-                {featuredBlueprint.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {featuredBlueprint.tags.slice(0, 4).map((tag) => (
-                      <Badge
-                        key={tag.id}
-                        variant="secondary"
-                        className={`text-xs cursor-pointer transition-colors border ${
-                          followedIds?.has(tag.id)
-                            ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                            : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-                        }`}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          void handleTagToggle({ id: tag.id, slug: tag.slug });
+              <Link
+                to={`/blueprint/${featuredBlueprint.id}`}
+                className="block group"
+                aria-label={`Open blueprint ${featuredBlueprint.title}`}
+                onPointerDown={(e) => {
+                  pointerStart.current = { x: e.clientX, y: e.clientY };
+                }}
+                onPointerUp={(e) => {
+                  const start = pointerStart.current;
+                  pointerStart.current = null;
+                  if (!start || !hasMany) return;
+                  const dx = e.clientX - start.x;
+                  const dy = e.clientY - start.y;
+                  if (Math.abs(dx) < SWIPE_THRESHOLD_PX) return;
+                  if (Math.abs(dx) <= Math.abs(dy)) return;
+
+                  // Prevent navigation on swipe.
+                  e.preventDefault();
+                  if (dx < 0) goNext();
+                  else goPrev();
+                }}
+              >
+                <Card className="bg-card/60 backdrop-blur-sm border-border/50 transition-all duration-300 hover:border-border/80 hover:shadow-md hover:shadow-black/5 group-focus-visible:ring-2 group-focus-visible:ring-primary overflow-hidden">
+                  {featuredDetail.banner_url && (
+                    <div className="aspect-[4/1] w-full bg-muted/20">
+                      <img
+                        src={featuredDetail.banner_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                  )}
+                  <CardContent className="p-5 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <h3 className="text-lg font-semibold leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+                          {featuredBlueprint.title}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {featuredBlueprint.inventory_title ? `From ${featuredBlueprint.inventory_title}` : 'Community blueprint'}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`h-8 px-2 shrink-0 ${featuredBlueprint.user_liked ? 'text-red-500 hover:text-red-600' : 'text-muted-foreground hover:text-foreground'}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void handleLike(featuredBlueprint.id, featuredBlueprint.user_liked);
                         }}
+                        aria-label={featuredBlueprint.user_liked ? 'Unlike blueprint' : 'Like blueprint'}
                       >
-                        #{tag.slug}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+                        <span className="text-xs tabular-nums">{featuredBlueprint.likes_count}</span>
+                      </Button>
+                    </div>
 
-                {featuredDetail.llm_review && (
-                  <div className="rounded-xl border border-border/50 bg-muted/20 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                      Review snapshot
-                    </p>
-                    <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed line-clamp-4">
-                      {reviewPreview(featuredDetail.llm_review)}
-                    </p>
-                  </div>
-                )}
+                    {featuredBlueprint.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {featuredBlueprint.tags.slice(0, 4).map((tag) => (
+                          <Badge
+                            key={tag.id}
+                            variant="secondary"
+                            className={`text-xs cursor-pointer transition-colors border ${
+                              followedIds?.has(tag.id)
+                                ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                                : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+                            }`}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              void handleTagToggle({ id: tag.id, slug: tag.slug });
+                            }}
+                          >
+                            #{tag.slug}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
 
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Open full blueprint</span>
-                  <span className="opacity-60">Tap to view details</span>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+                    {featuredDetail.llm_review && (
+                      <div className="rounded-xl border border-border/50 bg-muted/20 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                          Review snapshot
+                        </p>
+                        <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed line-clamp-4">
+                          {reviewPreview(featuredDetail.llm_review)}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Open full blueprint</span>
+                      <span className="opacity-60">Swipe or tap</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            </div>
+
+            {hasMany && (
+              <div className="flex items-center justify-center gap-1">
+                {carouselBlueprints.map((bp, idx) => {
+                  const isActive = idx === safeIndex;
+                  return (
+                    <button
+                      key={bp.id}
+                      type="button"
+                      className={`h-1.5 w-1.5 rounded-full transition-colors ${isActive ? 'bg-primary' : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'}`}
+                      aria-label={`Go to blueprint ${idx + 1}`}
+                      onClick={() => setActiveIndex(idx)}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
         ) : null}
       </div>
 
