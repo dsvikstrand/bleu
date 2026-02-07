@@ -1,6 +1,7 @@
 # Stage 0 Workflow (Linear)
 
 1. Read `seed/seed_spec_v0.json`.
+   - Optional: `asp` block (persona stub). It is recorded in `run_meta.json` for future alignment gates, but does not change generation yet.
 2. Call `generate-inventory` using `library.topic` + `library.title` + `library.notes`.
 3. For each blueprint variant:
    - Call `generate-blueprint` with variant title/description/notes and the library categories.
@@ -35,6 +36,7 @@ TMPDIR=/tmp tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/
 ```
 
 Outputs:
+- `seed/outputs/<run_id>/run_meta.json` (run context including optional `asp`)
 - `seed/outputs/<run_id>/library.json`
 - `seed/outputs/<run_id>/blueprints.json`
 - `seed/outputs/<run_id>/review_requests.json` (payloads only)

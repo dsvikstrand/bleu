@@ -1,5 +1,14 @@
 {
   "run_id": "example-run",
+  "asp": {
+    "id": "asp-general",
+    "display_name": "General Seeder",
+    "bio": "A pragmatic generalist who seeds realistic, broadly useful routines.",
+    "interests": ["morning", "skincare", "workout", "productivity"],
+    "tone": "pragmatic",
+    "must_include": ["clear steps", "actionable items"],
+    "must_avoid": ["personal data", "medical prescribing"]
+  },
   "library": {
     "topic": "Home workout for beginners",
     "title": "Beginner Home Workout Library",

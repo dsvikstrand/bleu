@@ -1,87 +1,114 @@
-flowchart TD
-  ST0([STAGE Inputs]) -.-> A
-  ST1([STAGE Generate Library]) -.-> H
-  ST2([STAGE Generate Blueprints]) -.-> I
-  ST3([STAGE Stage 0.5 Execute AI]) -.-> R
-  ST4([STAGE Stage 1 Apply Mode]) -.-> T0
+%% Stage 0/0.5/1 LAS graph + planned DAS v1 gates (Mermaid v11+)
+%% Source of truth: codex/skills/seed-blueprints/scripts/seed_stage0.ts
 
-  %% Stage-based styling (Mermaid v11+)
+flowchart TD
+  %% Stage markers (stadium)
+  ST_IN([STAGE Inputs]) -.-> IN_SPEC
+  ST_AUTH([STAGE Auth]) -.-> AUTH_READ
+  ST_LIB([STAGE Generate Library]) -.-> LIB_GEN
+  ST_BP([STAGE Generate Blueprints]) -.-> BP_GEN
+  ST_AI([STAGE Stage 0.5 Execute AI]) -.-> AI_REVIEW
+  ST_APPLY([STAGE Stage 1 Apply Mode]) -.-> APPLY_START
+  ST_DAS([STAGE DAS gates and retries - planned]) -.-> LIB_EVAL
+  ST_DAS -.-> BP_EVAL
+
+  %% Stage-based styling
   classDef stage_marker fill:#0b1220,stroke:#253047,color:#e7eefc,stroke-width:1px;
   classDef stage_inputs fill:#102a43,stroke:#1e4e8c,color:#e7f0ff;
+  classDef stage_auth fill:#11324a,stroke:#2563eb,color:#e7f0ff;
   classDef stage_lib fill:#0f3d2e,stroke:#1b6b4b,color:#e7fff2;
   classDef stage_bps fill:#3a2a10,stroke:#8a5b12,color:#fff4e5;
   classDef stage_ai fill:#3b1030,stroke:#7d1f66,color:#ffe8f7;
   classDef stage_apply fill:#2a133a,stroke:#5b2a88,color:#f4eaff;
+  classDef das_gate fill:#0b2a2f,stroke:#0ea5b7,color:#e6feff;
   classDef note fill:#111827,stroke:#374151,color:#e5e7eb,stroke-dasharray: 3 3;
   classDef done fill:#0b2f1a,stroke:#1f8a3a,color:#eafff1;
-  classDef not_tested fill:#2f2f2f,stroke:#6b7280,color:#f3f4f6;
+  classDef todo fill:#2f2f2f,stroke:#6b7280,color:#f3f4f6,stroke-dasharray: 4 3;
 
-  A["ID:A seed/seed_spec_v0.json (Seed Spec) TESTED_OK"] --> B["ID:B seed_stage0.ts (parse args + validate spec) TESTED_OK"]
-  B --> C["ID:C Create run folder seed/outputs/RUN_ID/ TESTED_OK"]
-  C --> G["ID:G Read SEED_USER_ACCESS_TOKEN TESTED_OK"]
-  G --> H["ID:H n1 generate_library POST /api/generate-inventory TESTED_OK"]
-  H --> H1["ID:H1 Write library.json TESTED_OK"]
+  %% Inputs + runner
+  IN_SPEC["IN_SPEC seed/seed_spec_v0.json (Seed Spec) TESTED_OK"] --> IN_RUN["IN_RUN seed_stage0.ts (parse args + validate spec) TESTED_OK"]
+  IN_RUN --> OUT_DIR["OUT_DIR Create run folder seed/outputs/RUN_ID/ TESTED_OK"]
 
-  H1 --> I["ID:I n2 generate_blueprints POST /api/generate-blueprint TESTED_OK"]
-  I --> I1["ID:I1 Write blueprints.json TESTED_OK"]
+  %% Auth
+  OUT_DIR --> AUTH_READ["AUTH_READ Load auth store + tokens (refresh supported) TESTED_OK"]
+  N_AUTH{{NOTE access token expires; refresh supported via auth store}} --> AUTH_READ
+  N_AUTH2{{NOTE refresh flow verified by forcing access token rotation}} --> AUTH_READ
+  N_OUT{{NOTE seed outputs are artifacts; do not commit seed/outputs}} --> OUT_DIR
 
-  I1 --> J["ID:J n3 build review_requests (no network) TESTED_OK"]
-  J --> J1["ID:J1 Write review_requests.json TESTED_OK"]
+  %% Library generation (candidate -> eval -> select)
+  AUTH_READ --> LIB_GEN["LIB_GEN n1 generate_library POST /api/generate-inventory TESTED_OK"]
+  LIB_GEN --> LIB_CAND["LIB_CAND Write candidates/LIB/ATTEMPT.json NOT_TESTED"]
+  LIB_CAND --> LIB_EVAL{"LIB_EVAL eval_structural + eval_relevance + eval_safety + eval_pii NOT_TESTED"}
+  LIB_EVAL -->|pass| LIB_SEL["LIB_SEL score + select best candidate NOT_TESTED"]
+  LIB_EVAL -->|struct/relevance fail and attempt lt max| LIB_RETRY["LIB_RETRY tighten prompt + retry (maxAttempts=2) NOT_TESTED"]
+  LIB_EVAL -->|safety/pii fail| ABORT["ABORT hard fail run (seeding mode) NOT_TESTED"]
+  LIB_RETRY --> LIB_GEN
+  LIB_SEL --> LIB_OUT["LIB_OUT Write library.json TESTED_OK"]
 
-  J1 --> K["ID:K n4 build banner_requests (no network) TESTED_OK"]
-  K --> K1["ID:K1 Write banner_requests.json TESTED_OK"]
+  N_DAS{{NOTE DAS gates run when --das is enabled}} --> LIB_EVAL
+  N_DAS2{{NOTE safety and PII failures are non-retryable in seeding mode}} --> ABORT
 
-  K1 -.-> R["ID:R n3.5 execute_review POST /api/analyze-blueprint TESTED_OK"]
-  R --> R1["ID:R1 Write reviews.json TESTED_OK"]
+  %% Blueprint generation (per-variant candidates -> eval -> select)
+  LIB_OUT --> BP_GEN["BP_GEN n2 generate_blueprints POST /api/generate-blueprint TESTED_OK"]
+  BP_GEN --> BP_CAND["BP_CAND Write candidates/BP/ATTEMPT.json NOT_TESTED"]
+  BP_CAND --> BP_EVAL{"BP_EVAL eval_structural + eval_relevance + eval_safety + eval_pii NOT_TESTED"}
+  BP_EVAL -->|pass| BP_SEL["BP_SEL score + select best candidate NOT_TESTED"]
+  BP_EVAL -->|struct/relevance fail and attempt lt max| BP_RETRY["BP_RETRY tighten prompt + retry (maxAttempts=2) NOT_TESTED"]
+  BP_EVAL -->|safety/pii fail| ABORT
+  BP_RETRY --> BP_GEN
+  BP_SEL --> BP_OUT["BP_OUT Write blueprints.json TESTED_OK"]
 
-  R1 -.-> S["ID:S n4.5 execute_banner POST /api/generate-banner dryRun TESTED_OK"]
-  S --> S1["ID:S1 Write banners.json TESTED_OK"]
+  %% Request payloads (no network)
+  BP_OUT --> REQ_REVIEW["REQ_REVIEW build review_requests (no network) TESTED_OK"]
+  REQ_REVIEW --> OUT_REVIEW_REQ["OUT_REVIEW_REQ Write review_requests.json TESTED_OK"]
+  OUT_REVIEW_REQ --> REQ_BANNER["REQ_BANNER build banner_requests (no network) TESTED_OK"]
+  REQ_BANNER --> OUT_BANNER_REQ["OUT_BANNER_REQ Write banner_requests.json TESTED_OK"]
 
-  K1 --> L["ID:L n5 validate category+item references TESTED_OK"]
-  S1 -.-> L
-  L --> L1["ID:L1 Write validation.json TESTED_OK"]
+  %% Stage 0.5 (optional network)
+  OUT_BANNER_REQ -.->|--do-review| AI_REVIEW["AI_REVIEW execute_review POST /api/analyze-blueprint TESTED_OK"]
+  AI_REVIEW --> OUT_REVIEWS["OUT_REVIEWS Write reviews.json TESTED_OK"]
+  OUT_REVIEWS -.->|--do-banner| AI_BANNER["AI_BANNER execute_banner POST /api/generate-banner dryRun TESTED_OK"]
+  AI_BANNER --> OUT_BANNERS["OUT_BANNERS Write banners.json TESTED_OK"]
+  N_SSE{{NOTE analyze-blueprint is SSE; runner stitches to text}} --> AI_REVIEW
+  N_DRY{{NOTE generate-banner dryRun returns base64; no Storage write}} --> AI_BANNER
 
-  L1 --> M["ID:M n6 publish_payload (no writes) TESTED_OK"]
-  M --> M1["ID:M1 Write publish_payload.json TESTED_OK"]
+  %% Validate + publish payload (no writes)
+  OUT_BANNER_REQ --> VAL["VAL validate category+item references TESTED_OK"]
+  OUT_BANNERS -.-> VAL
+  VAL --> OUT_VAL["OUT_VAL Write validation.json TESTED_OK"]
+  OUT_VAL --> PAYLOAD["PAYLOAD publish_payload (no writes) TESTED_OK"]
+  PAYLOAD --> OUT_PAYLOAD["OUT_PAYLOAD Write publish_payload.json TESTED_OK"]
+  OUT_PAYLOAD --> RUNLOG["RUNLOG Append run_log.json timings+status TESTED_OK"]
+  RUNLOG --> DONE["DONE artifacts complete TESTED_OK"]
 
-  M1 --> N["ID:N Append run_log.json timings+status TESTED_OK"]
-  N --> Z
+  %% Stage 1 apply mode (optional writes)
+  OUT_PAYLOAD -.->|--apply + --yes APPLY_STAGE1| APPLY_START["APPLY_START Stage 1 apply mode TESTED_OK"]
+  APPLY_START --> APPLY_INV["APPLY_INV Insert inventory/library into DB TESTED_OK"]
+  APPLY_INV --> APPLY_BP["APPLY_BP Insert blueprint drafts into DB TESTED_OK"]
+  APPLY_BP --> APPLY_BANNER["APPLY_BANNER Upload banner via upload-banner edge function TESTED_OK"]
+  APPLY_BANNER --> APPLY_REVIEW["APPLY_REVIEW Persist review text to blueprint row TESTED_OK"]
+  APPLY_REVIEW --> APPLY_PUB["APPLY_PUB Publish public blueprint finalize TESTED_OK"]
+  N_APPLY{{NOTE apply writes apply_log.json + rollback.sql}} --> APPLY_START
+  N_APPLY2{{NOTE publish sets is_public true on created rows}} --> APPLY_PUB
 
-  Z["ID:Z Done (artifacts only) TESTED_OK"]
+  %% TODO (future but expected in full DAS)
+  BP_SEL -.-> TODO_ASP_EVAL["TODO_ASP_EVAL eval_asp_alignment (persona) NOT_TESTED"]
+  BP_SEL -.-> TODO_GRADER["TODO_GRADER optional LLM grader for alignment/safety NOT_TESTED"]
+  LIB_SEL -.-> TODO_COST["TODO_COST cost tracking + token accounting NOT_TESTED"]
 
-  %% Notes (hexagons) - point into nodes with key context
-  NX1{{NOTE access token expires refresh often}} --> G
-  NX1B{{NOTE auth supports SEED_USER_REFRESH_TOKEN and auth store}} --> G
-  NX1C{{NOTE refresh flow verified by clearing access token in auth store}} --> G
-  NX2{{NOTE analyze-blueprint is SSE runner stitches text}} --> R
-  NX3{{NOTE generate-banner dryRun returns base64 no Storage}} --> S
-  NX4{{NOTE image generation can be rate limited or safety rejected}} --> S
-  NX5{{NOTE seed outputs ignored do not commit artifacts}} --> C
-
-  %% Stage 1 apply mode nodes (implemented in seed_stage0.ts)
-  M1 -.-> T0["ID:T0 Stage 1 apply mode TESTED_OK"]
-  T0 --> T1["ID:T1 Insert library/inventory into DB TESTED_OK"]
-  T1 --> T2["ID:T2 Insert blueprint drafts into DB TESTED_OK"]
-  T2 --> T3["ID:T3 Upload banner via upload-banner edge function TESTED_OK"]
-  T3 --> T4["ID:T4 Persist review text to blueprint row TESTED_OK"]
-  T4 --> T5["ID:T5 Publish public blueprint finalize TESTED_OK"]
-
-  NX6{{NOTE apply mode gated with --apply and --yes APPLY_STAGE1}} --> T0
-  NX7{{NOTE writes apply_log json and rollback sql in the run folder}} --> T0
-  NX8{{NOTE publish sets is_public true on created rows}} --> T5
-  NX9{{NOTE Stage1 test run stage1-test-20260207-183213 inv 4f8c826f bp 3e122c58}} --> T0
-
-  %% Assign stage classes
-  class ST0,ST1,ST2,ST3,ST4 stage_marker;
-
-  class A,B,C,G stage_inputs;
-  class H,H1 stage_lib;
-  class I,I1,J,J1,K,K1 stage_bps;
-  class R,R1,S,S1 stage_ai;
-  class T0,T1,T2,T3,T4,T5 stage_apply;
-  class L,L1,M,M1,N,Z stage_inputs;
-
-  class NX1,NX1B,NX1C,NX2,NX3,NX4,NX5,NX6,NX7,NX8,NX9 note;
+  %% Styling assignments
+  class ST_IN,ST_AUTH,ST_LIB,ST_BP,ST_AI,ST_APPLY,ST_DAS stage_marker;
+  class IN_SPEC,IN_RUN,OUT_DIR stage_inputs;
+  class AUTH_READ stage_auth;
+  class LIB_GEN,LIB_OUT stage_lib;
+  class BP_GEN,BP_OUT,REQ_REVIEW,OUT_REVIEW_REQ,REQ_BANNER,OUT_BANNER_REQ stage_bps;
+  class AI_REVIEW,OUT_REVIEWS,AI_BANNER,OUT_BANNERS stage_ai;
+  class VAL,OUT_VAL,PAYLOAD,OUT_PAYLOAD,RUNLOG,DONE stage_inputs;
+  class APPLY_START,APPLY_INV,APPLY_BP,APPLY_BANNER,APPLY_REVIEW,APPLY_PUB stage_apply;
+  class LIB_CAND,LIB_EVAL,LIB_SEL,LIB_RETRY,BP_CAND,BP_EVAL,BP_SEL,BP_RETRY,ABORT das_gate;
+  class N_AUTH,N_AUTH2,N_OUT,N_DAS,N_DAS2,N_SSE,N_DRY,N_APPLY,N_APPLY2 note;
+  class TODO_ASP_EVAL,TODO_GRADER,TODO_COST todo;
 
   %% Tested status styling
-  class A,B,C,G,H,H1,I,I1,J,J1,K,K1,R,R1,S,S1,L,L1,M,M1,N,Z,T0,T1,T2,T3,T4,T5 done;
+  class IN_SPEC,IN_RUN,OUT_DIR,AUTH_READ,LIB_GEN,LIB_OUT,BP_GEN,BP_OUT,REQ_REVIEW,OUT_REVIEW_REQ,REQ_BANNER,OUT_BANNER_REQ,AI_REVIEW,OUT_REVIEWS,AI_BANNER,OUT_BANNERS,VAL,OUT_VAL,PAYLOAD,OUT_PAYLOAD,RUNLOG,DONE,APPLY_START,APPLY_INV,APPLY_BP,APPLY_BANNER,APPLY_REVIEW,APPLY_PUB done;
+  class LIB_CAND,LIB_EVAL,LIB_SEL,LIB_RETRY,BP_CAND,BP_EVAL,BP_SEL,BP_RETRY,ABORT,TODO_ASP_EVAL,TODO_GRADER,TODO_COST todo;

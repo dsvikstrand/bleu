@@ -8,8 +8,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
+type AspProfile = {
+  id: string;
+  display_name?: string;
+  bio?: string;
+  interests?: string[];
+  tone?: string;
+  must_include?: string[];
+  must_avoid?: string[];
+};
+
 type SeedSpec = {
   run_id: string;
+  asp?: AspProfile;
   library: {
     topic: string;
     title: string;
@@ -145,6 +156,8 @@ type RunLog = {
     backendCalls: boolean;
     applyStage1?: boolean;
     limitBlueprints?: number;
+    aspId?: string;
+    runContextHash?: string;
   };
   steps: Array<{
     name: string;
@@ -158,6 +171,36 @@ type RunLog = {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function sha256Hex(input: string) {
+  return crypto.createHash('sha256').update(input).digest('hex');
+}
+
+function buildRunContextHash(spec: SeedSpec) {
+  const payload = {
+    asp: spec.asp
+      ? {
+          id: String(spec.asp.id || '').trim(),
+          interests: (spec.asp.interests || []).map((s) => String(s || '').trim()).filter(Boolean),
+          tone: String(spec.asp.tone || '').trim(),
+          must_include: (spec.asp.must_include || []).map((s) => String(s || '').trim()).filter(Boolean),
+          must_avoid: (spec.asp.must_avoid || []).map((s) => String(s || '').trim()).filter(Boolean),
+        }
+      : null,
+    library: {
+      topic: String(spec.library?.topic || '').trim(),
+      title: String(spec.library?.title || '').trim(),
+      tags: (spec.library?.tags || []).map((s) => String(s || '').trim()).filter(Boolean),
+      notes: String(spec.library?.notes || '').trim(),
+    },
+    blueprints: (spec.blueprints || []).map((bp) => ({
+      title: String(bp?.title || '').trim(),
+      tags: (bp?.tags || []).map((s) => String(s || '').trim()).filter(Boolean),
+      notes: String(bp?.notes || '').trim(),
+    })),
+  };
+  return sha256Hex(JSON.stringify(payload));
 }
 
 function die(message: string): never {
@@ -306,6 +349,7 @@ function validateSeedSpec(spec: SeedSpec): string[] {
   const errors: string[] = [];
   if (!spec || typeof spec !== 'object') return ['Spec must be a JSON object'];
   if (!spec.run_id || !spec.run_id.trim()) errors.push('run_id is required');
+  if (spec.asp && !String(spec.asp.id || '').trim()) errors.push('asp.id is required when asp is provided');
   if (!spec.library?.topic?.trim()) errors.push('library.topic is required');
   if (!spec.library?.title?.trim()) errors.push('library.title is required');
   if (!spec.blueprints || !Array.isArray(spec.blueprints) || spec.blueprints.length === 0) {
@@ -474,6 +518,16 @@ async function main() {
   const runDir = path.join(outBase, runId);
   ensureDir(runDir);
 
+  const aspId = spec.asp?.id ? String(spec.asp.id).trim() : '';
+  const runContextHash = buildRunContextHash(spec);
+  writeJsonFile(path.join(runDir, 'run_meta.json'), {
+    runId,
+    createdAt: nowIso(),
+    specPath,
+    asp: spec.asp || null,
+    runContextHash,
+  });
+
   const yes = String(args.yes || '').trim();
   const applyStage1 = Boolean(args.apply);
   const limitBlueprints = Number(args.limitBlueprints || 0) || 0;
@@ -488,6 +542,8 @@ async function main() {
       backendCalls,
       applyStage1,
       limitBlueprints,
+      ...(aspId ? { aspId } : {}),
+      runContextHash,
     },
     steps: [],
   };
