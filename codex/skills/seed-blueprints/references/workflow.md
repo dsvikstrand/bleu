@@ -16,8 +16,11 @@ Prereqs:
 - A real Supabase access token for a user (used to behave like a signed-in user)
 
 Environment:
-- `SEED_USER_ACCESS_TOKEN` (required): Supabase access token string
+- `SEED_USER_ACCESS_TOKEN` (recommended): Supabase access token string (JWT; expires quickly)
+- `SEED_USER_REFRESH_TOKEN` (optional, recommended for automation): Supabase refresh token (used to mint new access tokens)
 - `VITE_AGENTIC_BACKEND_URL` (optional): overrides backend base URL for the runner
+- `SUPABASE_URL` or `VITE_SUPABASE_URL` (required if using refresh token or Stage 1)
+- `SUPABASE_ANON_KEY` or `VITE_SUPABASE_PUBLISHABLE_KEY` (required if using refresh token or Stage 1)
 
 Command:
 ```bash
@@ -109,3 +112,23 @@ Stage 1 outputs (additional):
 
 Notes:
 - Stage 1 has been exercised successfully with `--limit-blueprints 1` (happy path).
+
+## Token Automation (No Manual Access Token Copy/Paste)
+
+If you store the seed user's refresh token, the runner can mint new access tokens automatically and persist token rotation.
+
+Recommended local store:
+- `seed/seed_auth.local` (JSON; ignored by `*.local`)
+
+Example:
+```bash
+TMPDIR=/tmp \
+SEED_USER_REFRESH_TOKEN="$(cat refresh_tok.local)" \
+SUPABASE_URL="https://piszvseyaefxekubphhf.supabase.co" \
+SUPABASE_ANON_KEY="(paste VITE_SUPABASE_PUBLISHABLE_KEY)" \
+tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
+  --spec seed/seed_spec_v0.json \
+  --run-id refresh-token-test \
+  --limit-blueprints 1 \
+  --auth-store seed/seed_auth.local
+```

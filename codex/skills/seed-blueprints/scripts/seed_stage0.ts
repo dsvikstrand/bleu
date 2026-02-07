@@ -67,10 +67,35 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+type SeedAuthStore = {
+  access_token?: string;
+  refresh_token?: string;
+  updated_at?: string;
+};
+
 function decodeBase64Url(input: string) {
   const base64 = input.replace(/-/g, '+').replace(/_/g, '/');
   const pad = base64.length % 4 === 0 ? '' : '='.repeat(4 - (base64.length % 4));
   return Buffer.from(base64 + pad, 'base64').toString('utf8');
+}
+
+function getJwtExp(accessToken: string): number | null {
+  const parts = accessToken.split('.');
+  if (parts.length < 2) return null;
+  try {
+    const payloadJson = decodeBase64Url(parts[1] || '');
+    const payload = JSON.parse(payloadJson) as { exp?: number };
+    return typeof payload.exp === 'number' ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+function isJwtExpired(accessToken: string, skewSeconds = 60): boolean {
+  const exp = getJwtExp(accessToken);
+  if (!exp) return true;
+  const nowSec = Math.floor(Date.now() / 1000);
+  return exp <= nowSec + skewSeconds;
 }
 
 function getJwtSub(accessToken: string): string {
@@ -150,6 +175,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--out') out.out = argv[++i] ?? '';
     else if (a === '--agentic-base-url') out.agenticBaseUrl = argv[++i] ?? '';
     else if (a === '--run-id') out.runId = argv[++i] ?? '';
+    else if (a === '--auth-store') out.authStore = argv[++i] ?? '';
     else if (a === '--no-backend') out.noBackend = true;
     else if (a === '--do-review') out.doReview = true;
     else if (a === '--review-focus') out.reviewFocus = argv[++i] ?? '';
@@ -177,6 +203,27 @@ function writeJsonFile(filePath: string, data: unknown) {
 
 function writeTextFile(filePath: string, text: string) {
   fs.writeFileSync(filePath, text.endsWith('\n') ? text : text + '\n', 'utf-8');
+}
+
+function readAuthStore(filePath: string): SeedAuthStore {
+  if (!filePath || !fs.existsSync(filePath)) return {};
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(raw) as SeedAuthStore;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeAuthStore(filePath: string, store: SeedAuthStore) {
+  if (!filePath) return;
+  const out: SeedAuthStore = {
+    access_token: store.access_token || '',
+    refresh_token: store.refresh_token || '',
+    updated_at: nowIso(),
+  };
+  writeJsonFile(filePath, out);
 }
 
 function sanitizeRunId(input: string) {
@@ -394,6 +441,7 @@ async function main() {
         '  --out <dir>                Output base dir (default: seed/outputs)',
         '  --agentic-base-url <url>   Agentic backend base URL (default: env VITE_AGENTIC_BACKEND_URL or https://bapi.vdsai.cloud)',
         '  --run-id <id>              Override run_id folder name',
+        '  --auth-store <path>        Optional local JSON store for rotating tokens (recommended: seed/seed_auth.local)',
         '  --no-backend               Do not call backend (future use)',
         '  --do-review                Execute /api/analyze-blueprint (Stage 0.5)',
         '  --review-focus <text>      Optional reviewPrompt for /api/analyze-blueprint',
@@ -408,6 +456,7 @@ async function main() {
 
   const specPath = String(args.spec || 'seed/seed_spec_v0.json');
   const outBase = String(args.out || 'seed/outputs');
+  const authStorePath = String(args.authStore || 'seed/seed_auth.local');
   const agenticBaseUrl =
     String(args.agenticBaseUrl || process.env.VITE_AGENTIC_BACKEND_URL || 'https://bapi.vdsai.cloud').replace(/\/$/, '');
   const backendCalls = !args.noBackend;
@@ -462,10 +511,56 @@ async function main() {
     }
   };
 
-  // Stage 0 "behave as a user": call backend endpoints using a real user access token.
-  const accessToken = process.env.SEED_USER_ACCESS_TOKEN?.trim() || '';
-  if (backendCalls && !accessToken) {
-    die('Missing SEED_USER_ACCESS_TOKEN. Set it in your shell before running Stage 0.');
+  // Auth: prefer explicit access token; optionally refresh via refresh token and persist rotation in authStorePath.
+  const supabaseUrlForAuth =
+    String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+  const supabaseAnonKeyForAuth = String(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '');
+
+  const store = readAuthStore(authStorePath);
+  let accessToken = (process.env.SEED_USER_ACCESS_TOKEN?.trim() || store.access_token || '').trim();
+  let refreshToken = (process.env.SEED_USER_REFRESH_TOKEN?.trim() || store.refresh_token || '').trim();
+
+  const refreshSession = async () => {
+    if (!refreshToken) throw new Error('Missing refresh token (set SEED_USER_REFRESH_TOKEN or auth store refresh_token).');
+    if (!supabaseUrlForAuth || !supabaseAnonKeyForAuth) {
+      throw new Error('Missing SUPABASE_URL/VITE_SUPABASE_URL or SUPABASE_ANON_KEY/VITE_SUPABASE_PUBLISHABLE_KEY for refresh.');
+    }
+
+    const url = `${supabaseUrlForAuth}/auth/v1/token?grant_type=refresh_token`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKeyForAuth,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    const text = await res.text().catch(() => '');
+    if (!res.ok) throw new Error(`Supabase refresh failed (${res.status}): ${text.slice(0, 800)}`);
+    const data = JSON.parse(text) as { access_token?: string; refresh_token?: string };
+    const nextAccess = String(data.access_token || '').trim();
+    const nextRefresh = String(data.refresh_token || '').trim();
+    if (!nextAccess) throw new Error('Supabase refresh succeeded but returned empty access_token');
+    accessToken = nextAccess;
+    if (nextRefresh) refreshToken = nextRefresh;
+    writeAuthStore(authStorePath, { access_token: accessToken, refresh_token: refreshToken });
+  };
+
+  const ensureValidAccessToken = async () => {
+    if (accessToken && !isJwtExpired(accessToken)) return;
+    if (refreshToken) {
+      await refreshSession();
+      return;
+    }
+    if (!accessToken) throw new Error('Missing SEED_USER_ACCESS_TOKEN. Set it in your shell before running Stage 0.');
+    throw new Error('SEED_USER_ACCESS_TOKEN is expired and no refresh token is available.');
+  };
+
+  if (backendCalls) {
+    await step('auth', async () => {
+      await ensureValidAccessToken();
+      return { ok: true };
+    });
   }
 
   const seedUserId = accessToken ? getJwtSub(accessToken) : '';
@@ -475,13 +570,18 @@ async function main() {
 
   const inventory = await step('generate_library', async () => {
     if (!backendCalls) throw new Error('Backend calls disabled (no-backend not implemented in Stage 0)');
+    await ensureValidAccessToken();
     const url = `${agenticBaseUrl}/api/generate-inventory`;
     const body = {
       keywords: spec.library.topic,
       title: spec.library.title,
       customInstructions: spec.library.notes || '',
     };
-    const res = await postJson<InventorySchema>(url, accessToken, body);
+    let res = await postJson<InventorySchema>(url, accessToken, body);
+    if (!res.ok && res.status === 401 && refreshToken) {
+      await refreshSession();
+      res = await postJson<InventorySchema>(url, accessToken, body);
+    }
     if (!res.ok) {
       throw new Error(`generate-inventory failed (${res.status}): ${res.text.slice(0, 500)}`);
     }
@@ -494,6 +594,7 @@ async function main() {
 
   const generatedBlueprints = await step('generate_blueprints', async () => {
     if (!backendCalls) throw new Error('Backend calls disabled (no-backend not implemented in Stage 0)');
+    await ensureValidAccessToken();
     const url = `${agenticBaseUrl}/api/generate-blueprint`;
     const categories = (inventory.categories || []).map((c) => ({ name: c.name, items: c.items }));
 
@@ -511,7 +612,11 @@ async function main() {
         inventoryTitle: spec.library.title,
         categories,
       };
-      const res = await postJson<GeneratedBlueprint>(url, accessToken, body);
+      let res = await postJson<GeneratedBlueprint>(url, accessToken, body);
+      if (!res.ok && res.status === 401 && refreshToken) {
+        await refreshSession();
+        res = await postJson<GeneratedBlueprint>(url, accessToken, body);
+      }
       if (!res.ok) {
         throw new Error(`generate-blueprint failed (${res.status}): ${res.text.slice(0, 500)}`);
       }
@@ -543,6 +648,7 @@ async function main() {
   if (doReview) {
     await step('execute_review', async () => {
       if (!backendCalls) throw new Error('Backend calls disabled');
+      await ensureValidAccessToken();
       const url = `${agenticBaseUrl}/api/analyze-blueprint`;
       const results: Array<{ title: string; review: string }> = [];
 
@@ -551,7 +657,11 @@ async function main() {
           ...payload,
           reviewPrompt: reviewFocus || payload.reviewPrompt || '',
         };
-        const res = await postSseText(url, accessToken, body);
+        let res = await postSseText(url, accessToken, body);
+        if (!res.ok && res.status === 401 && refreshToken) {
+          await refreshSession();
+          res = await postSseText(url, accessToken, body);
+        }
         if (!res.ok) {
           throw new Error(`analyze-blueprint failed (${res.status}): ${res.text.slice(0, 500)}`);
         }
@@ -566,6 +676,7 @@ async function main() {
   if (doBanner) {
     await step('execute_banner', async () => {
       if (!backendCalls) throw new Error('Backend calls disabled');
+      await ensureValidAccessToken();
       const url = `${agenticBaseUrl}/api/generate-banner`;
       const maxAttempts = 3;
       const results: Array<
@@ -579,7 +690,11 @@ async function main() {
 
         while (attempts < maxAttempts) {
           attempts += 1;
-          const res = await postJson<{ contentType: string; imageBase64: string }>(url, accessToken, payload);
+          let res = await postJson<{ contentType: string; imageBase64: string }>(url, accessToken, payload);
+          if (!res.ok && res.status === 401 && refreshToken) {
+            await refreshSession();
+            res = await postJson<{ contentType: string; imageBase64: string }>(url, accessToken, payload);
+          }
           if (res.ok) {
             results.push({
               title: payload.title,
@@ -635,6 +750,11 @@ async function main() {
       return { ok: true };
     });
 
+    await step('apply_stage1_auth', async () => {
+      await ensureValidAccessToken();
+      return { ok: true };
+    });
+
     const supabaseUrl =
       String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
     const supabaseAnonKey = String(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '');
@@ -643,16 +763,17 @@ async function main() {
     }
 
     const restBase = `${supabaseUrl}/rest/v1`;
-    const restHeaders = {
-      apikey: supabaseAnonKey,
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation',
-    } as const;
+    const restHeaders = () =>
+      ({
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation',
+      }) as const;
 
     const restInsert = async <T>(table: string, row: unknown, select: string) => {
       const url = `${restBase}/${table}?select=${encodeURIComponent(select)}`;
-      const res = await fetch(url, { method: 'POST', headers: restHeaders as any, body: JSON.stringify(row) });
+      const res = await fetch(url, { method: 'POST', headers: restHeaders() as any, body: JSON.stringify(row) });
       const text = await res.text().catch(() => '');
       if (!res.ok) throw new Error(`Supabase insert ${table} failed (${res.status}): ${text.slice(0, 800)}`);
       const data = JSON.parse(text) as T[];
@@ -662,7 +783,7 @@ async function main() {
 
     const restUpdate = async <T>(table: string, filter: string, patch: unknown, select: string) => {
       const url = `${restBase}/${table}?${filter}&select=${encodeURIComponent(select)}`;
-      const res = await fetch(url, { method: 'PATCH', headers: restHeaders as any, body: JSON.stringify(patch) });
+      const res = await fetch(url, { method: 'PATCH', headers: restHeaders() as any, body: JSON.stringify(patch) });
       const text = await res.text().catch(() => '');
       if (!res.ok) throw new Error(`Supabase update ${table} failed (${res.status}): ${text.slice(0, 800)}`);
       const data = JSON.parse(text) as T[];
@@ -671,7 +792,7 @@ async function main() {
 
     const restGet = async <T>(table: string, query: string) => {
       const url = `${restBase}/${table}?${query}`;
-      const res = await fetch(url, { method: 'GET', headers: restHeaders as any });
+      const res = await fetch(url, { method: 'GET', headers: restHeaders() as any });
       const text = await res.text().catch(() => '');
       if (!res.ok) throw new Error(`Supabase get ${table} failed (${res.status}): ${text.slice(0, 800)}`);
       return JSON.parse(text) as T[];
@@ -821,6 +942,7 @@ async function main() {
 
       const uploadUrl = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/upload-banner`;
       for (const b of banners) {
+        await ensureValidAccessToken();
         const bpId = blueprintIdByTitle.get(b.title);
         if (!bpId) continue;
 

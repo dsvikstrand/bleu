@@ -139,7 +139,7 @@ export function DiscoverRoutines() {
           Blueprints are here to help you
         </h2>
         <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">
-          Blueprints are small yet effective guides to help you get things done. Browse Blueprints from the community, then come back and build your own Blueprint.
+          Blueprints are small yet effective guides to help you get things done. Browse Blueprints from the community, then come back and build your own Blueprints.
         </p>
       </div>
 
