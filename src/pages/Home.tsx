@@ -8,6 +8,7 @@ import { TopBlueprints } from '@/components/home/TopBlueprints';
 import { FeaturedTags } from '@/components/home/FeaturedTags';
 import { HowItWorks } from '@/components/home/HowItWorks';
 import { FeaturedLibrariesStarter } from '@/components/home/FeaturedLibrariesStarter';
+import { DiscoverRoutines } from '@/components/home/DiscoverRoutines';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
@@ -99,6 +100,9 @@ export default function Home() {
 
         {/* Starter build experience (no LLM calls) */}
         <FeaturedLibrariesStarter />
+
+        {/* Discover routines (consumer-first bridge) */}
+        <DiscoverRoutines />
 
         {/* Top blueprints */}
         <TopBlueprints />
