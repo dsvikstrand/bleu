@@ -5,6 +5,17 @@ flowchart TD
   ST3([STAGE Stage 0.5 Execute AI]) -.-> R
   ST4([STAGE Stage 1 Apply Mode]) -.-> T0
 
+  %% Stage-based styling (Mermaid v11+)
+  classDef stage_marker fill:#0b1220,stroke:#253047,color:#e7eefc,stroke-width:1px;
+  classDef stage_inputs fill:#102a43,stroke:#1e4e8c,color:#e7f0ff;
+  classDef stage_lib fill:#0f3d2e,stroke:#1b6b4b,color:#e7fff2;
+  classDef stage_bps fill:#3a2a10,stroke:#8a5b12,color:#fff4e5;
+  classDef stage_ai fill:#3b1030,stroke:#7d1f66,color:#ffe8f7;
+  classDef stage_apply fill:#2a133a,stroke:#5b2a88,color:#f4eaff;
+  classDef note fill:#111827,stroke:#374151,color:#e5e7eb,stroke-dasharray: 3 3;
+  classDef done fill:#0b2f1a,stroke:#1f8a3a,color:#eafff1;
+  classDef not_tested fill:#2f2f2f,stroke:#6b7280,color:#f3f4f6;
+
   A["ID:A seed/seed_spec_v0.json (Seed Spec) TESTED_OK"] --> B["ID:B seed_stage0.ts (parse args + validate spec) TESTED_OK"]
   B --> C["ID:C Create run folder seed/outputs/RUN_ID/ TESTED_OK"]
   C --> G["ID:G Read SEED_USER_ACCESS_TOKEN TESTED_OK"]
@@ -57,3 +68,18 @@ flowchart TD
   NX7{{NOTE writes apply_log json and rollback sql in the run folder}} --> T0
   NX8{{NOTE publish sets is_public true on created rows}} --> T5
   NX9{{NOTE Stage1 test run stage1-test-20260207-183213 inv 4f8c826f bp 3e122c58}} --> T0
+
+  %% Assign stage classes
+  class ST0,ST1,ST2,ST3,ST4 stage_marker;
+
+  class A,B,C,G stage_inputs;
+  class H,H1 stage_lib;
+  class I,I1,J,J1,K,K1 stage_bps;
+  class R,R1,S,S1 stage_ai;
+  class T0,T1,T2,T3,T4,T5 stage_apply;
+  class L,L1,M,M1,N,Z stage_inputs;
+
+  class NX1,NX2,NX3,NX4,NX5,NX6,NX7,NX8,NX9 note;
+
+  %% Tested status styling
+  class A,B,C,G,H,H1,I,I1,J,J1,K,K1,R,R1,S,S1,L,L1,M,M1,N,Z,T0,T1,T2,T3,T4,T5 done;

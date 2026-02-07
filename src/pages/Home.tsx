@@ -98,14 +98,14 @@ export default function Home() {
         {/* How it works (moved up for immediate clarity) */}
         <HowItWorks />
 
-        {/* Starter build experience (no LLM calls) */}
-        <FeaturedLibrariesStarter />
-
         {/* Discover routines (consumer-first bridge) */}
         <DiscoverRoutines />
 
         {/* Top blueprints */}
         <TopBlueprints />
+
+        {/* Starter build experience (no LLM calls) */}
+        <FeaturedLibrariesStarter />
 
         {/* Featured tags */}
         <FeaturedTags />
