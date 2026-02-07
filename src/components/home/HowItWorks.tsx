@@ -17,11 +17,9 @@ const STEPS = [
   },
   {
     icon: Users,
-    title: 'Share & Remix',
-    description: "Post to the Wall, comment on others, or remix what they've built.",
+    title: 'Publish',
+    description: "When you're happy with your blueprint, publish it so others can learn from it.",
     color: 'bg-secondary/15 text-secondary-foreground',
-    link: '/wall',
-    linkText: 'See the Wall →',
   },
 ];
 

@@ -65,6 +65,8 @@ const ANALYZE_BLUEPRINT_URL = USE_AGENTIC_BACKEND && AGENTIC_ANALYZE_URL
   ? AGENTIC_ANALYZE_URL
   : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
 
+const HOME_DRAFT_KEY = 'blueprints_home_draft_v1';
+
 interface InventoryCategory {
   name: string;
   items: string[];
@@ -80,6 +82,15 @@ type GeneratedStep = {
 type GeneratedBlueprint = {
   title: string;
   steps: GeneratedStep[];
+};
+
+type HomeDraftV1 = {
+  version: 1;
+  inventoryId: string;
+  title: string;
+  selectedItems: Record<string, string[]>;
+  steps: BlueprintStep[];
+  source: 'home-starter' | 'home-example';
 };
 
 function parseCategories(schema: Json): InventoryCategory[] {
@@ -275,6 +286,40 @@ export default function InventoryBuild() {
       setActiveStepId(null);
       setBannerUrl(null);
       setGenerateBanner(true);
+
+      // One-time Home prefill bridge (non-LLM): lets Home load starter items or a full example blueprint.
+      // Intentional behavior: if present, it overwrites the current build state.
+      try {
+        const raw = sessionStorage.getItem(HOME_DRAFT_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as Partial<HomeDraftV1>;
+          sessionStorage.removeItem(HOME_DRAFT_KEY);
+
+          if (
+            parsed &&
+            parsed.version === 1 &&
+            typeof parsed.inventoryId === 'string' &&
+            parsed.inventoryId === inventory.id
+          ) {
+            setTitle(typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title : inventory.title);
+            setSelectedItems(parsed.selectedItems && typeof parsed.selectedItems === 'object' ? parsed.selectedItems : {});
+            setItemContexts({});
+            setMixNotes('');
+            setReviewPrompt('');
+            setReview('');
+            setTags([]);
+            setIsPublic(true);
+            setBannerUrl(null);
+            setGenerateBanner(true);
+
+            const nextSteps = Array.isArray(parsed.steps) ? parsed.steps : [];
+            setSteps(nextSteps);
+            setActiveStepId(nextSteps[0]?.id || null);
+          }
+        }
+      } catch {
+        // Ignore malformed payloads.
+      }
     }
 
     setIsInitialized(true);

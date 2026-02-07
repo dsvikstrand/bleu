@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { CommunityStats } from '@/components/home/CommunityStats';
 import { TopBlueprints } from '@/components/home/TopBlueprints';
 import { FeaturedTags } from '@/components/home/FeaturedTags';
-import { DemoInventory } from '@/components/home/DemoInventory';
 import { HowItWorks } from '@/components/home/HowItWorks';
+import { FeaturedLibrariesStarter } from '@/components/home/FeaturedLibrariesStarter';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
@@ -73,7 +73,7 @@ export default function Home() {
             Create & share recipes for life routines
           </p>
           <p className="text-base text-muted-foreground max-w-md mx-auto leading-relaxed">
-            Build routines from shared inventories, get AI reviews, and remix what others have made.
+            Build routines from shared libraries, get AI reviews, and publish when you're ready.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <Link to="/explore">
@@ -94,11 +94,11 @@ export default function Home() {
         {/* Community stats bar */}
         <CommunityStats />
 
-        {/* Demo section - moved up for immediate interaction */}
-        <DemoInventory />
-
-        {/* How it works */}
+        {/* How it works (moved up for immediate clarity) */}
         <HowItWorks />
+
+        {/* Starter build experience (no LLM calls) */}
+        <FeaturedLibrariesStarter />
 
         {/* Top blueprints */}
         <TopBlueprints />
