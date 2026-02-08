@@ -1323,6 +1323,38 @@ async function main() {
       const k = policy.kCandidates;
       let selected: { pack: ControlPackV0; file: string; attempt: number; candidate: number; score: number } | null = null;
 
+      const applyControlPackOverrides = (pack: ControlPackV0) => {
+        // Optional per-node overrides for smoke tests and deterministic runs.
+        // These are intentionally simple: they mutate the composed pack before gates run.
+        const params = (policy.params || {}) as Record<string, unknown>;
+
+        const forceDomain = String(params.force_domain || '').trim();
+        const forceDomainCustom = String(params.force_domain_custom || '').trim();
+        if (forceDomain) {
+          (pack.library as any).controls = (pack.library as any).controls || {};
+          (pack.library as any).controls.domain = forceDomain as any;
+          if (forceDomain === 'custom') {
+            if (forceDomainCustom) (pack.library as any).controls.domain_custom = forceDomainCustom;
+          } else {
+            delete (pack.library as any).controls.domain_custom;
+          }
+        }
+
+        const forceFocus = String(params.force_focus || '').trim();
+        const forceFocusCustom = String(params.force_focus_custom || '').trim();
+        if (forceFocus) {
+          for (const bp of pack.blueprints || []) {
+            (bp as any).controls = (bp as any).controls || {};
+            (bp as any).controls.focus = forceFocus;
+            if (forceFocus === 'custom') {
+              if (forceFocusCustom) (bp as any).controls.focus_custom = forceFocusCustom;
+            } else {
+              delete (bp as any).controls.focus_custom;
+            }
+          }
+        }
+      };
+
       for (let attempt = 1; attempt <= attemptCount; attempt += 1) {
         const attemptRec: DasNodeDecision['attempts'][number] = { attempt, candidates: [], status: 'retry' };
         decision.attempts.push(attemptRec);
@@ -1356,6 +1388,7 @@ async function main() {
               blueprintCount,
               templateOffset,
             });
+            applyControlPackOverrides(pack);
           } catch (e) {
             const err = e instanceof Error ? e : new Error(String(e));
             attemptRec.candidates.push({
