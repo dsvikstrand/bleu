@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "notes": [
+    "Planning-only skeleton for DAS v1 (dynamic gates, retries, select-best).",
+    "Not wired into codex/skills/seed-blueprints/scripts/seed_stage0.ts yet.",
+    "Policies are per-node (maxAttempts, kCandidates, eval)."
+  ],
+  "defaults": {
+    "enabled": true,
+    "kCandidates": 1,
+    "maxAttempts": 1,
+    "eval": [],
+    "onHardFail": "stop_run"
+  },
+  "nodes": {
+    "AUTH_READ": {
+      "enabled": true,
+      "maxAttempts": 1
+    },
+    "LIB_GEN": {
+      "kCandidates": 2,
+      "maxAttempts": 2,
+      "eval": ["structural", "bounds", "testOnly_failOnce"]
+    },
+    "BP_GEN": {
+      "kCandidates": 2,
+      "maxAttempts": 2,
+      "eval": ["structural", "bounds"]
+    },
+    "VAL": {
+      "kCandidates": 1,
+      "maxAttempts": 1,
+      "eval": ["crossref"],
+      "onHardFail": "stop_run"
+    },
+    "AI_REVIEW": {
+      "enabled": false,
+      "maxAttempts": 1
+    },
+    "AI_BANNER": {
+      "enabled": false,
+      "maxAttempts": 1
+    },
+    "APPLY": {
+      "enabled": false,
+      "maxAttempts": 1
+    }
+  },
+  "testOnly": {
+    "enabled": false,
+    "failOnce": {
+      "nodes": ["LIB_GEN"],
+      "failOnAttempt": 1
+    }
+  }
+}
+

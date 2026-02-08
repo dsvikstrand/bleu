@@ -1,56 +1,75 @@
-# Agentic Seed System (ASS) – Stage 0 Spec
+# Agentic Seed System (ASS) – Baseline (LAS) + Roadmap (DAS)
 
 ## Goal
-Create a **linear, debuggable** seeding pipeline that produces a library and multiple blueprint variants, **without** writing to the database. Outputs are saved as JSON files for inspection.
+Build a **debuggable agentic seeding pipeline** that can:
 
-## Stage 0 Scope (Linear Graph)
-1. **lib_gen** → Generate a library schema (categories + items) from a seed topic.
-2. **bp_gen** → Generate multiple blueprint variants from that library (steps + items + context).
-3. (Optional) **review** + **banner** are **not** part of Stage 0.
+- Generate a library (inventory) and blueprint drafts from a topic
+- Optionally execute AI review + banner generation
+- Optionally apply results to Supabase (DB + banner upload)
+
+The baseline is a **linear agentic system (LAS)**. We will evolve it into a **dynamic agentic system (DAS)** with gates/retries/selection.
+
+## Where It Lives
+- Runner: `codex/skills/seed-blueprints/scripts/seed_stage0.ts`
+- Input spec: `seed/seed_spec_v0.json`
+- Outputs: `seed/outputs/<run_id>/...`
+- Mermaid graph: `docs/seed_las_stage0.mmd`
 
 ## Inputs
 `seed/seed_spec_v0.json`
 
-```json
-{
-  "run_id": "example-run",
-  "library": {
-    "topic": "...",
-    "title": "...",
-    "description": "...",
-    "notes": "...",
-    "tags": ["..."]
-  },
-  "blueprints": [
-    {
-      "title": "...",
-      "description": "...",
-      "notes": "...",
-      "tags": ["..."]
-    }
-  ]
-}
-```
+Key fields:
+- `run_id`: output folder name
+- `library`: seed topic + title + constraints
+- `blueprints[]`: blueprint variants to generate from the generated library
+- Optional: `asp` (persona stub; recorded for future alignment evals)
 
-## Outputs
-Saved under `seed/outputs/<run_id>/`:
-- `library.json`
-- `blueprint_1.json`, `blueprint_2.json`, ...
-- `run_log.json` (inputs + timestamps)
+## Stage 0 (LAS) – Artifacts Only (No Writes)
+Stage 0 calls the agentic backend for generation, but does **not** write to Supabase.
 
-## Validation (Stage 0)
-- **Schema validation**: strict JSON shape, no missing keys.
-- **Item validation**: blueprint steps can only use items from the library.
+Outputs under `seed/outputs/<run_id>/`:
+- `run_meta.json` (run context, including optional `asp`)
+- `library.json` (generated categories + items)
+- `blueprints.json` (generated blueprint drafts)
+- `review_requests.json` (payloads only; no network)
+- `banner_requests.json` (payloads only; no network)
+- `validation.json` (cross-reference checks)
+- `publish_payload.json` (payload only; no writes)
+- `run_log.json` (timings + status)
 
-## Logging
-Each step writes:
-- input payload
-- output payload
-- start/end timestamps
-- status
+## Stage 0.5 (LAS) – Execute AI (Still No Writes)
+Stage 0.5 optionally runs two expensive calls to validate the happy path end-to-end:
 
-## Next Stages (Roadmap)
-- **Stage 1**: Lightweight evals (diversity, length, tag coverage)
-- **Stage 2**: Retry policies (1 retry for low quality)
-- **Stage 3**: Security + cost guardrails
-- **Stage 4**: Optional DB insert
+- Review: `POST /api/analyze-blueprint` (SSE stream collected into text)
+- Banner: `POST /api/generate-banner` with `dryRun: true` (base64; no Storage upload)
+
+Additional outputs:
+- `reviews.json`
+- `banners.json`
+
+## Stage 1 – Apply Mode (Writes To Supabase)
+Stage 1 takes the Stage 0/0.5 artifacts and writes to Supabase:
+
+- Insert inventory/library row
+- Insert blueprint rows
+- Persist optional review text
+- Upload banner via Supabase edge function and persist `banner_url`
+- Publish by setting `is_public=true`
+
+Additional outputs:
+- `apply_log.json`
+- `rollback.sql`
+
+## Validation (Current)
+Hard checks we already have:
+- Schema shape checks (runner-side)
+- Cross-reference checks (blueprint item refs must exist in library categories)
+
+## Roadmap: DAS v1 (Planned)
+The first DAS milestone is to add **gates + retries + select-best** on generation nodes.
+
+- Config (planned): `seed/das_config_v1.json` (per-node `maxAttempts`, `kCandidates`, `eval[]`)
+- New artifacts (planned):
+  - `candidates/<node_id>/attempt-01.json`...
+  - `decision_log.json` (why we retried/selected)
+  - `selection.json` (best candidate summary)

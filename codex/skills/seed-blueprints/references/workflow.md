@@ -122,6 +122,10 @@ If you store the seed user's refresh token, the runner can mint new access token
 Recommended local store:
 - `seed/seed_auth.local` (JSON; ignored by `*.local`)
 
+Important:
+- Supabase refresh tokens **rotate**. If you refresh once, the old refresh token becomes invalid.
+- Always use `--auth-store ...` so the runner can write back the rotated `refresh_token`.
+
 Verified:
 - Refresh flow works when the stored access token is missing (forced test by clearing `access_token` in the auth store).
 
@@ -137,3 +141,18 @@ tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
   --limit-blueprints 1 \
   --auth-store seed/seed_auth.local
 ```
+
+## Planned: DAS v1 (Dynamic Gates + Retries)
+
+DAS v1 will add retry loops and "select best out of k candidates" to generation nodes.
+
+Config (planning-only file for now):
+- `seed/das_config_v1.json` (per-node `maxAttempts`, `kCandidates`, `eval[]`)
+
+Expected new artifacts (planned):
+- `seed/outputs/<run_id>/candidates/<node_id>/attempt-01.json` ...
+- `seed/outputs/<run_id>/decision_log.json`
+- `seed/outputs/<run_id>/selection.json`
+
+Note:
+- The runner does **not** read `seed/das_config_v1.json` yet. This is a planning contract to keep IDs and artifacts consistent.
