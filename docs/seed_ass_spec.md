@@ -41,6 +41,13 @@ Notes:
 - `persona_alignment_v0` is currently wired for `PROMPT_PACK` only (the prompt composer stage) so we can validate eval wiring cheaply.
 - Gate parameters live under `params` in the DAS config, per node (example: `nodes.PROMPT_PACK.params.persona_alignment_v0.minTagOverlapRatio`).
 
+## Promptless Controls (Current)
+We support a promptless intent layer (`ControlPackV0`) that is rendered into a `PromptPackV0` for backend compatibility.
+
+- Schema doc: `docs/control_pack_schema.md`
+- Runner flag: `--compose-controls`
+- Output: `requests/control_pack.json` (plus the rendered `requests/prompt_pack.json`)
+
 ## Personas (Repo-Global, Current)
 Personas are not "seed-only". They are a reusable contract that can be used by:
 - Seeding runs (conditioning + eval target)
@@ -69,8 +76,10 @@ Outputs under `seed/outputs/<run_id>/` (layout v2):
 - `logs/run_meta.json` (run context, including optional `asp`)
 - `logs/run_log.json` (timings + status)
 - `logs/persona_log.json` (optional; applied persona prompt block)
+- `logs/control_pack_log.json` (optional; controls composer log)
 - `artifacts/library.json` (generated categories + items)
 - `artifacts/blueprints.json` (generated blueprint drafts)
+- `requests/control_pack.json` (optional; promptless controls)
 - `requests/review_requests.json` (payloads only; no network)
 - `requests/banner_requests.json` (payloads only; no network)
 - `artifacts/validation.json` (cross-reference checks)

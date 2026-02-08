@@ -9,6 +9,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { loadPersonaV0, type PersonaV0 } from './lib/persona_v0';
 import { composePromptPackV0, type PromptPackV0 } from './lib/prompt_pack_v0';
+import { composeControlPackV0, renderControlPackToPromptPackV0, type ControlPackV0 } from './lib/control_pack_v0';
 
 type AspProfile = {
   id: string;
@@ -76,7 +77,16 @@ type BannerPayload = {
   dryRun?: boolean;
 };
 
-type DasNodeId = 'AUTH_READ' | 'PROMPT_PACK' | 'LIB_GEN' | 'BP_GEN' | 'VAL' | 'AI_REVIEW' | 'AI_BANNER' | 'APPLY';
+type DasNodeId =
+  | 'AUTH_READ'
+  | 'CONTROL_PACK'
+  | 'PROMPT_PACK'
+  | 'LIB_GEN'
+  | 'BP_GEN'
+  | 'VAL'
+  | 'AI_REVIEW'
+  | 'AI_BANNER'
+  | 'APPLY';
 
 type DasGateSeverity = 'info' | 'warn' | 'hard_fail';
 
@@ -243,6 +253,8 @@ type RunLog = {
     dasConfigPath?: string;
     dasConfigHash?: string;
     limitBlueprints?: number;
+    composeControls?: boolean;
+    controlPackHash?: string;
     composePrompts?: boolean;
     promptPackHash?: string;
     aspId?: string;
@@ -323,6 +335,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--do-review') out.doReview = true;
     else if (a === '--review-focus') out.reviewFocus = argv[++i] ?? '';
     else if (a === '--do-banner') out.doBanner = true;
+    else if (a === '--compose-controls') out.composeControls = true;
     else if (a === '--compose-prompts') out.composePrompts = true;
     else if (a === '--apply') out.apply = true;
     else if (a === '--das') out.das = true;
@@ -698,6 +711,53 @@ function sanitizeRunId(input: string) {
     .slice(0, 60);
 }
 
+function evalStructuralControlPack(pack: ControlPackV0): DasGateResult {
+  if (Number(pack?.version) !== 0) return gate('structural', false, 'warn', 0, 'bad_version');
+  const goal = String(pack?.goal || '').trim();
+  if (!goal) return gate('structural', false, 'warn', 0, 'missing_goal');
+  const lib = pack?.library as any;
+  if (!lib || !lib.controls) return gate('structural', false, 'warn', 0, 'missing_library_controls');
+  const bps = Array.isArray(pack?.blueprints) ? pack.blueprints : [];
+  if (!bps.length) return gate('structural', false, 'warn', 0, 'no_blueprints', { blueprintCount: 0 });
+  for (const bp of bps) {
+    if (!bp || !bp.controls || !String(bp.controls.focus || '').trim()) return gate('structural', false, 'warn', 0, 'missing_blueprint_focus');
+  }
+  return gate('structural', true, 'info', 1, 'ok', { blueprintCount: bps.length });
+}
+
+function evalBoundsControlPack(pack: ControlPackV0): DasGateResult {
+  const limits = {
+    maxGoalLen: 200,
+    maxNameLen: 80,
+    maxNotesLen: 1200,
+    maxTags: 12,
+    maxTagLen: 40,
+    maxBlueprints: 8,
+  };
+  const goal = String(pack?.goal || '');
+  if (goal.length > limits.maxGoalLen) return gate('bounds', false, 'warn', 0, 'goal_too_long', limits);
+  const libNameLen = String(pack?.library?.name || '').length;
+  if (libNameLen > limits.maxNameLen) return gate('bounds', false, 'warn', 0, 'library_name_too_long', limits);
+  const libNotesLen = String(pack?.library?.notes || '').length;
+  if (libNotesLen > limits.maxNotesLen) return gate('bounds', false, 'warn', 0, 'library_notes_too_long', limits);
+  const libTags = ((pack?.library?.tags || []) as any[]).map((x) => String(x || '')).filter(Boolean);
+  if (libTags.length > limits.maxTags) return gate('bounds', false, 'warn', 0, 'too_many_library_tags', limits);
+  for (const tag of libTags) if (String(tag).length > limits.maxTagLen) return gate('bounds', false, 'warn', 0, 'library_tag_too_long', limits);
+
+  const bps = Array.isArray(pack?.blueprints) ? pack.blueprints : [];
+  if (bps.length > limits.maxBlueprints) return gate('bounds', false, 'warn', 0, 'too_many_blueprints', limits);
+  for (const bp of bps) {
+    const nameLen = String(bp?.name || '').length;
+    if (nameLen > limits.maxNameLen) return gate('bounds', false, 'warn', 0, 'blueprint_name_too_long', limits);
+    const notesLen = String(bp?.notes || '').length;
+    if (notesLen > limits.maxNotesLen) return gate('bounds', false, 'warn', 0, 'blueprint_notes_too_long', limits);
+    const tags = ((bp?.tags || []) as any[]).map((x) => String(x || '')).filter(Boolean);
+    if (tags.length > limits.maxTags) return gate('bounds', false, 'warn', 0, 'too_many_blueprint_tags', limits);
+    for (const tag of tags) if (String(tag).length > limits.maxTagLen) return gate('bounds', false, 'warn', 0, 'blueprint_tag_too_long', limits);
+  }
+  return gate('bounds', true, 'info', 1, 'ok', limits);
+}
+
 async function postJson<T>(
   url: string,
   token: string,
@@ -909,6 +969,7 @@ async function main() {
         '  --do-review                Execute /api/analyze-blueprint (Stage 0.5)',
         '  --review-focus <text>      Optional reviewPrompt for /api/analyze-blueprint',
         '  --do-banner                Execute /api/generate-banner in dryRun mode (Stage 0.5; no Storage upload)',
+        '  --compose-controls         Compose promptless controls (click/press config) and render to prompt pack',
         '  --compose-prompts          Compose user-like prompts from persona + goal (writes requests/prompt_pack.json)',
         '  --apply                    Stage 1 apply mode (writes to Supabase)',
         '  --das                      Enable DAS v1 (dynamic gates, retries, select-best; uses das config)',
@@ -928,6 +989,7 @@ async function main() {
   const backendCalls = !args.noBackend;
   const doReview = !!args.doReview;
   const doBanner = !!args.doBanner;
+  const composeControls = !!args.composeControls;
   const composePrompts = !!args.composePrompts;
   const reviewFocus = String(args.reviewFocus || '').trim();
   const dasEnabled = Boolean(args.das || args.dasConfig);
@@ -1016,6 +1078,7 @@ async function main() {
       runMeta: 'logs/run_meta.json',
       runLog: 'logs/run_log.json',
       personaLog: 'logs/persona_log.json',
+      controlPackLog: 'logs/control_pack_log.json',
       promptPackLog: 'logs/prompt_pack_log.json',
       decisionLog: 'logs/decision_log.json',
       selection: 'logs/selection.json',
@@ -1025,6 +1088,7 @@ async function main() {
       blueprints: 'artifacts/blueprints.json',
       validation: 'artifacts/validation.json',
       publishPayload: 'artifacts/publish_payload.json',
+      controlPack: 'requests/control_pack.json',
       promptPack: 'requests/prompt_pack.json',
       reviewRequests: 'requests/review_requests.json',
       bannerRequests: 'requests/banner_requests.json',
@@ -1048,14 +1112,22 @@ async function main() {
           prompt_hash: personaPromptHash,
         }
       : null,
-    composer: composePrompts
+    composer: composeControls
       ? {
           enabled: true,
-          mode: 'template',
+          mode: 'controls_v0',
           run_type: 'seed',
+          control_pack_path: 'requests/control_pack.json',
           prompt_pack_path: 'requests/prompt_pack.json',
         }
-      : { enabled: false },
+      : composePrompts
+        ? {
+            enabled: true,
+            mode: 'template',
+            run_type: 'seed',
+            prompt_pack_path: 'requests/prompt_pack.json',
+          }
+        : { enabled: false },
     runContextHash,
     das: dasEnabled
       ? {
@@ -1092,6 +1164,7 @@ async function main() {
       outputLayoutVersion,
       agenticBaseUrl,
       backendCalls,
+      composeControls,
       composePrompts,
       applyStage1,
       limitBlueprints,
@@ -1102,6 +1175,10 @@ async function main() {
     },
     steps: [],
   };
+
+  if (composeControls && composePrompts) {
+    die('Invalid flags: use either --compose-controls or --compose-prompts (controls already render to prompt pack).');
+  }
 
   const dasDecision: DasDecisionLog | null = dasEnabled
     ? {
@@ -1149,6 +1226,211 @@ async function main() {
       writeJsonFile(outPath.logs('run_log.json'), { ...runLog, finishedAt: nowIso() });
     }
   };
+
+  // Control composition: optional, promptless controls derived from (persona + goal),
+  // then rendered into a PromptPack so downstream nodes remain unchanged.
+  let controlPack: ControlPackV0 | null = null;
+  let controlPackHash = '';
+  if (composeControls) {
+    await step('compose_controls', async () => {
+      const nodeId: DasNodeId = 'CONTROL_PACK';
+      const goal = String(specRun.library.topic || '').trim();
+      const blueprintCountRaw =
+        limitBlueprints > 0 ? Math.min(limitBlueprints, specRun.blueprints.length) : specRun.blueprints.length;
+      const blueprintCount = Math.max(1, blueprintCountRaw);
+
+      const writePack = (pack: ControlPackV0, meta: Record<string, unknown>) => {
+        const raw = JSON.stringify(pack, null, 2) + '\n';
+        controlPackHash = sha256Hex(raw);
+        runLog.config.controlPackHash = controlPackHash;
+        writeJsonFile(outPath.requests('control_pack.json'), pack);
+        writeJsonFile(outPath.logs('control_pack_log.json'), {
+          version: 1,
+          createdAt: nowIso(),
+          nodeId,
+          control_pack_hash: controlPackHash,
+          control_pack_path: relPath(outPath.requests('control_pack.json')),
+          ...meta,
+        });
+        writeJsonFile(outPath.logs('run_meta.json'), runMeta);
+      };
+
+      const renderAndApply = (pack: ControlPackV0) => {
+        const rendered = renderControlPackToPromptPackV0(pack, persona);
+        const renderedRaw = JSON.stringify(rendered, null, 2) + '\n';
+        const renderedHash = sha256Hex(renderedRaw);
+        runLog.config.promptPackHash = renderedHash;
+        writeJsonFile(outPath.requests('prompt_pack.json'), rendered);
+        writeJsonFile(outPath.logs('prompt_pack_log.json'), {
+          version: 1,
+          createdAt: nowIso(),
+          nodeId: 'PROMPT_PACK',
+          prompt_pack_hash: renderedHash,
+          prompt_pack_path: relPath(outPath.requests('prompt_pack.json')),
+          rendered_from: 'control_pack_v0',
+          control_pack_hash: controlPackHash,
+        });
+        // Override effective spec so downstream uses rendered inputs.
+        specRun = { ...specRun, library: rendered.library as any, blueprints: rendered.blueprints as any };
+      };
+
+      if (!dasEnabled || !dasConfig || !dasDecision || !dasSelection) {
+        const pack = composeControlPackV0({
+          runType: 'seed',
+          goal,
+          persona,
+          blueprintCount,
+        });
+        const gates: DasGateResult[] = [evalStructuralControlPack(pack), evalBoundsControlPack(pack)];
+        if (!gates.every((g) => g.ok)) {
+          throw new Error(`CONTROL_PACK gates failed: ${gates.filter((g) => !g.ok).map((g) => g.reason).join(', ')}`);
+        }
+        controlPack = pack;
+        writePack(pack, { dasEnabled: false, selected: { attempt: 1, candidate: 1 }, gates });
+        renderAndApply(pack);
+        return { ok: true };
+      }
+
+      const policy = getDasPolicy(dasConfig, nodeId);
+      const decision: DasNodeDecision = { nodeId, policy, attempts: [] };
+      dasDecision.nodes[nodeId] = decision;
+      ensureDir(path.join(runDir, 'candidates', nodeId));
+
+      const failOnceEnabled =
+        !!dasConfig.testOnly?.enabled &&
+        !!dasConfig.testOnly?.failOnce &&
+        Array.isArray(dasConfig.testOnly.failOnce.nodes) &&
+        dasConfig.testOnly.failOnce.nodes.includes(nodeId) &&
+        Number(dasConfig.testOnly.failOnce.failOnAttempt || 0) > 0;
+      const failOnAttempt = Number(dasConfig.testOnly?.failOnce?.failOnAttempt || 0) || 0;
+
+      if (!policy.enabled) {
+        decision.attempts.push({ attempt: 1, candidates: [], status: 'disabled' });
+        writeDasLogs();
+        const pack = composeControlPackV0({
+          runType: 'seed',
+          goal,
+          persona,
+          blueprintCount,
+        });
+        controlPack = pack;
+        writePack(pack, { dasEnabled: true, policy, selected: { attempt: 1, candidate: 1 }, gates: [] });
+        renderAndApply(pack);
+        return { ok: true };
+      }
+
+      const attemptCount = policy.maxAttempts;
+      const k = policy.kCandidates;
+      let selected: { pack: ControlPackV0; file: string; attempt: number; candidate: number; score: number } | null = null;
+
+      for (let attempt = 1; attempt <= attemptCount; attempt += 1) {
+        const attemptRec: DasNodeDecision['attempts'][number] = { attempt, candidates: [], status: 'retry' };
+        decision.attempts.push(attemptRec);
+
+        if (failOnceEnabled && attempt === failOnAttempt) {
+          const file = path.join(runDir, 'candidates', nodeId, `attempt-${String(attempt).padStart(2, '0')}-skipped.json`);
+          writeJsonFile(file, { nodeId, attempt, skipped: true, reason: 'testOnly_failOnce', createdAt: nowIso() });
+          attemptRec.candidates.push({
+            attempt,
+            candidate: 0,
+            ok: false,
+            score: 0,
+            skipped: true,
+            file: path.relative(runDir, file),
+            gates: [gate('testOnly_failOnce', false, 'warn', 0, 'forced_retry', { attempt })],
+          });
+          attemptRec.status = attempt === attemptCount ? 'exhausted' : 'retry';
+          writeDasLogs();
+          continue;
+        }
+
+        const candidateValues: Array<{ pack: ControlPackV0; file: string; score: number; candidate: number }> = [];
+        for (let cand = 1; cand <= k; cand += 1) {
+          const templateOffset = (attempt - 1) * k + (cand - 1);
+          let pack: ControlPackV0 | null = null;
+          try {
+            pack = composeControlPackV0({
+              runType: 'seed',
+              goal,
+              persona,
+              blueprintCount,
+              templateOffset,
+            });
+          } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            attemptRec.candidates.push({
+              attempt,
+              candidate: cand,
+              ok: false,
+              score: 0,
+              error: err.message.slice(0, 500),
+              gates: [gate('exception', false, 'warn', 0, 'compose_threw')],
+            });
+            continue;
+          }
+
+          const outFile = path.join(
+            runDir,
+            'candidates',
+            nodeId,
+            `attempt-${String(attempt).padStart(2, '0')}-cand-${String(cand).padStart(2, '0')}.json`
+          );
+          writeJsonFile(outFile, {
+            nodeId,
+            attempt,
+            candidate: cand,
+            createdAt: nowIso(),
+            goal,
+            blueprintCount,
+            persona_id: persona ? persona.id : null,
+            output: pack,
+          });
+
+          const gates: DasGateResult[] = [];
+          const evalList = policy.eval;
+          if (evalList.includes('structural')) gates.push(evalStructuralControlPack(pack));
+          if (evalList.includes('bounds')) gates.push(evalBoundsControlPack(pack));
+          for (const gName of evalList) {
+            if (gName === 'structural' || gName === 'bounds' || gName === 'testOnly_failOnce') continue;
+            gates.push(gate(gName, false, 'hard_fail', 0, 'not_implemented'));
+          }
+
+          const ok = gates.every((g) => g.ok);
+          const score = gates.reduce((acc, g) => acc + (Number(g.score) || 0), 0);
+          attemptRec.candidates.push({
+            attempt,
+            candidate: cand,
+            ok,
+            score,
+            file: path.relative(runDir, outFile),
+            gates,
+          });
+          if (ok) candidateValues.push({ pack, file: path.relative(runDir, outFile), score, candidate: cand });
+        }
+
+        if (candidateValues.length) {
+          candidateValues.sort((a, b) => b.score - a.score);
+          const best = candidateValues[0]!;
+          selected = { pack: best.pack, file: best.file, attempt, candidate: best.candidate, score: best.score };
+          attemptRec.selectedCandidate = best.candidate;
+          attemptRec.status = 'selected';
+          decision.selected = { attempt, candidate: best.candidate, score: best.score, file: best.file };
+          dasSelection.selected[nodeId] = { attempt, candidate: best.candidate, score: best.score, file: best.file };
+          writeDasLogs();
+          break;
+        }
+
+        attemptRec.status = attempt === attemptCount ? 'exhausted' : 'retry';
+        writeDasLogs();
+      }
+
+      if (!selected) throw new Error(`DAS failed: no passing control_pack candidate after ${attemptCount} attempt(s)`);
+      controlPack = selected.pack;
+      writePack(selected.pack, { dasEnabled: true, policy, selected: decision.selected || null });
+      renderAndApply(selected.pack);
+      return { ok: true };
+    });
+  }
 
   // Prompt composition: optional, template-based "user-like inputs" derived from (persona + goal).
   // When enabled, specRun is overridden so downstream nodes consume the composed prompts.
