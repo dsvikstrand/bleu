@@ -117,3 +117,16 @@ Next steps
 b1) [todo] Implement the LIB_GEN eval gate + retry wiring
 b2) [todo] Run a DAS smoke test and link the run_log.json
 ```
+
+## 13) Mermaid (.mmd) rendering gotchas
+
+m1) Keep node and edge labels ASCII-only. Avoid unicode symbols (example: `✔`) and emojis.
+m2) Avoid `<` and `>` in labels (example: use `PERSONA_ID` instead of `<id>`).
+m3) Avoid multiline labels and escape tricks. Keep labels single-line.
+m4) Prefer quoted labels for punctuation: `NODE_ID["text here"]` instead of `NODE_ID[text here]`.
+m5) Keep node ids simple: letters/numbers/underscores only (put extra info in the label).
+m6) For note nodes (`NOTE{{...}}`), keep note text short and ASCII.
+m7) Debug method: if rendering breaks, remove or comment the last edits until it renders, then add text back incrementally.
+
+How to use this in msgs
+m8) If you hit a Mermaid parse error, paste the error line number and snippet. I will rewrite the offending labels to the safe subset above.
