@@ -93,3 +93,27 @@ Preferred patterns
 Troubleshooting
 - If you see `Permission denied (publickey)`: confirm the key path and that `oracle_id_ed25519` is present on this machine. Add with `ssh-add ~/.ssh/oracle_id_ed25519` if using an agent, or ensure the `IdentityFile` path above exists.
 - First connect may prompt to accept the host key; answer `yes` once.
+
+## 12) [have]/[todo] status tags
+
+Use `[have]` and `[todo]` at the start of bullet items when describing project state, plans, and reviews (especially for ASS/DAS work).
+
+Definitions
+- `[have]`: implemented and verified (or explicitly confirmed working).
+- `[todo]`: missing, not implemented yet, or not verified.
+
+How to use in messages
+- Before a multi-step plan: include a short `Status` section with a mix of `[have]` and `[todo]`.
+- For execution plans: tag each step as `[todo]` unless it is already done (`[have]`).
+- For reviews: tag each finding as `[todo]` and call out if it is blocking vs non-blocking.
+
+Example format
+```
+Status
+a1) [have] Stage 0 runner produces artifacts under seed/outputs/<run_id>/
+a2) [todo] Add real quality eval gates (relevance/safety/pii) for LIB_GEN
+
+Next steps
+b1) [todo] Implement the LIB_GEN eval gate + retry wiring
+b2) [todo] Run a DAS smoke test and link the run_log.json
+```
