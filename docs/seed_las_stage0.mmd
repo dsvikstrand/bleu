@@ -4,6 +4,7 @@
 flowchart TD
   %% Stage markers (stadium)
   ST_IN([STAGE Inputs]) -.-> IN_SPEC
+  ST_PP([STAGE Compose Prompts]) -.-> PROMPT_PACK
   ST_AUTH([STAGE Auth]) -.-> AUTH_READ
   ST_LIB([STAGE Generate Library]) -.-> LIB_GEN
   ST_BP([STAGE Generate Blueprints]) -.-> BP_GEN
@@ -12,12 +13,14 @@ flowchart TD
   ST_PERS([STAGE Persona Contract]) -.-> PERS_SCHEMA
   ST_DAS([STAGE DAS gates and retries]) -.-> LIB_EVAL
   ST_DAS -.-> BP_EVAL
+  ST_DAS -.-> PP_EVAL
   ST_DAS -.-> DAS_CFG
 
   %% Stage-based styling
   classDef stage_marker fill:#0b1220,stroke:#253047,color:#e7eefc,stroke-width:1px;
   classDef stage_inputs fill:#102a43,stroke:#1e4e8c,color:#e7f0ff;
   classDef stage_auth fill:#11324a,stroke:#2563eb,color:#e7f0ff;
+  classDef stage_comp fill:#1c1b3a,stroke:#6366f1,color:#eef2ff;
   classDef stage_lib fill:#0f3d2e,stroke:#1b6b4b,color:#e7fff2;
   classDef stage_bps fill:#3a2a10,stroke:#8a5b12,color:#fff4e5;
   classDef stage_ai fill:#3b1030,stroke:#7d1f66,color:#ffe8f7;
@@ -34,6 +37,20 @@ flowchart TD
   IN_RUN --> OUT_DIR["OUT_DIR Create run folder seed/outputs/RUN_ID/ TESTED_OK"]
   IN_RUN -.-> DAS_CFG["DAS_CFG seed/das_config_v1.json (DAS policy) TESTED_OK"]
   IN_RUN -.-> PERS_SCHEMA["PERS_SCHEMA docs/persona_schema.md (persona contract) TESTED_OK"]
+
+  %% Prompt pack (optional, template v0)
+  OUT_DIR -.->|--compose-prompts| PROMPT_PACK["PROMPT_PACK compose prompts (template v0) NOT_TESTED"]
+  DAS_CFG -.-> PP_EVAL
+  PROMPT_PACK --> PP_CAND["PP_CAND Write candidates/PROMPT_PACK/attempt-xx-cand-yy.json NOT_TESTED"]
+  PP_CAND --> PP_EVAL{"PP_EVAL eval_structural + eval_bounds NOT_TESTED"}
+  PP_EVAL -->|pass| PP_SEL["PP_SEL score + select best candidate NOT_TESTED"]
+  PP_EVAL -->|fail and attempt lt max| PP_RETRY["PP_RETRY retry (maxAttempts=2) NOT_TESTED"]
+  PP_RETRY --> PROMPT_PACK
+  PP_SEL --> PP_OUT["PP_OUT Write requests/prompt_pack.json NOT_TESTED"]
+  PROMPT_PACK --> PP_LOG["PP_LOG Write logs/prompt_pack_log.json NOT_TESTED"]
+  PP_OUT --> AUTH_READ
+  N_PP{{NOTE composed prompts override specRun library + blueprints}} --> PROMPT_PACK
+  N_PP2{{NOTE v0 is template; LLM composer is TODO}} --> PROMPT_PACK
 
   %% Auth
   OUT_DIR --> AUTH_READ["AUTH_READ Load auth store + tokens (refresh supported) TESTED_OK"]
@@ -115,6 +132,8 @@ flowchart TD
   %% Styling assignments
   class ST_IN,ST_AUTH,ST_LIB,ST_BP,ST_AI,ST_APPLY,ST_PERS,ST_DAS stage_marker;
   class IN_SPEC,IN_RUN,OUT_DIR stage_inputs;
+  class ST_PP stage_marker;
+  class PROMPT_PACK,PP_OUT,PP_LOG stage_comp;
   class AUTH_READ stage_auth;
   class LIB_GEN,LIB_OUT stage_lib;
   class BP_GEN,BP_OUT,REQ_REVIEW,OUT_REVIEW_REQ,REQ_BANNER,OUT_BANNER_REQ stage_bps;
@@ -122,11 +141,12 @@ flowchart TD
   class VAL,OUT_VAL,PAYLOAD,OUT_PAYLOAD,RUNLOG,DONE stage_inputs;
   class APPLY_START,APPLY_INV,APPLY_BP,APPLY_BANNER,APPLY_REVIEW,APPLY_PUB stage_apply;
   class PERS_SCHEMA,PERS_PROFILE,PERS_LOG stage_pers;
-  class LIB_CAND,LIB_EVAL,LIB_SEL,LIB_RETRY,BP_CAND,BP_EVAL,BP_SEL,BP_RETRY,ABORT das_gate;
+  class PP_CAND,PP_EVAL,PP_SEL,PP_RETRY,LIB_CAND,LIB_EVAL,LIB_SEL,LIB_RETRY,BP_CAND,BP_EVAL,BP_SEL,BP_RETRY,ABORT das_gate;
   class DAS_CFG das_cfg;
-  class N_AUTH,N_AUTH2,N_OUT,N_PERS,N_DAS,N_DAS2,N_SSE,N_DRY,N_APPLY,N_APPLY2 note;
+  class N_AUTH,N_AUTH2,N_OUT,N_PERS,N_DAS,N_DAS2,N_SSE,N_DRY,N_APPLY,N_APPLY2,N_PP,N_PP2 note;
   class TODO_ASP_EVAL,TODO_GRADER,TODO_COST todo;
 
   %% Tested status styling
   class IN_SPEC,IN_RUN,OUT_DIR,PERS_SCHEMA,PERS_PROFILE,PERS_LOG,AUTH_READ,DAS_CFG,LIB_GEN,LIB_CAND,LIB_EVAL,LIB_SEL,LIB_RETRY,LIB_OUT,BP_GEN,BP_CAND,BP_EVAL,BP_SEL,BP_RETRY,BP_OUT,REQ_REVIEW,OUT_REVIEW_REQ,REQ_BANNER,OUT_BANNER_REQ,AI_REVIEW,OUT_REVIEWS,AI_BANNER,OUT_BANNERS,VAL,OUT_VAL,PAYLOAD,OUT_PAYLOAD,RUNLOG,DONE,APPLY_START,APPLY_INV,APPLY_BP,APPLY_BANNER,APPLY_REVIEW,APPLY_PUB done;
   class ABORT,TODO_ASP_EVAL,TODO_GRADER,TODO_COST todo;
+  class PROMPT_PACK,PP_CAND,PP_EVAL,PP_SEL,PP_RETRY,PP_OUT,PP_LOG todo;

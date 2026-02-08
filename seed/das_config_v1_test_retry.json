@@ -2,7 +2,7 @@
   "version": 1,
   "notes": [
     "Test config to validate DAS retry/select-best wiring without debating eval metrics.",
-    "Forces a single retry on LIB_GEN via testOnly.failOnce.",
+    "Forces a single retry on PROMPT_PACK and LIB_GEN via testOnly.failOnce.",
     "Keep this file for local/Oracle validation runs only."
   ],
   "defaults": {
@@ -13,6 +13,11 @@
     "onHardFail": "stop_run"
   },
   "nodes": {
+    "PROMPT_PACK": {
+      "kCandidates": 1,
+      "maxAttempts": 2,
+      "eval": ["structural", "bounds", "testOnly_failOnce"]
+    },
     "LIB_GEN": {
       "kCandidates": 1,
       "maxAttempts": 2,
@@ -36,7 +41,7 @@
   "testOnly": {
     "enabled": true,
     "failOnce": {
-      "nodes": ["LIB_GEN"],
+      "nodes": ["PROMPT_PACK", "LIB_GEN"],
       "failOnAttempt": 1
     }
   }

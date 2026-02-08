@@ -5,6 +5,9 @@
    - The runner appends the persona prompt block into:
      - `LIB_GEN` request `customInstructions`
      - `BP_GEN` request `notes`
+   - Optional: `--compose-prompts` composes a "prompt pack" (template-based v0) from `(persona + goal)` and
+     overrides the effective `library` + `blueprints` used downstream.
+     - Writes `requests/prompt_pack.json` + `logs/prompt_pack_log.json`.
 2. Call `generate-inventory` using `library.topic` + `library.title` + `library.notes`.
 3. For each blueprint variant:
    - Call `generate-blueprint` with variant title/description/notes and the library categories.
@@ -80,8 +83,10 @@ Outputs:
 - `seed/outputs/<run_id>/manifest.json` (paths + dirs map)
 - `seed/outputs/<run_id>/logs/run_meta.json` (run context including optional `asp`)
 - `seed/outputs/<run_id>/logs/run_log.json`
+- `seed/outputs/<run_id>/logs/prompt_pack_log.json` (only when `--compose-prompts`)
 - `seed/outputs/<run_id>/artifacts/library.json`
 - `seed/outputs/<run_id>/artifacts/blueprints.json`
+- `seed/outputs/<run_id>/requests/prompt_pack.json` (only when `--compose-prompts`)
 - `seed/outputs/<run_id>/requests/review_requests.json` (payloads only)
 - `seed/outputs/<run_id>/requests/banner_requests.json` (payloads only)
 - `seed/outputs/<run_id>/artifacts/validation.json`
@@ -190,7 +195,7 @@ DAS v1 adds retry loops and "select best out of k candidates" to generation node
 
 Config:
 - `seed/das_config_v1.json` (per-node `maxAttempts`, `kCandidates`, `eval[]`)
-- `seed/das_config_v1_test_retry.json` (forces one retry on `LIB_GEN` for validation)
+- `seed/das_config_v1_test_retry.json` (forces one retry on `PROMPT_PACK` and `LIB_GEN` for validation)
 
 New artifacts (when DAS is enabled):
 - `seed/outputs/<run_id>/candidates/<node_id>/attempt-01.json` ...
@@ -208,6 +213,7 @@ npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \
   --run-id das-smoke \
   --limit-blueprints 1 \
   --auth-store seed/seed_auth.local \
+  --compose-prompts \
   --das \
   --das-config seed/das_config_v1_test_retry.json
 ```

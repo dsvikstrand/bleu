@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { loadPersonaV0, type PersonaV0 } from './lib/persona_v0';
+import { composePromptPackV0, type PromptPackV0 } from './lib/prompt_pack_v0';
 
 type AspProfile = {
   id: string;
@@ -75,7 +76,7 @@ type BannerPayload = {
   dryRun?: boolean;
 };
 
-type DasNodeId = 'AUTH_READ' | 'LIB_GEN' | 'BP_GEN' | 'VAL' | 'AI_REVIEW' | 'AI_BANNER' | 'APPLY';
+type DasNodeId = 'AUTH_READ' | 'PROMPT_PACK' | 'LIB_GEN' | 'BP_GEN' | 'VAL' | 'AI_REVIEW' | 'AI_BANNER' | 'APPLY';
 
 type DasGateSeverity = 'info' | 'warn' | 'hard_fail';
 
@@ -237,6 +238,8 @@ type RunLog = {
     dasConfigPath?: string;
     dasConfigHash?: string;
     limitBlueprints?: number;
+    composePrompts?: boolean;
+    promptPackHash?: string;
     aspId?: string;
     personaHash?: string;
     runContextHash?: string;
@@ -315,6 +318,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--do-review') out.doReview = true;
     else if (a === '--review-focus') out.reviewFocus = argv[++i] ?? '';
     else if (a === '--do-banner') out.doBanner = true;
+    else if (a === '--compose-prompts') out.composePrompts = true;
     else if (a === '--apply') out.apply = true;
     else if (a === '--das') out.das = true;
     else if (a === '--das-config') out.dasConfig = argv[++i] ?? '';
@@ -496,6 +500,63 @@ function evalBoundsBlueprints(blueprints: GeneratedBlueprint[]): DasGateResult {
       }
     }
   }
+  return gate('bounds', true, 'info', 1, 'ok', limits);
+}
+
+function evalStructuralPromptPack(pack: PromptPackV0): DasGateResult {
+  const goal = String(pack?.goal || '').trim();
+  if (!goal) return gate('structural', false, 'warn', 0, 'missing_goal');
+
+  const lib = pack?.library as any;
+  if (!lib || !String(lib.topic || '').trim()) return gate('structural', false, 'warn', 0, 'missing_library_topic');
+  if (!String(lib.title || '').trim()) return gate('structural', false, 'warn', 0, 'missing_library_title');
+
+  const bps = Array.isArray(pack?.blueprints) ? pack.blueprints : [];
+  if (bps.length === 0) return gate('structural', false, 'warn', 0, 'no_blueprints', { blueprintCount: 0 });
+  for (const bp of bps) {
+    if (!String(bp?.title || '').trim()) return gate('structural', false, 'warn', 0, 'missing_blueprint_title');
+  }
+  return gate('structural', true, 'info', 1, 'ok', { blueprintCount: bps.length });
+}
+
+function evalBoundsPromptPack(pack: PromptPackV0): DasGateResult {
+  const limits = {
+    maxGoalLen: 200,
+    maxTitleLen: 80,
+    maxDescriptionLen: 240,
+    maxNotesLen: 1200,
+    maxTags: 12,
+    maxTagLen: 40,
+    maxBlueprints: 8,
+  };
+
+  const goal = String(pack?.goal || '');
+  if (goal.length > limits.maxGoalLen) return gate('bounds', false, 'warn', 0, 'goal_too_long', limits);
+
+  const lib = pack?.library;
+  const libTitleLen = String(lib?.title || '').length;
+  if (libTitleLen > limits.maxTitleLen) return gate('bounds', false, 'warn', 0, 'library_title_too_long', limits);
+  const libDescLen = String(lib?.description || '').length;
+  if (libDescLen > limits.maxDescriptionLen) return gate('bounds', false, 'warn', 0, 'library_description_too_long', limits);
+  const libNotesLen = String(lib?.notes || '').length;
+  if (libNotesLen > limits.maxNotesLen) return gate('bounds', false, 'warn', 0, 'library_notes_too_long', limits);
+
+  const bps = Array.isArray(pack?.blueprints) ? pack.blueprints : [];
+  if (bps.length > limits.maxBlueprints) return gate('bounds', false, 'warn', 0, 'too_many_blueprints', limits);
+  for (const bp of bps) {
+    const tLen = String(bp?.title || '').length;
+    if (tLen > limits.maxTitleLen) return gate('bounds', false, 'warn', 0, 'blueprint_title_too_long', limits);
+    const dLen = String(bp?.description || '').length;
+    if (dLen > limits.maxDescriptionLen) return gate('bounds', false, 'warn', 0, 'blueprint_description_too_long', limits);
+    const nLen = String(bp?.notes || '').length;
+    if (nLen > limits.maxNotesLen) return gate('bounds', false, 'warn', 0, 'blueprint_notes_too_long', limits);
+    const tags = (bp?.tags || []).map((x) => String(x || '')).filter(Boolean);
+    if (tags.length > limits.maxTags) return gate('bounds', false, 'warn', 0, 'too_many_tags', limits);
+    for (const tag of tags) {
+      if (String(tag).length > limits.maxTagLen) return gate('bounds', false, 'warn', 0, 'tag_too_long', limits);
+    }
+  }
+
   return gate('bounds', true, 'info', 1, 'ok', limits);
 }
 
@@ -749,6 +810,7 @@ async function main() {
         '  --do-review                Execute /api/analyze-blueprint (Stage 0.5)',
         '  --review-focus <text>      Optional reviewPrompt for /api/analyze-blueprint',
         '  --do-banner                Execute /api/generate-banner in dryRun mode (Stage 0.5; no Storage upload)',
+        '  --compose-prompts          Compose user-like prompts from persona + goal (writes requests/prompt_pack.json)',
         '  --apply                    Stage 1 apply mode (writes to Supabase)',
         '  --das                      Enable DAS v1 (dynamic gates, retries, select-best; uses das config)',
         '  --das-config <path>        DAS config JSON path (default: seed/das_config_v1.json)',
@@ -767,6 +829,7 @@ async function main() {
   const backendCalls = !args.noBackend;
   const doReview = !!args.doReview;
   const doBanner = !!args.doBanner;
+  const composePrompts = !!args.composePrompts;
   const reviewFocus = String(args.reviewFocus || '').trim();
   const dasEnabled = Boolean(args.das || args.dasConfig);
   const dasConfigPath = String(args.dasConfig || 'seed/das_config_v1.json');
@@ -776,6 +839,9 @@ async function main() {
   const spec = readJsonFile<SeedSpec>(specPath);
   const specErrors = validateSeedSpec(spec);
   if (specErrors.length) die(`Invalid spec:\n- ${specErrors.join('\n- ')}`);
+
+  // specRun is the "effective" spec for this run. It may be overridden by prompt composition.
+  let specRun: SeedSpec = spec;
 
   const aspId = spec.asp?.id ? String(spec.asp.id).trim() : '';
   let persona: PersonaV0 | null = null;
@@ -851,6 +917,7 @@ async function main() {
       runMeta: 'logs/run_meta.json',
       runLog: 'logs/run_log.json',
       personaLog: 'logs/persona_log.json',
+      promptPackLog: 'logs/prompt_pack_log.json',
       decisionLog: 'logs/decision_log.json',
       selection: 'logs/selection.json',
       applyLog: 'logs/apply_log.json',
@@ -859,6 +926,7 @@ async function main() {
       blueprints: 'artifacts/blueprints.json',
       validation: 'artifacts/validation.json',
       publishPayload: 'artifacts/publish_payload.json',
+      promptPack: 'requests/prompt_pack.json',
       reviewRequests: 'requests/review_requests.json',
       bannerRequests: 'requests/banner_requests.json',
       reviews: 'ai/reviews.json',
@@ -866,7 +934,7 @@ async function main() {
     },
   });
 
-  writeJsonFile(outPath.logs('run_meta.json'), {
+  const runMeta: any = {
     runId,
     createdAt,
     layoutVersion: outputLayoutVersion,
@@ -881,6 +949,14 @@ async function main() {
           prompt_hash: personaPromptHash,
         }
       : null,
+    composer: composePrompts
+      ? {
+          enabled: true,
+          mode: 'template',
+          run_type: 'seed',
+          prompt_pack_path: 'requests/prompt_pack.json',
+        }
+      : { enabled: false },
     runContextHash,
     das: dasEnabled
       ? {
@@ -889,7 +965,8 @@ async function main() {
           configHash: dasConfigHash,
         }
       : { enabled: false },
-  });
+  };
+  writeJsonFile(outPath.logs('run_meta.json'), runMeta);
 
   if (persona) {
     writeJsonFile(outPath.logs('persona_log.json'), {
@@ -916,6 +993,7 @@ async function main() {
       outputLayoutVersion,
       agenticBaseUrl,
       backendCalls,
+      composePrompts,
       applyStage1,
       limitBlueprints,
       ...(dasEnabled ? { dasEnabled: true, dasConfigPath, dasConfigHash } : {}),
@@ -972,6 +1050,200 @@ async function main() {
       writeJsonFile(outPath.logs('run_log.json'), { ...runLog, finishedAt: nowIso() });
     }
   };
+
+  // Prompt composition: optional, template-based "user-like inputs" derived from (persona + goal).
+  // When enabled, specRun is overridden so downstream nodes consume the composed prompts.
+  let promptPack: PromptPackV0 | null = null;
+  let promptPackHash = '';
+  if (composePrompts) {
+    await step('compose_prompts', async () => {
+      const nodeId: DasNodeId = 'PROMPT_PACK';
+      const goal = String(specRun.library.topic || '').trim();
+      const blueprintCountRaw =
+        limitBlueprints > 0 ? Math.min(limitBlueprints, specRun.blueprints.length) : specRun.blueprints.length;
+      const blueprintCount = Math.max(1, blueprintCountRaw);
+
+      const writePack = (pack: PromptPackV0, meta: Record<string, unknown>) => {
+        const raw = JSON.stringify(pack, null, 2) + '\n';
+        promptPackHash = sha256Hex(raw);
+        runLog.config.promptPackHash = promptPackHash;
+        writeJsonFile(outPath.requests('prompt_pack.json'), pack);
+        writeJsonFile(outPath.logs('prompt_pack_log.json'), {
+          version: 1,
+          createdAt: nowIso(),
+          nodeId,
+          prompt_pack_hash: promptPackHash,
+          prompt_pack_path: relPath(outPath.requests('prompt_pack.json')),
+          ...meta,
+        });
+        // Record the hash in run_meta for reproducibility.
+        if (runMeta.composer && runMeta.composer.enabled) {
+          runMeta.composer.prompt_pack_hash = promptPackHash;
+        }
+        writeJsonFile(outPath.logs('run_meta.json'), runMeta);
+      };
+
+      if (!dasEnabled || !dasConfig || !dasDecision || !dasSelection) {
+        const pack = composePromptPackV0({
+          runType: 'seed',
+          goal,
+          persona,
+          blueprintCount,
+        });
+        const gates: DasGateResult[] = [evalStructuralPromptPack(pack), evalBoundsPromptPack(pack)];
+        if (!gates.every((g) => g.ok)) {
+          throw new Error(`PROMPT_PACK gates failed: ${gates.filter((g) => !g.ok).map((g) => g.reason).join(', ')}`);
+        }
+        promptPack = pack;
+        specRun = { ...specRun, library: pack.library as any, blueprints: pack.blueprints as any };
+        writePack(pack, { dasEnabled: false, selected: { attempt: 1, candidate: 1 }, gates });
+        return { ok: true };
+      }
+
+      const policy = getDasPolicy(dasConfig, nodeId);
+      const decision: DasNodeDecision = { nodeId, policy, attempts: [] };
+      dasDecision.nodes[nodeId] = decision;
+      ensureDir(path.join(runDir, 'candidates', nodeId));
+
+      const failOnceEnabled =
+        !!dasConfig.testOnly?.enabled &&
+        !!dasConfig.testOnly?.failOnce &&
+        Array.isArray(dasConfig.testOnly.failOnce.nodes) &&
+        dasConfig.testOnly.failOnce.nodes.includes(nodeId) &&
+        Number(dasConfig.testOnly.failOnce.failOnAttempt || 0) > 0;
+      const failOnAttempt = Number(dasConfig.testOnly?.failOnce?.failOnAttempt || 0) || 0;
+
+      if (!policy.enabled) {
+        decision.attempts.push({ attempt: 1, candidates: [], status: 'disabled' });
+        writeDasLogs();
+        const pack = composePromptPackV0({
+          runType: 'seed',
+          goal,
+          persona,
+          blueprintCount,
+        });
+        promptPack = pack;
+        specRun = { ...specRun, library: pack.library as any, blueprints: pack.blueprints as any };
+        writePack(pack, { dasEnabled: true, policy, selected: { attempt: 1, candidate: 1 }, gates: [] });
+        return { ok: true };
+      }
+
+      const attemptCount = policy.maxAttempts;
+      const k = policy.kCandidates;
+      let selected: { pack: PromptPackV0; file: string; attempt: number; candidate: number; score: number } | null = null;
+
+      for (let attempt = 1; attempt <= attemptCount; attempt += 1) {
+        const attemptRec: DasNodeDecision['attempts'][number] = { attempt, candidates: [], status: 'retry' };
+        decision.attempts.push(attemptRec);
+
+        if (failOnceEnabled && attempt === failOnAttempt) {
+          const file = path.join(runDir, 'candidates', nodeId, `attempt-${String(attempt).padStart(2, '0')}-skipped.json`);
+          writeJsonFile(file, { nodeId, attempt, skipped: true, reason: 'testOnly_failOnce', createdAt: nowIso() });
+          attemptRec.candidates.push({
+            attempt,
+            candidate: 0,
+            ok: false,
+            score: 0,
+            skipped: true,
+            file: path.relative(runDir, file),
+            gates: [gate('testOnly_failOnce', false, 'warn', 0, 'forced_retry', { attempt })],
+          });
+          attemptRec.status = attempt === attemptCount ? 'exhausted' : 'retry';
+          writeDasLogs();
+          continue;
+        }
+
+        const candidateValues: Array<{ pack: PromptPackV0; file: string; score: number; candidate: number }> = [];
+        for (let cand = 1; cand <= k; cand += 1) {
+          const templateOffset = (attempt - 1) * k + (cand - 1);
+          let pack: PromptPackV0 | null = null;
+          try {
+            pack = composePromptPackV0({
+              runType: 'seed',
+              goal,
+              persona,
+              blueprintCount,
+              templateOffset,
+            });
+          } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            attemptRec.candidates.push({
+              attempt,
+              candidate: cand,
+              ok: false,
+              score: 0,
+              error: err.message.slice(0, 500),
+              gates: [gate('exception', false, 'warn', 0, 'compose_threw')],
+            });
+            continue;
+          }
+
+          const outFile = path.join(
+            runDir,
+            'candidates',
+            nodeId,
+            `attempt-${String(attempt).padStart(2, '0')}-cand-${String(cand).padStart(2, '0')}.json`
+          );
+          writeJsonFile(outFile, {
+            nodeId,
+            attempt,
+            candidate: cand,
+            createdAt: nowIso(),
+            goal,
+            blueprintCount,
+            persona_id: persona ? persona.id : null,
+            output: pack,
+          });
+
+          const gates: DasGateResult[] = [];
+          const evalList = policy.eval;
+          if (evalList.includes('structural')) gates.push(evalStructuralPromptPack(pack));
+          if (evalList.includes('bounds')) gates.push(evalBoundsPromptPack(pack));
+
+          for (const gName of evalList) {
+            if (gName === 'structural' || gName === 'bounds' || gName === 'testOnly_failOnce') continue;
+            gates.push(gate(gName, false, 'hard_fail', 0, 'not_implemented'));
+          }
+
+          const ok = gates.every((g) => g.ok);
+          const score = gates.reduce((acc, g) => acc + (Number(g.score) || 0), 0);
+          attemptRec.candidates.push({
+            attempt,
+            candidate: cand,
+            ok,
+            score,
+            file: path.relative(runDir, outFile),
+            gates,
+          });
+          if (ok) candidateValues.push({ pack, file: path.relative(runDir, outFile), score, candidate: cand });
+        }
+
+        if (candidateValues.length) {
+          candidateValues.sort((a, b) => b.score - a.score);
+          const best = candidateValues[0]!;
+          selected = { pack: best.pack, file: best.file, attempt, candidate: best.candidate, score: best.score };
+          attemptRec.selectedCandidate = best.candidate;
+          attemptRec.status = 'selected';
+          decision.selected = { attempt, candidate: best.candidate, score: best.score, file: best.file };
+          dasSelection.selected[nodeId] = { attempt, candidate: best.candidate, score: best.score, file: best.file };
+          writeDasLogs();
+          break;
+        }
+
+        attemptRec.status = attempt === attemptCount ? 'exhausted' : 'retry';
+        writeDasLogs();
+      }
+
+      if (!selected) {
+        throw new Error(`DAS failed: no passing prompt_pack candidate after ${attemptCount} attempt(s)`);
+      }
+
+      promptPack = selected.pack;
+      specRun = { ...specRun, library: selected.pack.library as any, blueprints: selected.pack.blueprints as any };
+      writePack(selected.pack, { dasEnabled: true, policy, selected: decision.selected || null });
+      return { ok: true };
+    });
+  }
 
   // Auth: prefer explicit access token; optionally refresh via refresh token and persist rotation in authStorePath.
   const supabaseUrlForAuth =
@@ -1033,10 +1305,10 @@ async function main() {
   const inventory = await step('generate_library', async () => {
     if (!backendCalls) throw new Error('Backend calls disabled (no-backend not implemented in Stage 0)');
     const url = `${agenticBaseUrl}/api/generate-inventory`;
-    const customInstructions = joinPromptParts([spec.library.notes || '', personaPromptBlock]);
+    const customInstructions = joinPromptParts([specRun.library.notes || '', personaPromptBlock]);
     const body = {
-      keywords: spec.library.topic,
-      title: spec.library.title,
+      keywords: specRun.library.topic,
+      title: specRun.library.title,
       customInstructions,
     };
 
@@ -1052,7 +1324,7 @@ async function main() {
         throw new Error(`generate-inventory failed (${res.status}): ${res.text.slice(0, 500)}`);
       }
       writeJsonFile(outPath.artifacts('library.json'), {
-        ...spec.library,
+        ...specRun.library,
         ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
         generated: res.data,
       });
@@ -1080,7 +1352,7 @@ async function main() {
       const res = await postJson<InventorySchema>(url, accessToken, body);
       if (!res.ok) throw new Error(`generate-inventory failed (${res.status}): ${res.text.slice(0, 500)}`);
       writeJsonFile(outPath.artifacts('library.json'), {
-        ...spec.library,
+        ...specRun.library,
         ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
         generated: res.data,
       });
@@ -1199,7 +1471,7 @@ async function main() {
     }
 
     writeJsonFile(outPath.artifacts('library.json'), {
-      ...spec.library,
+      ...specRun.library,
       ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
       generated: selected.inv,
     });
@@ -1211,7 +1483,7 @@ async function main() {
     const url = `${agenticBaseUrl}/api/generate-blueprint`;
     const categories = (inventory.categories || []).map((c) => ({ name: c.name, items: c.items }));
 
-    const blueprintSpecs = limitBlueprints > 0 ? spec.blueprints.slice(0, limitBlueprints) : spec.blueprints;
+    const blueprintSpecs = limitBlueprints > 0 ? specRun.blueprints.slice(0, limitBlueprints) : specRun.blueprints;
 
     const generateOnce = async (): Promise<{
       results: Array<{ spec: SeedSpec['blueprints'][number]; generated: GeneratedBlueprint }>;
@@ -1230,7 +1502,7 @@ async function main() {
           title: bp.title,
           description: bp.description || '',
           notes,
-          inventoryTitle: spec.library.title,
+          inventoryTitle: specRun.library.title,
           categories,
         };
         requests.push(body);
@@ -1252,7 +1524,7 @@ async function main() {
       await ensureValidAccessToken();
       const { results, list } = await generateOnce();
       writeJsonFile(outPath.artifacts('blueprints.json'), {
-        libraryTitle: spec.library.title,
+        libraryTitle: specRun.library.title,
         ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
         blueprints: results,
       });
@@ -1279,7 +1551,7 @@ async function main() {
       await ensureValidAccessToken();
       const { results, list } = await generateOnce();
       writeJsonFile(outPath.artifacts('blueprints.json'), {
-        libraryTitle: spec.library.title,
+        libraryTitle: specRun.library.title,
         ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
         blueprints: results,
       });
@@ -1421,7 +1693,7 @@ async function main() {
 
     // Persist the selected set as the canonical artifact.
     writeJsonFile(outPath.artifacts('blueprints.json'), {
-      libraryTitle: spec.library.title,
+      libraryTitle: specRun.library.title,
       ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
       blueprints: blueprintSpecs.map((bp, i) => ({ spec: bp, generated: selected!.list[i]! })),
     });
@@ -1430,14 +1702,14 @@ async function main() {
 
   const reviewPayloads = await step('generate_review_requests', async () => {
     // Stage 0: do not call review endpoint (cost + credits). Produce payloads only.
-    const payloads = generatedBlueprints.map((bp) => buildReviewPayload(spec, bp));
+    const payloads = generatedBlueprints.map((bp) => buildReviewPayload(specRun, bp));
     writeJsonFile(outPath.requests('review_requests.json'), payloads);
     return payloads;
   });
 
   const bannerPayloads = await step('generate_banner_requests', async () => {
     // Stage 0: do not call banner endpoint (would upload to Storage). Produce payloads only.
-    const payloads = generatedBlueprints.map((bp, idx) => buildBannerPayload(spec, bp, idx));
+    const payloads = generatedBlueprints.map((bp, idx) => buildBannerPayload(specRun, bp, idx));
     writeJsonFile(outPath.requests('banner_requests.json'), payloads);
     return payloads;
   });
@@ -1668,15 +1940,15 @@ async function main() {
       bannerUploads: [] as Array<{ blueprintTitle: string; ok: boolean; bannerUrl?: string; error?: string }>,
     };
 
-    const invTags = ensureTags(spec.library.tags || []);
+    const invTags = ensureTags(specRun.library.tags || []);
     const inventoryRow = await step('apply_T1_insert_inventory', async () => {
       const categories = (inventory.categories || []).map((c) => c.name).filter(Boolean);
       const promptCategories = categories.join(', ');
       const row = await restInsert<{ id: string }>(
         'inventories',
         {
-          title: spec.library.title,
-          prompt_inventory: spec.library.topic,
+          title: specRun.library.title,
+          prompt_inventory: specRun.library.topic,
           prompt_categories: promptCategories,
           generated_schema: inventory,
           review_sections: ['Overview', 'Strengths', 'Gaps', 'Suggestions'],
@@ -1707,7 +1979,7 @@ async function main() {
     await step('apply_T2_insert_blueprints', async () => {
       let idx = 0;
       for (const bp of generatedBlueprints) {
-        const variant = spec.blueprints[idx] || {};
+        const variant = specRun.blueprints[idx] || {};
         idx += 1;
 
         const selectedItems: Record<string, Array<string | { name: string; context?: string }>> = {};
@@ -1722,7 +1994,7 @@ async function main() {
           }
         }
 
-        const mixNotes = String(variant.notes || spec.library.notes || '').trim() || null;
+        const mixNotes = String(variant.notes || specRun.library.notes || '').trim() || null;
         const row = await restInsert<{ id: string }>(
           'blueprints',
           {
@@ -1750,12 +2022,12 @@ async function main() {
     await step('apply_T2_tag_blueprints', async () => {
       let idx = 0;
       for (const bp of generatedBlueprints) {
-        const variant = spec.blueprints[idx] || {};
+        const variant = specRun.blueprints[idx] || {};
         idx += 1;
         const title = bp.title;
         const bpId = blueprintIdByTitle.get(title);
         if (!bpId) continue;
-        const tags = await ensureTags([...(spec.library.tags || []), ...((variant as any).tags || [])]);
+        const tags = await ensureTags([...(specRun.library.tags || []), ...((variant as any).tags || [])]);
         for (const t of tags) {
           await restInsert('blueprint_tags', { blueprint_id: bpId, tag_id: t.id }, 'blueprint_id,tag_id');
         }
@@ -1854,7 +2126,7 @@ async function main() {
   await step('publish_payload', async () => {
     const payload = {
       run_id: runId,
-      library: spec.library,
+      library: specRun.library,
       inventory: inventory,
       blueprints: generatedBlueprints,
       notes: 'Stage 0 only: no DB writes. Stage 1 will translate this payload into Supabase inserts.',
