@@ -75,7 +75,7 @@ SSH config to add (in this Codex env it lives at `/root/.ssh/config`):
 Host oracle-free
   HostName 140.238.158.227
   User ubuntu
-  IdentityFile ~/.ssh/oracle_id_ed25519
+  IdentityFile /root/.ssh/id_ed25519_codex_agentic
   IdentitiesOnly yes
   ControlMaster auto
   ControlPersist 10m
@@ -86,12 +86,17 @@ Sanity checks
 - `ssh oracle-free "echo ok"`
 - `ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git status -sb"`
 
+Node/tsx note (important)
+- One-shot `ssh oracle-free "node -v"` may use the system Node (`/usr/bin/node`, often old). For seed scripts, force Node 20 via nvm:
+  `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20.20.0 >/dev/null; node -v`
+
 Preferred patterns
 - One-shot: `ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git pull"`
-- SCP: `scp -i ~/.ssh/oracle_id_ed25519 localfile oracle-free:/home/ubuntu/remix-of-stackwise-advisor/`
+- Seed runner: `ssh oracle-free 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20.20.0 >/dev/null; cd /home/ubuntu/remix-of-stackwise-advisor && TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --help'`
+- SCP: `scp localfile oracle-free:/home/ubuntu/remix-of-stackwise-advisor/`
 
 Troubleshooting
-- If you see `Permission denied (publickey)`: confirm the key path and that `oracle_id_ed25519` is present on this machine. Add with `ssh-add ~/.ssh/oracle_id_ed25519` if using an agent, or ensure the `IdentityFile` path above exists.
+- If you see `Permission denied (publickey)`: confirm the key path and that `/root/.ssh/id_ed25519_codex_agentic` exists in this environment, and that the public key is in `~/.ssh/authorized_keys` on the server.
 - First connect may prompt to accept the host key; answer `yes` once.
 
 ## 12) [have]/[todo] status tags

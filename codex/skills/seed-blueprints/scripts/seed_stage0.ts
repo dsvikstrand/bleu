@@ -1314,11 +1314,13 @@ async function main() {
     const generateOnce = async (): Promise<{
       results: Array<{ spec: SeedSpec['blueprints'][number]; generated: GeneratedBlueprint }>;
       list: GeneratedBlueprint[];
+      requests: unknown[];
     }> => {
       const results: Array<{
         spec: SeedSpec['blueprints'][number];
         generated: GeneratedBlueprint;
       }> = [];
+      const requests: unknown[] = [];
 
       for (const bp of blueprintSpecs) {
         const notes = joinPromptParts([bp.notes || '', personaPromptBlock]);
@@ -1329,6 +1331,7 @@ async function main() {
           inventoryTitle: spec.library.title,
           categories,
         };
+        requests.push(body);
         let res = await postJson<GeneratedBlueprint>(url, accessToken, body);
         if (!res.ok && res.status === 401 && refreshToken) {
           await refreshSession();
@@ -1339,7 +1342,7 @@ async function main() {
         }
         results.push({ spec: bp, generated: res.data });
       }
-      return { results, list: results.map((r) => r.generated) };
+      return { results, list: results.map((r) => r.generated), requests };
     };
 
     // DAS v1: retries + select-best only when enabled.
@@ -1417,25 +1420,27 @@ async function main() {
       for (let cand = 1; cand <= k; cand += 1) {
         await ensureValidAccessToken();
         let list: GeneratedBlueprint[] = [];
+        let requests: unknown[] = [];
         let err: Error | null = null;
         try {
           const out = await generateOnce();
           list = out.list;
+          requests = out.requests;
         } catch (e) {
           err = e instanceof Error ? e : new Error(String(e));
         }
 
         if (err) {
-        attemptRec.candidates.push({
-          attempt,
-          candidate: cand,
-          ok: false,
-          score: 0,
-          error: err.message.slice(0, 500),
-          gates: [gate('exception', false, 'warn', 0, 'generate_blueprint_threw')],
-        });
-        continue;
-      }
+          attemptRec.candidates.push({
+            attempt,
+            candidate: cand,
+            ok: false,
+            score: 0,
+            error: err.message.slice(0, 500),
+            gates: [gate('exception', false, 'warn', 0, 'generate_blueprint_threw')],
+          });
+          continue;
+        }
 
         const outFile = path.join(
           runDir,
@@ -1449,6 +1454,7 @@ async function main() {
           candidate: cand,
           createdAt: nowIso(),
           blueprintCount: blueprintSpecs.length,
+          requests,
           output: list,
         });
 
