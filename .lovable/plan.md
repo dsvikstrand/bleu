@@ -1,270 +1,142 @@
 
-# Explore Page Implementation Plan
 
-## Repo State (Current)
-- `main` = agentic backend branch (deployed to the root URL).
-- `lovable-main` = legacy Lovable branch (deployed to `/lovable-backend/`).
+# Migration Step 1: Centralized Config + API Client Wrapper
 
 ## Overview
 
-Add a new public **Explore** page (`/explore`) as a search-first discovery hub for Blueprints, Inventories, and Users. The page emphasizes a minimal, search-forward design with unified results across all content types.
+This is a low-risk, zero-behavior-change refactor that creates two foundational files and updates existing `import.meta.env` references to flow through them. No UI changes, no DB migrations, no endpoint swaps.
 
----
+## Branch
 
-## Key Design Decisions
+Since Lovable cannot create Git branches, you'll create this branch yourself in your local repo:
 
-Based on your preferences:
-
-| Preference | Implementation |
-|------------|----------------|
-| Public access | No login required (like Wall) |
-| All content types | Blueprints, Inventories, Users searchable |
-| Search-first | Large search bar at top, minimal content below until searching |
-| Separate from Wall | Wall = social feed, Explore = cross-content search |
-| Minimal tags | Small inline chips (no tag clouds) |
-| User cards | Compact cards with avatar, name, follower count, follow button |
-
----
-
-## Page Layout
-
-```text
-+----------------------------------------------------------+
-| [Header with AppNavigation - Explore tab highlighted]    |
-+----------------------------------------------------------+
-|                                                          |
-|  +----------------------------------------------------+  |
-|  | [Search icon]  Search blueprints, inventories...   |  |
-|  +----------------------------------------------------+  |
-|                                                          |
-|  [Blueprints] [Inventories] [Users]  <- filter pills     |
-|                                                          |
-|  ------------------------------------------------        |
-|                                                          |
-|  [Results grid/list - appears after typing]              |
-|                                                          |
-|  OR (when empty):                                        |
-|                                                          |
-|  Trending Tags: [#tag1] [#tag2] [#tag3] ...              |
-|                                                          |
-+----------------------------------------------------------+
+```
+git checkout main
+git checkout -b migration-backend-switch
 ```
 
-### Empty State (Before Search)
-- Large centered search bar
-- Optional subtle "Trending Tags" row (5-6 small chips, clickable to filter)
-- Minimal visual noise
-
-### Active Search State
-- Filter pills: "All" | "Blueprints" | "Inventories" | "Users"
-- Results grouped by type (if "All" selected) or filtered to single type
-- Results appear as you type (debounced 300ms)
+Then either make the changes locally or cherry-pick Lovable's commits into this branch.
 
 ---
 
-## Navigation Update
+## File 1: `src/config/runtime.ts` -- Single source of truth
 
-Add "Explore" to `AppNavigation.tsx`:
+This module centralizes all environment variables into one typed export:
 
 ```typescript
-const navItems = [
-  { path: '/', label: 'Home', icon: Home, isPublic: true },
-  { path: '/explore', label: 'Explore', icon: Search, isPublic: true },  // NEW
-  { path: '/inventory', label: 'Inventory', icon: Layers, isPublic: false },
-  { path: '/wall', label: 'Wall', icon: Users, isPublic: true },
-  { path: '/tags', label: 'Tags', icon: Tag, isPublic: false },
-];
-```
+export type BackendTarget = "lovable" | "self";
 
----
+export const config = {
+  backendTarget: (import.meta.env.VITE_BACKEND_TARGET ?? "lovable") as BackendTarget,
+  supabaseUrl: import.meta.env.VITE_SUPABASE_URL as string,
+  supabaseAnonKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+  agenticBackendUrl: import.meta.env.VITE_AGENTIC_BACKEND_URL as string | undefined,
+  useAgenticBackend: import.meta.env.VITE_USE_AGENTIC_BACKEND === "true",
+  basePath: import.meta.env.BASE_URL as string,
+} as const;
 
-## New Files
-
-### 1. `src/pages/Explore.tsx`
-
-Main page component with:
-- Search input with debounce
-- Filter pills (All | Blueprints | Inventories | Users)
-- Conditional rendering based on search state
-- Empty state with trending tags
-
-### 2. `src/hooks/useExploreSearch.ts`
-
-Unified search hook that:
-- Accepts query string and filter type
-- Searches across blueprints (title, tags), inventories (title, tags), and profiles (display_name)
-- Returns combined, typed results
-- Handles empty query (returns trending/popular content)
-
-### 3. `src/components/explore/ExploreResultCard.tsx`
-
-Polymorphic result card that renders differently based on type:
-- **Blueprint**: Title, item count, creator avatar, like count, tags
-- **Inventory**: Title, category count, blueprint count, tags
-- **User**: Avatar, display name, bio snippet, follower count, follow button
-
-### 4. `src/components/explore/UserMiniCard.tsx`
-
-Compact user card component:
-- Small avatar (32x32)
-- Display name
-- Follower count
-- Follow/Unfollow button (inline)
-
----
-
-## Modified Files
-
-### 1. `src/components/shared/AppNavigation.tsx`
-
-- Add Explore nav item with `Search` icon
-- Mark as `isPublic: true`
-
-### 2. `src/App.tsx`
-
-- Add route: `<Route path="/explore" element={<Explore />} />`
-
----
-
-## Data Flow
-
-```text
-User types in search bar
-        |
-        v
-useExploreSearch(query, filter)
-        |
-        +--> Blueprints: .ilike('title', '%query%') + tag match
-        +--> Inventories: .ilike('title', '%query%') + tag match
-        +--> Users: .ilike('display_name', '%query%'), is_public=true
-        |
-        v
-Combined results with type discriminator
-        |
-        v
-ExploreResultCard renders per type
-```
-
----
-
-## Search Logic Details
-
-### Blueprint Search
-```typescript
-// Search by title
-const titleMatches = await supabase
-  .from('blueprints')
-  .select('id, title, selected_items, likes_count, creator_user_id, created_at')
-  .eq('is_public', true)
-  .ilike('title', `%${query}%`)
-  .order('likes_count', { ascending: false })
-  .limit(20);
-
-// Also search by tag slug
-const tagMatches = await supabase
-  .from('tags')
-  .select('id')
-  .ilike('slug', `%${normalizedQuery}%`);
-// Then join via blueprint_tags
-```
-
-### Inventory Search
-Reuse existing `useInventorySearch` pattern with `.ilike('title', ...)` and tag matching.
-
-### User Search
-```typescript
-const users = await supabase
-  .from('profiles')
-  .select('user_id, display_name, avatar_url, bio, follower_count')
-  .eq('is_public', true)
-  .ilike('display_name', `%${query}%`)
-  .order('follower_count', { ascending: false })
-  .limit(15);
-```
-
----
-
-## Component Specifications
-
-### UserMiniCard Props
-```typescript
-interface UserMiniCardProps {
-  userId: string;
-  displayName: string | null;
-  avatarUrl: string | null;
-  followerCount: number;
+/** Resolve the URL for a backend function by name. */
+export function getFunctionUrl(fnName: string): string {
+  if (config.useAgenticBackend && config.agenticBackendUrl) {
+    return `${config.agenticBackendUrl.replace(/\/$/, "")}/api/${fnName}`;
+  }
+  return `${config.supabaseUrl}/functions/v1/${fnName}`;
 }
 ```
 
-Renders as:
-```text
-+------------------------------------------+
-| [Avatar] Display Name                    |
-|          12 followers    [Follow]        |
-+------------------------------------------+
+Default behavior is identical: `VITE_BACKEND_TARGET` defaults to `"lovable"`, all existing env vars keep working.
+
+---
+
+## File 2: `src/lib/api.ts` -- Thin fetch wrapper
+
+A lightweight API client that handles JSON, errors, and optional auth:
+
+```typescript
+import { supabase } from "@/integrations/supabase/client";
+import { config, getFunctionUrl } from "@/config/runtime";
+
+type ApiOptions = {
+  method?: "GET" | "POST" | "PUT" | "DELETE";
+  body?: unknown;
+  headers?: Record<string, string>;
+  stream?: boolean;  // return raw Response for SSE
+};
+
+async function getAuthHeader(): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (token) return `Bearer ${token}`;
+  return `Bearer ${config.supabaseAnonKey}`;
+}
+
+export async function apiFetch(fnName: string, opts: ApiOptions = {}) {
+  const url = getFunctionUrl(fnName);
+  const authHeader = await getAuthHeader();
+
+  const res = await fetch(url, {
+    method: opts.method ?? "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: authHeader,
+      ...opts.headers,
+    },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`API ${fnName} ${res.status}: ${text}`);
+  }
+
+  if (opts.stream) return res;          // caller reads SSE
+  return res.json();                    // default: parse JSON
+}
 ```
 
-### Filter Pills
-Simple toggle group using existing `Button` component with `variant="outline"` for inactive and `variant="default"` for active.
+This wrapper is **ready to use** but won't be wired into any actual calls yet (except optionally `log-event` as a safe first candidate).
 
 ---
 
-## Tag Interaction
+## Refactoring: Files that get updated
 
-- Tags appear as small `Badge` components on result cards
-- Clicking a tag fills the search bar with `#tag-slug` and filters results
-- Search supports `#tag` syntax: if query starts with `#`, treat as tag-only search
+These files currently use raw `import.meta.env.*` and will be updated to import from `src/config/runtime.ts` instead:
 
----
+| File | What changes |
+|------|-------------|
+| `src/pages/InventoryCreate.tsx` | Replace env var reads with `config.*` and `getFunctionUrl("generate-inventory")` |
+| `src/pages/InventoryBuild.tsx` | Replace env var reads with `config.*` and `getFunctionUrl("analyze-blueprint")` |
+| `src/components/blueprint/BlueprintBuilder.tsx` | Same pattern as InventoryBuild |
+| `src/hooks/useAiCredits.ts` | Replace `AGENTIC_BASE_URL` with `config.agenticBackendUrl` |
+| `src/lib/logEvent.ts` | Replace `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` with `config.*` |
+| `src/contexts/AuthContext.tsx` | Replace `import.meta.env.BASE_URL` with `config.basePath` |
+| `src/pages/Auth.tsx` | Replace `import.meta.env.BASE_URL` with `config.basePath` |
+| `src/App.tsx` | Replace `import.meta.env.BASE_URL` with `config.basePath` |
 
-## Empty/Default State
-
-When search is empty, show:
-1. Centered search bar with placeholder "Search blueprints, inventories, users..."
-2. Below: "Trending" section with 5-6 most-followed tags as small chips
-3. Optional: 2-3 featured blueprints (most liked this week)
-
----
-
-## Technical Notes
-
-### Debouncing
-Use 300ms debounce on search input to reduce API calls.
-
-### Result Limits
-- Blueprints: 20 max
-- Inventories: 20 max
-- Users: 15 max
-
-### RLS Considerations
-- Blueprints: `is_public = true` filter
-- Inventories: `is_public = true` filter
-- Profiles: RLS policy already restricts to `is_public = true OR auth.uid() = user_id`
-
-### Following Users
-Reuse existing `useFollowUser` and `useUnfollowUser` mutations from `useUserFollows.ts`.
+**Not touched** (and should not be):
+- `src/integrations/supabase/client.ts` -- auto-generated, stays as-is
+- `src/integrations/lovable/index.ts` -- auto-generated, stays as-is
 
 ---
 
-## Implementation Order
+## Tricky spots / notes
 
-| Step | Task |
-|------|------|
-| 1 | Update `AppNavigation.tsx` to add Explore tab |
-| 2 | Add `/explore` route in `App.tsx` |
-| 3 | Create `useExploreSearch.ts` hook with unified search logic |
-| 4 | Create `UserMiniCard.tsx` component |
-| 5 | Create `ExploreResultCard.tsx` polymorphic component |
-| 6 | Create `Explore.tsx` page with search UI, filters, and results |
-| 7 | Test search across all content types |
+1. **Duplicated URL-building logic**: The "agentic vs Supabase" URL pattern is copy-pasted across 3 files (`InventoryCreate`, `InventoryBuild`, `BlueprintBuilder`). `getFunctionUrl()` eliminates all 3 copies.
+
+2. **Auth header branching**: The same "use access_token if agentic, else use anon key" logic is also duplicated in 3 places. `apiFetch()` or `getAuthHeader()` centralizes this. Even before files switch to `apiFetch()`, the auth logic can be imported as a standalone helper.
+
+3. **`BASE_URL` is Vite-specific**: This is a build-time constant for the SPA base path, not really a "backend" config. Including it in `runtime.ts` keeps things centralized, but it's fine to leave `import.meta.env.BASE_URL` in place if you prefer -- it's not a migration concern.
+
+4. **`log-event` is the safest first migration candidate**: It's fire-and-forget, no SSE streaming, simple POST. Ideal first function to route through `apiFetch()` to validate the wrapper works.
+
+5. **No new env vars required**: `VITE_BACKEND_TARGET` is optional and defaults to `"lovable"`. Zero config change needed for current behavior.
 
 ---
 
-## Expected Outcomes
+## Summary of deliverables
 
-1. **Unified Discovery**: One place to search all content types
-2. **Search-First UX**: Minimal visual noise, prominent search bar
-3. **User Discovery**: Find and follow creators directly from search
-4. **Tag Integration**: Seamless tag-based filtering with `#tag` syntax
-5. **Public Access**: No login barrier for exploration
-6. **Distinct from Wall**: Wall remains the social feed; Explore is the search hub
+- **2 new files**: `src/config/runtime.ts`, `src/lib/api.ts`
+- **8 updated files**: Refactored to import from `config/runtime.ts` instead of raw `import.meta.env`
+- **0 behavior changes**: Everything works exactly as before
+- **Next step**: Wire `logMvpEvent` through `apiFetch("log-event", ...)` as a smoke test, then migrate one edge function at a time to your Oracle VM
+
