@@ -1,4 +1,14 @@
-export type LibraryDomain = 'skincare' | 'fitness' | 'nutrition' | 'productivity' | 'general';
+export type LibraryDomain =
+  | 'skincare'
+  | 'fitness'
+  | 'nutrition'
+  | 'productivity'
+  | 'sleep'
+  | 'mindfulness'
+  | 'supplements'
+  | 'cooking'
+  | 'general'
+  | 'custom';
 export type AudienceLevel = 'beginner' | 'intermediate' | 'advanced';
 export type WritingStyle = 'friendly' | 'practical' | 'coach' | 'clinical';
 export type StrictnessLevel = 'low' | 'medium' | 'high';
@@ -21,7 +31,8 @@ export type BlueprintFocus =
   | 'daily-plan'
   | 'deep-work'
   | 'evening-reset'
-  | 'weekly-review';
+  | 'weekly-review'
+  | 'custom';
 
 export type VarietyLevel = 'low' | 'medium' | 'high';
 export type CautionLevel = 'conservative' | 'balanced' | 'aggressive';
@@ -31,6 +42,7 @@ export type LibraryGenerationControlsV0 = {
   kind: 'library';
   controls: {
     domain: LibraryDomain;
+    domain_custom?: string;
     audience: AudienceLevel;
     style: WritingStyle;
     strictness: StrictnessLevel;
@@ -53,6 +65,7 @@ export type BlueprintGenerationControlsV0 = {
   kind: 'blueprint';
   controls: {
     focus: BlueprintFocus;
+    focus_custom?: string;
     length: LengthHint;
     strictness: StrictnessLevel;
     variety: VarietyLevel;
@@ -76,7 +89,12 @@ export const LIBRARY_DOMAIN_OPTIONS: Array<{ value: LibraryDomain; label: string
   { value: 'fitness', label: 'Fitness' },
   { value: 'nutrition', label: 'Nutrition' },
   { value: 'productivity', label: 'Productivity' },
+  { value: 'sleep', label: 'Sleep' },
+  { value: 'mindfulness', label: 'Mindfulness' },
+  { value: 'supplements', label: 'Supplements' },
+  { value: 'cooking', label: 'Cooking' },
   { value: 'general', label: 'General' },
+  { value: 'custom', label: 'Custom...' },
 ];
 
 export const AUDIENCE_OPTIONS: Array<{ value: AudienceLevel; label: string }> = [
@@ -122,6 +140,7 @@ export const BLUEPRINT_FOCUS_OPTIONS: Array<{ value: BlueprintFocus; label: stri
   { value: 'deep-work', label: 'Deep Work', domains: ['productivity'] },
   { value: 'evening-reset', label: 'Evening Reset', domains: ['productivity', 'general'] },
   { value: 'weekly-review', label: 'Weekly Review', domains: ['productivity'] },
+  { value: 'custom', label: 'Custom focus...' },
 ];
 
 export function formatTitleCase(input: string) {
@@ -138,6 +157,7 @@ export function formatTitleCase(input: string) {
 
 export function libraryControlsToTopic(controls: {
   domain: LibraryDomain;
+  domain_custom?: string;
   audience: AudienceLevel;
   length: LengthHint;
 }) {
@@ -150,6 +170,14 @@ export function libraryControlsToTopic(controls: {
     if (d === 'fitness') return 'home strength workout';
     if (d === 'nutrition') return 'healthy daily nutrition';
     if (d === 'productivity') return 'daily focus routine';
+    if (d === 'sleep') return 'sleep routine';
+    if (d === 'mindfulness') return 'mindfulness routine';
+    if (d === 'supplements') return 'supplement routine';
+    if (d === 'cooking') return 'home cooking routine';
+    if (d === 'custom') {
+      const custom = String(controls.domain_custom || '').trim();
+      return custom ? `${custom} routine` : 'life routine essentials';
+    }
     return 'life routine essentials';
   })();
 
@@ -160,6 +188,7 @@ export function libraryControlsToTopic(controls: {
 
 export function libraryControlsToInstructions(controls: {
   domain: LibraryDomain;
+  domain_custom?: string;
   audience: AudienceLevel;
   style: WritingStyle;
   strictness: StrictnessLevel;
@@ -169,6 +198,9 @@ export function libraryControlsToInstructions(controls: {
   const parts: string[] = [];
   parts.push('Mode: controls_v0');
   parts.push(`Domain: ${controls.domain}`);
+  if (controls.domain === 'custom' && controls.domain_custom && controls.domain_custom.trim()) {
+    parts.push(`DomainCustom: ${controls.domain_custom.trim()}`);
+  }
   parts.push(`Audience: ${controls.audience}`);
   parts.push(`Style: ${controls.style}`);
   parts.push(`Strictness: ${controls.strictness}`);
@@ -180,6 +212,7 @@ export function libraryControlsToInstructions(controls: {
 export function makeLibraryGenerationControlsV0(input: {
   controls: {
     domain: LibraryDomain;
+    domainCustom?: string;
     audience: AudienceLevel;
     style: WritingStyle;
     strictness: StrictnessLevel;
@@ -193,6 +226,7 @@ export function makeLibraryGenerationControlsV0(input: {
 }) {
   const keywords = libraryControlsToTopic({
     domain: input.controls.domain,
+    domain_custom: input.controls.domainCustom,
     audience: input.controls.audience,
     length: input.controls.lengthHint,
   });
@@ -206,6 +240,7 @@ export function makeLibraryGenerationControlsV0(input: {
     ' Library';
   const customInstructions = libraryControlsToInstructions({
     domain: input.controls.domain,
+    domain_custom: input.controls.domainCustom,
     audience: input.controls.audience,
     style: input.controls.style,
     strictness: input.controls.strictness,
@@ -218,6 +253,9 @@ export function makeLibraryGenerationControlsV0(input: {
     kind: 'library',
     controls: {
       domain: input.controls.domain,
+      ...(input.controls.domainCustom && input.controls.domainCustom.trim()
+        ? { domain_custom: input.controls.domainCustom.trim() }
+        : {}),
       audience: input.controls.audience,
       style: input.controls.style,
       strictness: input.controls.strictness,
@@ -230,7 +268,11 @@ export function makeLibraryGenerationControlsV0(input: {
   return out;
 }
 
-export function blueprintControlsToTitle(focus: BlueprintFocus) {
+export function blueprintControlsToTitle(focus: BlueprintFocus, focusCustom?: string) {
+  if (focus === 'custom') {
+    const c = String(focusCustom || '').trim();
+    return c ? formatTitleCase(c) : 'Custom Focus';
+  }
   const map: Record<string, string> = {
     starter: 'Quick Starter',
     hydration: 'Hydration Focus',
@@ -253,17 +295,25 @@ export function blueprintControlsToTitle(focus: BlueprintFocus) {
   return map[focus] || formatTitleCase(focus);
 }
 
-export function blueprintControlsToDescription(focus: BlueprintFocus, domain: LibraryDomain) {
-  const f = String(focus).replace(/-/g, ' ');
+export function blueprintControlsToDescription(focus: BlueprintFocus, domain: LibraryDomain, focusCustom?: string) {
+  const f =
+    focus === 'custom'
+      ? String(focusCustom || '').trim() || 'custom'
+      : String(focus).replace(/-/g, ' ');
   if (domain === 'skincare') return `A ${f} routine that stays gentle and beginner friendly.`;
   if (domain === 'fitness') return `A ${f} routine built for safe form and realistic progression.`;
   if (domain === 'nutrition') return `A ${f} routine focused on sustainable daily habits.`;
   if (domain === 'productivity') return `A ${f} routine designed for low-friction repeatability.`;
+  if (domain === 'sleep') return `A ${f} routine designed to support consistent, restorative sleep.`;
+  if (domain === 'mindfulness') return `A ${f} routine focused on calm, consistency, and mental clarity.`;
+  if (domain === 'supplements') return `A ${f} routine that keeps supplements simple and repeatable.`;
+  if (domain === 'cooking') return `A ${f} routine that makes home cooking easier to repeat.`;
   return `A ${f} routine aligned with your library.`;
 }
 
 export function blueprintControlsToNotes(controls: {
   focus: BlueprintFocus;
+  focus_custom?: string;
   length: LengthHint;
   strictness: StrictnessLevel;
   variety: VarietyLevel;
@@ -273,6 +323,9 @@ export function blueprintControlsToNotes(controls: {
   const parts: string[] = [];
   parts.push('Mode: controls_v0');
   parts.push(`Focus: ${controls.focus}`);
+  if (controls.focus === 'custom' && controls.focus_custom && controls.focus_custom.trim()) {
+    parts.push(`FocusCustom: ${controls.focus_custom.trim()}`);
+  }
   parts.push(`Length: ${controls.length}`);
   parts.push(`Strictness: ${controls.strictness}`);
   parts.push(`Variety: ${controls.variety}`);
@@ -284,6 +337,7 @@ export function blueprintControlsToNotes(controls: {
 export function makeBlueprintGenerationControlsV0(input: {
   controls: {
     focus: BlueprintFocus;
+    focusCustom?: string;
     length: LengthHint;
     strictness: StrictnessLevel;
     variety: VarietyLevel;
@@ -297,11 +351,12 @@ export function makeBlueprintGenerationControlsV0(input: {
     inventoryTitle?: string;
   };
 }) {
-  const baseTitle = blueprintControlsToTitle(input.controls.focus);
+  const baseTitle = blueprintControlsToTitle(input.controls.focus, input.controls.focusCustom);
   const title = String(input.optional?.name || '').trim() || baseTitle;
-  const description = blueprintControlsToDescription(input.controls.focus, input.domainHint);
+  const description = blueprintControlsToDescription(input.controls.focus, input.domainHint, input.controls.focusCustom);
   const notes = blueprintControlsToNotes({
     focus: input.controls.focus,
+    focus_custom: input.controls.focusCustom,
     length: input.controls.length,
     strictness: input.controls.strictness,
     variety: input.controls.variety,
@@ -314,6 +369,9 @@ export function makeBlueprintGenerationControlsV0(input: {
     kind: 'blueprint',
     controls: {
       focus: input.controls.focus,
+      ...(input.controls.focusCustom && input.controls.focusCustom.trim()
+        ? { focus_custom: input.controls.focusCustom.trim() }
+        : {}),
       length: input.controls.length,
       strictness: input.controls.strictness,
       variety: input.controls.variety,

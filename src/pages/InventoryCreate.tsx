@@ -31,6 +31,7 @@ import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AUDIENCE_OPTIONS,
   LIBRARY_DOMAIN_OPTIONS,
@@ -69,6 +70,7 @@ export default function InventoryCreate() {
 
   // Step 1: Promptless controls (click/press) + optional name/notes
   const [domain, setDomain] = useState<(typeof LIBRARY_DOMAIN_OPTIONS)[number]['value']>('skincare');
+  const [domainCustom, setDomainCustom] = useState('');
   const [audience, setAudience] = useState<(typeof AUDIENCE_OPTIONS)[number]['value']>('beginner');
   const [style, setStyle] = useState<(typeof STYLE_OPTIONS)[number]['value']>('friendly');
   const [strictness, setStrictness] = useState<(typeof STRICTNESS_OPTIONS)[number]['value']>('medium');
@@ -159,7 +161,12 @@ export default function InventoryCreate() {
     setIsGenerating(true);
 
     try {
-      const inferredTopic = libraryControlsToTopic({ domain, audience, length: lengthHint });
+      const inferredTopic = libraryControlsToTopic({
+        domain,
+        domain_custom: domain === 'custom' ? domainCustom : undefined,
+        audience,
+        length: lengthHint,
+      });
       const inferredTitle =
         title.trim() ||
         `${inferredTopic}`
@@ -170,6 +177,7 @@ export default function InventoryCreate() {
         ' Library';
       const inferredInstructions = libraryControlsToInstructions({
         domain,
+        domain_custom: domain === 'custom' ? domainCustom : undefined,
         audience,
         style,
         strictness,
@@ -234,6 +242,7 @@ export default function InventoryCreate() {
           style,
           strictness,
           lengthHint,
+          domainCustom: domain === 'custom' ? domainCustom : undefined,
         },
       });
     } catch (error) {
@@ -296,7 +305,7 @@ export default function InventoryCreate() {
         tags,
         isPublic,
         generationControls: makeLibraryGenerationControlsV0({
-          controls: { domain, audience, style, strictness, lengthHint },
+          controls: { domain, domainCustom: domain === 'custom' ? domainCustom : undefined, audience, style, strictness, lengthHint },
           optional: {
             name: title.trim() || undefined,
             notes: notes.trim() || undefined,
@@ -408,18 +417,31 @@ export default function InventoryCreate() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2" data-help-id="domain">
                 <Label>Domain</Label>
-                <ToggleGroup
-                  type="single"
-                  value={domain}
-                  onValueChange={(v) => v && setDomain(v as any)}
-                  className="flex flex-wrap justify-start gap-2"
-                >
-                  {LIBRARY_DOMAIN_OPTIONS.map((o) => (
-                    <ToggleGroupItem key={o.value} value={o.value} variant="outline" className="rounded-full px-3">
-                      {o.label}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
+                <Select value={domain} onValueChange={(v) => setDomain(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose domain" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LIBRARY_DOMAIN_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {domain === 'custom' && (
+                  <div className="space-y-2 pt-2">
+                    <Label htmlFor="domainCustom" className="text-xs text-muted-foreground">
+                      Custom domain (optional)
+                    </Label>
+                    <Input
+                      id="domainCustom"
+                      value={domainCustom}
+                      onChange={(e) => setDomainCustom(e.target.value)}
+                      placeholder="e.g., Longevity, Running, ADHD focus, Budget cooking..."
+                    />
+                  </div>
+                )}
               </div>
               <div className="space-y-2" data-help-id="audience">
                 <Label>Audience</Label>

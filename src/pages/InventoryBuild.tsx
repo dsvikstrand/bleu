@@ -165,6 +165,7 @@ export default function InventoryBuild() {
   const [autoTitle, setAutoTitle] = useState('');
   const [autoNotes, setAutoNotes] = useState('');
   const [autoFocus, setAutoFocus] = useState<BlueprintFocus>('starter');
+  const [autoFocusCustom, setAutoFocusCustom] = useState('');
   const [autoLength, setAutoLength] = useState<LengthHint>('medium');
   const [autoStrictness, setAutoStrictness] = useState<StrictnessLevel>('medium');
   const [autoVariety, setAutoVariety] = useState<VarietyLevel>('medium');
@@ -859,6 +860,7 @@ export default function InventoryBuild() {
       const genControls = makeBlueprintGenerationControlsV0({
         controls: {
           focus: autoFocus,
+          focusCustom: autoFocus === 'custom' ? autoFocusCustom : undefined,
           length: autoLength,
           strictness: autoStrictness,
           variety: autoVariety,
@@ -921,6 +923,7 @@ export default function InventoryBuild() {
               inventoryId: inventory.id,
               stepCount: data.steps.length,
               focus: autoFocus,
+              focusCustom: autoFocus === 'custom' ? autoFocusCustom : undefined,
               length: autoLength,
               strictness: autoStrictness,
               variety: autoVariety,
@@ -943,6 +946,7 @@ export default function InventoryBuild() {
     autoTitle,
     autoNotes,
     autoFocus,
+    autoFocusCustom,
     autoLength,
     autoStrictness,
     autoVariety,
@@ -1413,6 +1417,16 @@ export default function InventoryBuild() {
                             </SelectContent>
                           </Select>
                         </div>
+                        {autoFocus === 'custom' && (
+                          <div className="grid gap-2 sm:col-span-2">
+                            <Label>Custom focus (optional)</Label>
+                            <Input
+                              value={autoFocusCustom}
+                              onChange={(e) => setAutoFocusCustom(e.target.value)}
+                              placeholder="e.g., Knee-friendly strength, Marathon base, Acne-safe barrier..."
+                            />
+                          </div>
+                        )}
 
                         <div className="grid gap-2">
                           <Label>Length</Label>
@@ -1495,7 +1509,11 @@ export default function InventoryBuild() {
                         <Button
                           type="button"
                           onClick={handleAutoGenerateClick}
-                          disabled={isAutoGenerating || !session?.access_token}
+                          disabled={
+                            isAutoGenerating ||
+                            !session?.access_token ||
+                            (autoFocus === 'custom' && !autoFocusCustom.trim())
+                          }
                         >
                           {isAutoGenerating ? 'Generating...' : 'Generate blueprint'}
                         </Button>
