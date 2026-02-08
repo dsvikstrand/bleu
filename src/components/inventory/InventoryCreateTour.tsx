@@ -15,9 +15,9 @@ interface TourStep {
 
 const TOUR_STEPS: TourStep[] = [
   {
-    targetId: 'keywords',
-    title: 'Describe Your Library',
-    description: 'Enter a few words like "skincare routine" or "smoothie ingredients".',
+    targetId: 'domain',
+    title: 'Pick Controls',
+    description: 'Choose a domain and a few settings. No prompt needed.',
   },
   {
     targetId: 'generate',

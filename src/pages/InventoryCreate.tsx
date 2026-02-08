@@ -30,6 +30,16 @@ import { ChevronDown, Loader2, Settings2, Sparkles, Wand2, X } from 'lucide-reac
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+  AUDIENCE_OPTIONS,
+  LIBRARY_DOMAIN_OPTIONS,
+  LENGTH_OPTIONS,
+  STRICTNESS_OPTIONS,
+  STYLE_OPTIONS,
+  libraryControlsToInstructions,
+  libraryControlsToTopic,
+} from '@/lib/generationControls';
 
 const SUPABASE_GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-inventory`;
 const AGENTIC_BASE_URL = import.meta.env.VITE_AGENTIC_BACKEND_URL;
@@ -56,9 +66,13 @@ export default function InventoryCreate() {
   const { data: tagSuggestions } = useTagSuggestions();
   const { recentTags, addRecentTags } = useRecentTags();
 
-  // Step 1: Keywords input
-  const [keywords, setKeywords] = useState('');
-  const [customInstructions, setCustomInstructions] = useState('');
+  // Step 1: Promptless controls (click/press) + optional name/notes
+  const [domain, setDomain] = useState<(typeof LIBRARY_DOMAIN_OPTIONS)[number]['value']>('skincare');
+  const [audience, setAudience] = useState<(typeof AUDIENCE_OPTIONS)[number]['value']>('beginner');
+  const [style, setStyle] = useState<(typeof STYLE_OPTIONS)[number]['value']>('friendly');
+  const [strictness, setStrictness] = useState<(typeof STRICTNESS_OPTIONS)[number]['value']>('medium');
+  const [lengthHint, setLengthHint] = useState<(typeof LENGTH_OPTIONS)[number]['value']>('medium');
+  const [notes, setNotes] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
   const [preferredCategoryInput, setPreferredCategoryInput] = useState('');
@@ -132,15 +146,6 @@ export default function InventoryCreate() {
 
 
   const handleGenerate = async () => {
-    if (!keywords.trim()) {
-      toast({
-        title: 'Keywords required',
-        description: 'Enter what kind of library you want to create.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     if (USE_AGENTIC_BACKEND && !session?.access_token) {
       toast({
         title: 'Sign in required',
@@ -153,6 +158,24 @@ export default function InventoryCreate() {
     setIsGenerating(true);
 
     try {
+      const inferredTopic = libraryControlsToTopic({ domain, audience, length: lengthHint });
+      const inferredTitle =
+        title.trim() ||
+        `${inferredTopic}`
+          .split(' ')
+          .slice(0, 6)
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+          .join(' ') +
+        ' Library';
+      const inferredInstructions = libraryControlsToInstructions({
+        domain,
+        audience,
+        style,
+        strictness,
+        length: lengthHint,
+        notes,
+      });
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
@@ -166,9 +189,9 @@ export default function InventoryCreate() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          keywords: keywords.trim(),
-          title: title.trim() || undefined,
-          customInstructions: customInstructions.trim() || undefined,
+          keywords: inferredTopic,
+          title: inferredTitle,
+          customInstructions: inferredInstructions,
           preferredCategories: preferredCategories.length > 0 ? preferredCategories : undefined,
         }),
       });
@@ -186,10 +209,7 @@ export default function InventoryCreate() {
 
       // Auto-fill title if empty
       if (!title.trim()) {
-        const autoTitle = keywords.trim().split(' ').slice(0, 3).map(
-          (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-        ).join(' ') + ' Library';
-        setTitle(autoTitle);
+        setTitle(inferredTitle);
       }
 
       // Use suggested tags if available
@@ -208,6 +228,11 @@ export default function InventoryCreate() {
         metadata: {
           categoryCount: schema.categories.length,
           itemCount: schema.categories.reduce((sum, c) => sum + c.items.length, 0),
+          domain,
+          audience,
+          style,
+          strictness,
+          lengthHint,
         },
       });
     } catch (error) {
@@ -345,11 +370,11 @@ export default function InventoryCreate() {
             <span className="absolute -inset-4 bg-primary/10 blur-2xl rounded-full animate-pulse-soft -z-10" />
           </h1>
           <p className="text-lg text-muted-foreground max-w-md mx-auto">
-            Describe what you want to build, and AI will generate your library
+            Use simple controls to shape a library. No prompt required.
           </p>
         </div>
 
-        {/* Step 1: Keywords Generation */}
+        {/* Step 1: Promptless Generation */}
         <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in">
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="flex items-center gap-2">
@@ -358,7 +383,7 @@ export default function InventoryCreate() {
             </CardTitle>
             <Button
               onClick={handleGenerate}
-              disabled={isGenerating || !keywords.trim()}
+              disabled={isGenerating}
               className="gap-2"
               data-help-id="generate"
             >
@@ -371,31 +396,92 @@ export default function InventoryCreate() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2" data-help-id="keywords">
-              <Label htmlFor="keywords">Describe your library in a few words</Label>
-              <Input
-                id="keywords"
-                value={keywords}
-                onChange={(e) => setKeywords(e.target.value)}
-                placeholder="e.g., skincare routine, green smoothie, morning habits..."
-                onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-              />
-            </div>
-
-            {/* Quick suggestions */}
-            <div className="flex flex-wrap gap-2">
-              {['skincare routine', 'green smoothie', 'morning routine', 'home workout', 'meditation practice'].map((suggestion) => (
-                <Button
-                  key={suggestion}
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setKeywords(suggestion)}
-                  className="text-xs"
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2" data-help-id="domain">
+                <Label>Domain</Label>
+                <ToggleGroup
+                  type="single"
+                  value={domain}
+                  onValueChange={(v) => v && setDomain(v as any)}
+                  className="flex flex-wrap justify-start gap-2"
                 >
-                  {suggestion}
-                </Button>
-              ))}
+                  {LIBRARY_DOMAIN_OPTIONS.map((o) => (
+                    <ToggleGroupItem key={o.value} value={o.value} variant="outline" className="rounded-full px-3">
+                      {o.label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </div>
+              <div className="space-y-2" data-help-id="audience">
+                <Label>Audience</Label>
+                <ToggleGroup
+                  type="single"
+                  value={audience}
+                  onValueChange={(v) => v && setAudience(v as any)}
+                  className="flex flex-wrap justify-start gap-2"
+                >
+                  {AUDIENCE_OPTIONS.map((o) => (
+                    <ToggleGroupItem key={o.value} value={o.value} variant="outline" className="rounded-full px-3">
+                      {o.label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </div>
+              <div className="space-y-2" data-help-id="style">
+                <Label>Style</Label>
+                <ToggleGroup
+                  type="single"
+                  value={style}
+                  onValueChange={(v) => v && setStyle(v as any)}
+                  className="flex flex-wrap justify-start gap-2"
+                >
+                  {STYLE_OPTIONS.map((o) => (
+                    <ToggleGroupItem key={o.value} value={o.value} variant="outline" className="rounded-full px-3">
+                      {o.label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </div>
+              <div className="space-y-2" data-help-id="strictness">
+                <Label>Strictness</Label>
+                <ToggleGroup
+                  type="single"
+                  value={strictness}
+                  onValueChange={(v) => v && setStrictness(v as any)}
+                  className="flex flex-wrap justify-start gap-2"
+                >
+                  {STRICTNESS_OPTIONS.map((o) => (
+                    <ToggleGroupItem key={o.value} value={o.value} variant="outline" className="rounded-full px-3">
+                      {o.label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </div>
+              <div className="space-y-2 sm:col-span-2" data-help-id="length">
+                <Label>Length</Label>
+                <ToggleGroup
+                  type="single"
+                  value={lengthHint}
+                  onValueChange={(v) => v && setLengthHint(v as any)}
+                  className="flex flex-wrap justify-start gap-2"
+                >
+                  {LENGTH_OPTIONS.map((o) => (
+                    <ToggleGroupItem key={o.value} value={o.value} variant="outline" className="rounded-full px-3">
+                      {o.label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </div>
+              <div className="space-y-2 sm:col-span-2" data-help-id="notes">
+                <Label htmlFor="notes">Notes (optional)</Label>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Any constraints or preferences? (Optional)"
+                  rows={3}
+                />
+              </div>
             </div>
 
             {/* Advanced Options - Collapsed by default */}
@@ -414,21 +500,6 @@ export default function InventoryCreate() {
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="custom-instructions">Custom instructions (optional)</Label>
-                  <Textarea
-                    id="custom-instructions"
-                    value={customInstructions}
-                    onChange={(e) => setCustomInstructions(e.target.value)}
-                    placeholder="e.g., more beginner-friendly, fewer categories, emphasize budget options..."
-                    rows={3}
-                  />
-                  {generatedSchema && (
-                    <p className="text-xs text-muted-foreground">
-                      Regenerating will replace the current categories and items.
-                    </p>
-                  )}
-                </div>
                 <div className="space-y-3">
                   <div>
                     <Label>Preferred categories (optional)</Label>

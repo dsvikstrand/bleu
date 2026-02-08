@@ -40,6 +40,21 @@ import { getFriendlyErrorMessage } from '@/lib/errors';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { logMvpEvent } from '@/lib/logEvent';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+  BLUEPRINT_FOCUS_OPTIONS,
+  LENGTH_OPTIONS,
+  STRICTNESS_OPTIONS,
+  blueprintControlsToDescription,
+  blueprintControlsToNotes,
+  blueprintControlsToTitle,
+  type BlueprintFocus,
+  type CautionLevel,
+  type LengthHint,
+  type StrictnessLevel,
+  type VarietyLevel,
+} from '@/lib/generationControls';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   MAX_ADDITIONAL_SECTIONS,
   MAX_REVIEW_SECTIONS,
@@ -149,8 +164,12 @@ export default function InventoryBuild() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [showAutoGenerate, setShowAutoGenerate] = useState(false);
   const [autoTitle, setAutoTitle] = useState('');
-  const [autoDescription, setAutoDescription] = useState('');
   const [autoNotes, setAutoNotes] = useState('');
+  const [autoFocus, setAutoFocus] = useState<BlueprintFocus>('starter');
+  const [autoLength, setAutoLength] = useState<LengthHint>('medium');
+  const [autoStrictness, setAutoStrictness] = useState<StrictnessLevel>('medium');
+  const [autoVariety, setAutoVariety] = useState<VarietyLevel>('medium');
+  const [autoCaution, setAutoCaution] = useState<CautionLevel>('balanced');
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
 
@@ -826,6 +845,28 @@ export default function InventoryBuild() {
     setIsAutoGenerating(true);
 
     try {
+      const domainHint =
+        (inventory.tags || []).some((t) => String(t || '').toLowerCase().includes('skincare'))
+          ? 'skincare'
+          : (inventory.tags || []).some((t) => String(t || '').toLowerCase().includes('workout') || String(t || '').toLowerCase().includes('fitness'))
+            ? 'fitness'
+            : (inventory.tags || []).some((t) => String(t || '').toLowerCase().includes('nutrition') || String(t || '').toLowerCase().includes('diet'))
+              ? 'nutrition'
+              : (inventory.tags || []).some((t) => String(t || '').toLowerCase().includes('productivity') || String(t || '').toLowerCase().includes('planning'))
+                ? 'productivity'
+                : 'general';
+
+      const inferredTitle = autoTitle.trim() || blueprintControlsToTitle(autoFocus);
+      const inferredDescription = blueprintControlsToDescription(autoFocus, domainHint as any);
+      const inferredNotes = blueprintControlsToNotes({
+        focus: autoFocus,
+        length: autoLength,
+        strictness: autoStrictness,
+        variety: autoVariety,
+        caution: autoCaution,
+        notes: autoNotes,
+      });
+
       const response = await fetch(AGENTIC_GENERATE_BLUEPRINT_URL, {
         method: 'POST',
         headers: {
@@ -833,9 +874,9 @@ export default function InventoryBuild() {
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          title: autoTitle.trim() || undefined,
-          description: autoDescription.trim() || undefined,
-          notes: autoNotes.trim() || undefined,
+          title: inferredTitle,
+          description: inferredDescription,
+          notes: inferredNotes,
           inventoryTitle: inventory.title,
           categories: categories.map((category) => ({
             name: category.name,
@@ -868,6 +909,11 @@ export default function InventoryBuild() {
         metadata: {
           inventoryId: inventory.id,
           stepCount: data.steps.length,
+          focus: autoFocus,
+          length: autoLength,
+          strictness: autoStrictness,
+          variety: autoVariety,
+          caution: autoCaution,
         },
       });
     } catch (error) {
@@ -883,8 +929,12 @@ export default function InventoryBuild() {
     inventory,
     categories,
     autoTitle,
-    autoDescription,
     autoNotes,
+    autoFocus,
+    autoLength,
+    autoStrictness,
+    autoVariety,
+    autoCaution,
     applyGeneratedBlueprint,
     toast,
     session?.access_token,
@@ -1324,31 +1374,105 @@ export default function InventoryBuild() {
                   )}
                   {showAutoGenerate && (
                     <div className="grid gap-3 rounded-lg border border-border/40 bg-muted/20 p-4">
-                      <div className="grid gap-2">
-                        <Label>Title</Label>
-                        <Input
-                          value={autoTitle}
-                          onChange={(e) => setAutoTitle(e.target.value)}
-                          placeholder="Home Workout Blueprint"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>Description</Label>
-                        <Textarea
-                          value={autoDescription}
-                          onChange={(e) => setAutoDescription(e.target.value)}
-                          placeholder="What should this routine focus on? (Optional)"
-                          rows={2}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>Notes</Label>
-                        <Textarea
-                          value={autoNotes}
-                          onChange={(e) => setAutoNotes(e.target.value)}
-                          placeholder="Any constraints or preferences? (Optional)"
-                          rows={2}
-                        />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-2 sm:col-span-2">
+                          <Label>Name (optional)</Label>
+                          <Input
+                            value={autoTitle}
+                            onChange={(e) => setAutoTitle(e.target.value)}
+                            placeholder="Give your blueprint a name (Optional)"
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Focus</Label>
+                          <Select value={autoFocus} onValueChange={(v) => setAutoFocus(v as BlueprintFocus)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Choose focus" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {BLUEPRINT_FOCUS_OPTIONS.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>
+                                  {o.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Length</Label>
+                          <ToggleGroup
+                            type="single"
+                            value={autoLength}
+                            onValueChange={(v) => v && setAutoLength(v as LengthHint)}
+                            className="flex flex-wrap justify-start gap-2"
+                          >
+                            {LENGTH_OPTIONS.map((o) => (
+                              <ToggleGroupItem key={o.value} value={o.value} variant="outline" className="rounded-full px-3">
+                                {o.label}
+                              </ToggleGroupItem>
+                            ))}
+                          </ToggleGroup>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Strictness</Label>
+                          <ToggleGroup
+                            type="single"
+                            value={autoStrictness}
+                            onValueChange={(v) => v && setAutoStrictness(v as StrictnessLevel)}
+                            className="flex flex-wrap justify-start gap-2"
+                          >
+                            {STRICTNESS_OPTIONS.map((o) => (
+                              <ToggleGroupItem key={o.value} value={o.value} variant="outline" className="rounded-full px-3">
+                                {o.label}
+                              </ToggleGroupItem>
+                            ))}
+                          </ToggleGroup>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Variety</Label>
+                          <ToggleGroup
+                            type="single"
+                            value={autoVariety}
+                            onValueChange={(v) => v && setAutoVariety(v as VarietyLevel)}
+                            className="flex flex-wrap justify-start gap-2"
+                          >
+                            {(['low', 'medium', 'high'] as const).map((v) => (
+                              <ToggleGroupItem key={v} value={v} variant="outline" className="rounded-full px-3">
+                                {v.charAt(0).toUpperCase() + v.slice(1)}
+                              </ToggleGroupItem>
+                            ))}
+                          </ToggleGroup>
+                        </div>
+
+                        <div className="grid gap-2 sm:col-span-2">
+                          <Label>Caution</Label>
+                          <ToggleGroup
+                            type="single"
+                            value={autoCaution}
+                            onValueChange={(v) => v && setAutoCaution(v as CautionLevel)}
+                            className="flex flex-wrap justify-start gap-2"
+                          >
+                            {(['conservative', 'balanced', 'aggressive'] as const).map((v) => (
+                              <ToggleGroupItem key={v} value={v} variant="outline" className="rounded-full px-3">
+                                {v === 'conservative' ? 'Conservative' : v === 'aggressive' ? 'Aggressive' : 'Balanced'}
+                              </ToggleGroupItem>
+                            ))}
+                          </ToggleGroup>
+                        </div>
+
+                        <div className="grid gap-2 sm:col-span-2">
+                          <Label>Notes (optional)</Label>
+                          <Textarea
+                            value={autoNotes}
+                            onChange={(e) => setAutoNotes(e.target.value)}
+                            placeholder="Any constraints or preferences? (Optional)"
+                            rows={2}
+                          />
+                        </div>
                       </div>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-xs text-muted-foreground">
