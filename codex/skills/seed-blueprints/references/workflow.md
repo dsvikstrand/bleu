@@ -51,14 +51,20 @@ TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/gen_seed_spec.ts \
 
 Prereqs:
 - Agentic backend reachable (default: `https://bapi.vdsai.cloud`)
-- A real Supabase access token for a user (used to behave like a signed-in user)
+- A way to authenticate as the "seed user" (used to behave like a signed-in user)
 
 Environment:
-- `SEED_USER_ACCESS_TOKEN` (recommended): Supabase access token string (JWT; expires quickly)
-- `SEED_USER_REFRESH_TOKEN` (optional, recommended for automation): Supabase refresh token (used to mint new access tokens)
+- `SEED_USER_ACCESS_TOKEN` (optional): Supabase access token string (JWT; expires quickly)
+- `SEED_USER_REFRESH_TOKEN` (optional): Supabase refresh token (used to mint new access tokens; rotates)
+- `SEED_USER_EMAIL` + `SEED_USER_PASSWORD` (optional, recommended for headless persona accounts): enables password-grant fallback so runs can self-heal if refresh token rotation breaks
+- `--auth-env <path>` (optional): load `SEED_USER_EMAIL`/`SEED_USER_PASSWORD` from a local env file (recommended pattern: `seed/auth/<asp_id>.env.local`)
 - `VITE_AGENTIC_BACKEND_URL` (optional): overrides backend base URL for the runner
 - `SUPABASE_URL` or `VITE_SUPABASE_URL` (required if using refresh token or Stage 1)
 - `SUPABASE_ANON_KEY` or `VITE_SUPABASE_PUBLISHABLE_KEY` (required if using refresh token or Stage 1)
+
+Auth store:
+- If `asp.id` is present in the spec and `--auth-store` is not provided, the runner defaults to `seed/auth/<asp_id>.local`.
+- Otherwise it defaults to `seed/seed_auth.local`.
 
 Command:
 ```bash

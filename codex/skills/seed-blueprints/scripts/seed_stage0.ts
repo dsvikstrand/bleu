@@ -178,6 +178,11 @@ type SeedAuthStore = {
   updated_at?: string;
 };
 
+type SeedCreds = {
+  email: string;
+  password: string;
+};
+
 function decodeBase64Url(input: string) {
   const base64 = input.replace(/-/g, '+').replace(/_/g, '/');
   const pad = base64.length % 4 === 0 ? '' : '='.repeat(4 - (base64.length % 4));
@@ -331,6 +336,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--agentic-base-url') out.agenticBaseUrl = argv[++i] ?? '';
     else if (a === '--run-id') out.runId = argv[++i] ?? '';
     else if (a === '--auth-store') out.authStore = argv[++i] ?? '';
+    else if (a === '--auth-env') out.authEnv = argv[++i] ?? '';
     else if (a === '--no-backend') out.noBackend = true;
     else if (a === '--do-review') out.doReview = true;
     else if (a === '--review-focus') out.reviewFocus = argv[++i] ?? '';
@@ -693,12 +699,54 @@ function readAuthStore(filePath: string): SeedAuthStore {
 
 function writeAuthStore(filePath: string, store: SeedAuthStore) {
   if (!filePath) return;
+  // Auth stores may live under seed/auth/*.local; ensure the directory exists.
+  ensureDir(path.dirname(filePath));
   const out: SeedAuthStore = {
     access_token: store.access_token || '',
     refresh_token: store.refresh_token || '',
     updated_at: nowIso(),
   };
   writeJsonFile(filePath, out);
+}
+
+function readEnvFile(filePath: string): Record<string, string> {
+  if (!filePath || !fs.existsSync(filePath)) return {};
+  const out: Record<string, string> = {};
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const idx = trimmed.indexOf('=');
+    if (idx < 0) continue;
+    const key = trimmed.slice(0, idx).trim();
+    let val = trimmed.slice(idx + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"') && val.length >= 2) ||
+      (val.startsWith("'") && val.endsWith("'") && val.length >= 2)
+    ) {
+      val = val.slice(1, -1);
+    }
+    if (key) out[key] = val;
+  }
+  return out;
+}
+
+function loadSeedCredsFromEnvFile(filePath: string) {
+  const vars = readEnvFile(filePath);
+  if (!process.env.SEED_USER_EMAIL && vars.SEED_USER_EMAIL) process.env.SEED_USER_EMAIL = vars.SEED_USER_EMAIL;
+  if (!process.env.SEED_USER_PASSWORD && vars.SEED_USER_PASSWORD) process.env.SEED_USER_PASSWORD = vars.SEED_USER_PASSWORD;
+}
+
+function getSeedCredsFromEnv(): SeedCreds | null {
+  const email = String(process.env.SEED_USER_EMAIL || '').trim();
+  const password = String(process.env.SEED_USER_PASSWORD || '').trim();
+  if (!email || !password) return null;
+  return { email, password };
+}
+
+function isRefreshTokenAlreadyUsedError(err: unknown) {
+  const msg = String((err as any)?.message || err || '');
+  return msg.includes('refresh_token_already_used') || msg.includes('Already Used');
 }
 
 function sanitizeRunId(input: string) {
@@ -965,6 +1013,7 @@ async function main() {
         '  --agentic-base-url <url>   Agentic backend base URL (default: env VITE_AGENTIC_BACKEND_URL or https://bapi.vdsai.cloud)',
         '  --run-id <id>              Override run_id folder name',
         '  --auth-store <path>        Optional local JSON store for rotating tokens (recommended: seed/seed_auth.local)',
+        '  --auth-env <path>          Optional env file that sets SEED_USER_EMAIL/SEED_USER_PASSWORD (recommended: seed/auth/<asp_id>.env.local)',
         '  --no-backend               Do not call backend (future use)',
         '  --do-review                Execute /api/analyze-blueprint (Stage 0.5)',
         '  --review-focus <text>      Optional reviewPrompt for /api/analyze-blueprint',
@@ -983,7 +1032,8 @@ async function main() {
 
   const specPath = String(args.spec || 'seed/seed_spec_v0.json');
   const outBase = String(args.out || 'seed/outputs');
-  const authStorePath = String(args.authStore || 'seed/seed_auth.local');
+  let authStorePath = String(args.authStore || '').trim();
+  const authEnvPathArg = String((args as any).authEnv || '').trim();
   const agenticBaseUrl =
     String(args.agenticBaseUrl || process.env.VITE_AGENTIC_BACKEND_URL || 'https://bapi.vdsai.cloud').replace(/\/$/, '');
   const backendCalls = !args.noBackend;
@@ -1005,6 +1055,19 @@ async function main() {
   let specRun: SeedSpec = spec;
 
   const aspId = spec.asp?.id ? String(spec.asp.id).trim() : '';
+  if (!authStorePath) {
+    authStorePath = aspId ? path.join('seed', 'auth', `${aspId}.local`) : path.join('seed', 'seed_auth.local');
+  }
+  // Load per-persona credentials for password-grant fallback (headless persona accounts).
+  // Priority: --auth-env, else seed/auth/<asp_id>.env.local.
+  const authEnvPath = authEnvPathArg
+    ? authEnvPathArg
+    : aspId
+      ? path.join('seed', 'auth', `${aspId}.env.local`)
+      : '';
+  if (authEnvPath && fs.existsSync(authEnvPath)) {
+    loadSeedCredsFromEnvFile(authEnvPath);
+  }
   let persona: PersonaV0 | null = null;
   let personaHash = '';
   let personaPromptBlock = '';
@@ -1136,6 +1199,11 @@ async function main() {
           configHash: dasConfigHash,
         }
       : { enabled: false },
+    auth: {
+      storePath: path.relative(process.cwd(), authStorePath).replace(/\\/g, '/'),
+      envPath: authEnvPath && fs.existsSync(authEnvPath) ? path.relative(process.cwd(), authEnvPath).replace(/\\/g, '/') : null,
+      passwordGrantAvailable: Boolean(getSeedCredsFromEnv()),
+    },
   };
   writeJsonFile(outPath.logs('run_meta.json'), runMeta);
 
@@ -1681,6 +1749,32 @@ async function main() {
   let accessToken = (process.env.SEED_USER_ACCESS_TOKEN?.trim() || store.access_token || '').trim();
   let refreshToken = (process.env.SEED_USER_REFRESH_TOKEN?.trim() || store.refresh_token || '').trim();
 
+  const passwordGrantSession = async () => {
+    const creds = getSeedCredsFromEnv();
+    if (!creds) throw new Error('Missing SEED_USER_EMAIL/SEED_USER_PASSWORD for password grant.');
+    if (!supabaseUrlForAuth || !supabaseAnonKeyForAuth) {
+      throw new Error('Missing SUPABASE_URL/VITE_SUPABASE_URL or SUPABASE_ANON_KEY/VITE_SUPABASE_PUBLISHABLE_KEY for password grant.');
+    }
+    const url = `${supabaseUrlForAuth}/auth/v1/token?grant_type=password`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKeyForAuth,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email: creds.email, password: creds.password }),
+    });
+    const text = await res.text().catch(() => '');
+    if (!res.ok) throw new Error(`Supabase password grant failed (${res.status}): ${text.slice(0, 800)}`);
+    const data = JSON.parse(text) as { access_token?: string; refresh_token?: string };
+    const nextAccess = String(data.access_token || '').trim();
+    const nextRefresh = String(data.refresh_token || '').trim();
+    if (!nextAccess) throw new Error('Supabase password grant succeeded but returned empty access_token');
+    accessToken = nextAccess;
+    if (nextRefresh) refreshToken = nextRefresh;
+    writeAuthStore(authStorePath, { access_token: accessToken, refresh_token: refreshToken });
+  };
+
   const refreshSession = async () => {
     if (!refreshToken) throw new Error('Missing refresh token (set SEED_USER_REFRESH_TOKEN or auth store refresh_token).');
     if (!supabaseUrlForAuth || !supabaseAnonKeyForAuth) {
@@ -1709,12 +1803,37 @@ async function main() {
 
   const ensureValidAccessToken = async () => {
     if (accessToken && !isJwtExpired(accessToken)) return;
+    // Prefer refresh token rotation when available.
     if (refreshToken) {
-      await refreshSession();
+      try {
+        await refreshSession();
+        return;
+      } catch (err) {
+        // If another process rotated the token already, re-read the store and retry once.
+        if (isRefreshTokenAlreadyUsedError(err)) {
+          const latest = readAuthStore(authStorePath);
+          const latestRt = String(latest.refresh_token || '').trim();
+          if (latestRt && latestRt !== refreshToken) {
+            refreshToken = latestRt;
+            await refreshSession();
+            return;
+          }
+        }
+        // Fall back to password grant when configured (headless persona accounts).
+        if (getSeedCredsFromEnv()) {
+          await passwordGrantSession();
+          return;
+        }
+        throw err;
+      }
+    }
+    // No refresh token: try password grant if configured.
+    if (getSeedCredsFromEnv()) {
+      await passwordGrantSession();
       return;
     }
     if (!accessToken) throw new Error('Missing SEED_USER_ACCESS_TOKEN. Set it in your shell before running Stage 0.');
-    throw new Error('SEED_USER_ACCESS_TOKEN is expired and no refresh token is available.');
+    throw new Error('SEED_USER_ACCESS_TOKEN is expired and no refresh token or password grant is available.');
   };
 
   if (backendCalls) {
