@@ -1,17 +1,46 @@
 {
   "version": 0,
-  "description": "Maps persona ids to default auth env/store paths for headless seeding on Oracle. No secrets live here.",
+  "description": "Maps persona ids to default auth env/store paths for headless seeding on Oracle, plus optional promptless control defaults. No secrets live here.",
   "personas": [
     {
       "id": "skincare_diet_female_v0",
       "auth_env_path": "seed/auth/skincare_diet_female_v0.env.local",
-      "auth_store_path": "seed/auth/skincare_diet_female_v0.local"
+      "auth_store_path": "seed/auth/skincare_diet_female_v0.local",
+      "controls_defaults": {
+        "library": {
+          "domain": "skincare",
+          "audience": "beginner",
+          "style": "friendly",
+          "strictness": "medium",
+          "length_hint": "medium"
+        },
+        "blueprints": {
+          "length": "medium",
+          "strictness": "medium",
+          "variety": "medium",
+          "caution": "balanced"
+        }
+      }
     },
     {
       "id": "strength_training_male_v0",
       "auth_env_path": "seed/auth/strength_training_male_v0.env.local",
-      "auth_store_path": "seed/auth/strength_training_male_v0.local"
+      "auth_store_path": "seed/auth/strength_training_male_v0.local",
+      "controls_defaults": {
+        "library": {
+          "domain": "fitness",
+          "audience": "intermediate",
+          "style": "coach",
+          "strictness": "medium",
+          "length_hint": "medium"
+        },
+        "blueprints": {
+          "length": "medium",
+          "strictness": "medium",
+          "variety": "high",
+          "caution": "balanced"
+        }
+      }
     }
   ]
 }
-

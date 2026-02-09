@@ -365,6 +365,24 @@ type PersonaRegistryV0 = {
     id: string;
     auth_env_path?: string;
     auth_store_path?: string;
+    controls_defaults?: {
+      library?: {
+        domain?: string;
+        domain_custom?: string;
+        audience?: string;
+        style?: string;
+        strictness?: string;
+        length_hint?: string;
+      };
+      blueprints?: {
+        focus?: string;
+        focus_custom?: string;
+        length?: string;
+        strictness?: string;
+        variety?: string;
+        caution?: string;
+      };
+    };
   }>;
 };
 
@@ -400,6 +418,69 @@ function resolvePersonaAuthDefaults(params: {
   }
 
   return { authEnvPath: defaultAuthEnv, authStorePath: defaultAuthStore, source: 'default' };
+}
+
+function resolvePersonaRegistryEntry(params: {
+  aspId: string;
+  personaRegistryPath: string;
+}): PersonaRegistryV0['personas'][number] | null {
+  const aspId = String(params.aspId || '').trim();
+  if (!aspId) return null;
+  const reg = loadPersonaRegistryV0(params.personaRegistryPath);
+  if (!reg) return null;
+  const entry = reg.personas.find((p) => String(p.id || '').trim() === aspId);
+  return entry || null;
+}
+
+function applyControlDefaultsFromRegistry(pack: ControlPackV0, entry: PersonaRegistryV0['personas'][number] | null) {
+  const defaults = entry?.controls_defaults;
+  if (!defaults) return;
+
+  // Library controls
+  const lib = defaults.library || {};
+  (pack as any).library = (pack as any).library || {};
+  (pack as any).library.controls = (pack as any).library.controls || {};
+  const libControls = (pack as any).library.controls;
+
+  const setIf = (k: string, v: unknown) => {
+    const s = typeof v === 'string' ? v.trim() : '';
+    if (s) (libControls as any)[k] = s;
+  };
+
+  setIf('domain', lib.domain);
+  if (String(lib.domain || '').trim()) {
+    if (String(lib.domain || '').trim() === 'custom') {
+      setIf('domain_custom', lib.domain_custom);
+    } else {
+      delete (libControls as any).domain_custom;
+    }
+  }
+  setIf('audience', lib.audience);
+  setIf('style', lib.style);
+  setIf('strictness', lib.strictness);
+  setIf('length_hint', lib.length_hint);
+
+  // Blueprint controls applied to all blueprints (v0).
+  const bp = defaults.blueprints || {};
+  const bps = Array.isArray((pack as any).blueprints) ? (pack as any).blueprints : [];
+  for (const b of bps) {
+    (b as any).controls = (b as any).controls || {};
+    const c = (b as any).controls;
+    const setBpIf = (k: string, v: unknown) => {
+      const s = typeof v === 'string' ? v.trim() : '';
+      if (s) c[k] = s;
+    };
+    // focus is optional; if omitted we keep the template-derived focus.
+    if (String(bp.focus || '').trim()) {
+      setBpIf('focus', bp.focus);
+      if (String(bp.focus || '').trim() === 'custom') setBpIf('focus_custom', bp.focus_custom);
+      if (String(bp.focus || '').trim() !== 'custom') delete c.focus_custom;
+    }
+    setBpIf('length', bp.length);
+    setBpIf('strictness', bp.strictness);
+    setBpIf('variety', bp.variety);
+    setBpIf('caution', bp.caution);
+  }
 }
 
 function ensureDir(dir: string) {
@@ -1115,6 +1196,7 @@ async function main() {
   }
 
   const resolvedAuthDefaults = resolvePersonaAuthDefaults({ aspId, personaRegistryPath });
+  const personaRegistryEntry = resolvePersonaRegistryEntry({ aspId, personaRegistryPath });
 
   const runTypeRaw = String((args as any).runType || specRun.run_type || 'seed').trim();
   const runType = (runTypeRaw === 'library_only' || runTypeRaw === 'blueprint_only' || runTypeRaw === 'seed'
@@ -1421,6 +1503,7 @@ async function main() {
           persona,
           blueprintCount,
         });
+        applyControlDefaultsFromRegistry(pack, personaRegistryEntry);
         const gates: DasGateResult[] = [evalStructuralControlPack(pack), evalBoundsControlPack(pack)];
         if (!gates.every((g) => g.ok)) {
           throw new Error(`CONTROL_PACK gates failed: ${gates.filter((g) => !g.ok).map((g) => g.reason).join(', ')}`);
@@ -1528,6 +1611,7 @@ async function main() {
               blueprintCount,
               templateOffset,
             });
+            applyControlDefaultsFromRegistry(pack, personaRegistryEntry);
             applyControlPackOverrides(pack);
           } catch (e) {
             const err = e instanceof Error ? e : new Error(String(e));
