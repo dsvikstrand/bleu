@@ -8,12 +8,18 @@
 
 1) Sync branch
 
+Preferred: run this workflow inside the dedicated Lovable worktree folder:
+
+`/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu-lovable`
+
 ```bash
-cd /mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu
-git checkout lovable-updates
+cd /mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu-lovable
+git branch --show-current
 git fetch upstream
 git pull --ff-only upstream lovable-updates
 ```
+
+If `git branch --show-current` is not `lovable-updates`, stop and fix the folder/branch before applying patches.
 
 2) Apply one patch
 

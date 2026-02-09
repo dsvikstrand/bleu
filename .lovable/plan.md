@@ -31,6 +31,8 @@ Daily batching rules:
 
 How we integrate patches daily (handled outside Lovable):
 - Apply patches to `lovable-updates` in order.
+- Apply patches inside the dedicated Lovable worktree folder:
+  `/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu-lovable`
 - After each patch: run `npm run build` as a fast gate.
 - After the batch: run a short manual smoke on the site.
 - Only then merge into `main`.
