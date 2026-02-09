@@ -1,7 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
-import { config, getFunctionUrl } from '@/config/runtime';
+import { config } from '@/config/runtime';
 
-const LOG_EVENT_URL = getFunctionUrl('log-event');
+// MVP analytics should be stable regardless of which backend powers AI features.
+// Keep `log-event` pinned to the Supabase Edge Function (agentic backend may not implement it).
+const LOG_EVENT_URL = `${config.supabaseUrl.replace(/\/$/, '')}/functions/v1/log-event`;
 
 type LogEventPayload = {
   eventName: string;

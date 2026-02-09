@@ -6,6 +6,30 @@
 
 This is a low-risk, zero-behavior-change refactor that creates two foundational files and updates existing `import.meta.env` references to flow through them. No UI changes, no DB migrations, no endpoint swaps.
 
+## Branch Policy (Important)
+
+Lovable should not commit to `main`.
+
+- Target branch for Lovable bot commits: `lovable-updates`
+- Target branch for Codex/local dev work: `main`
+
+Reason: `main` is our integration branch that deploys to GitHub Pages. We want to keep it stable and only merge/cherry-pick Lovable changes intentionally.
+
+Copy/paste to Lovable:
+
+```
+Please make all commits to the branch `lovable-updates` only (do not commit to `main`).
+
+Notes:
+- `main` is the production/integration branch and deploys to GitHub Pages.
+- If your tooling cannot select a branch, output a patch/diff in chat and I will apply it manually to `lovable-updates`.
+- Keep changes minimal and avoid backend/API behavior changes unless explicitly requested.
+```
+
+## Endpoint Policy Note (Important)
+
+`log-event` must always call the Supabase Edge Function URL (`/functions/v1/log-event`), not the agentic backend. The agentic backend may not implement `/api/log-event`, and we don't want analytics to depend on the AI backend toggle.
+
 ## Branch
 
 Since Lovable cannot create Git branches, you'll create this branch yourself in your local repo:
@@ -139,4 +163,3 @@ These files currently use raw `import.meta.env.*` and will be updated to import 
 - **8 updated files**: Refactored to import from `config/runtime.ts` instead of raw `import.meta.env`
 - **0 behavior changes**: Everything works exactly as before
 - **Next step**: Wire `logMvpEvent` through `apiFetch("log-event", ...)` as a smoke test, then migrate one edge function at a time to your Oracle VM
-
