@@ -4,6 +4,31 @@
 - A list of 1-3 unified diff patches (from Lovable chat output).
 - Policy and invariants in `.lovable/plan.md`.
 
+## Keep The Skill Docs Current (important)
+
+This workflow runs on branch `lovable-updates`, but the newest version of this skill may be committed on `upstream/main` first.
+
+Always do:
+
+```bash
+cd /mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu-lovable
+git fetch upstream
+git pull --ff-only upstream lovable-updates
+```
+
+If you want to see whether the skill docs changed on `upstream/main`:
+
+```bash
+git fetch upstream main
+git log --oneline --decorate -5 upstream/main -- codex/skills/lovable-patch-integrator/SKILL.md
+```
+
+To read the newest skill text from `upstream/main` without switching branches:
+
+```bash
+git show upstream/main:codex/skills/lovable-patch-integrator/SKILL.md | sed -n '1,200p'
+```
+
 ## Commands (preferred)
 
 1) Sync branch

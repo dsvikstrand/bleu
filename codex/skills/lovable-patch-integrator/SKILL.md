@@ -30,6 +30,15 @@ Lovable outputs **unified diff patches** in chat. This skill applies those patch
 4. Push `lovable-updates` to `upstream`.
 5. Report what was applied and whether the build gate passed.
 
+## Keeping This Skill Up To Date
+This repo uses separate worktrees/branches for DAS work (`main`) and Lovable patch integration (`lovable-updates`).
+
+- The patch worker runs in the `bleu-lovable` worktree folder (branch `lovable-updates`).
+- Planning/docs for the workflow may advance on `upstream/main` first.
+
+If you suspect this skill is outdated while working on `lovable-updates`, you can read the latest skill text directly from `upstream/main`
+without merging branches by using `git show` (see `references/daily_workflow.md`).
+
 ## How To Apply A Patch
 Preferred: paste the patch into a file and apply with `git apply`.
 
@@ -40,4 +49,3 @@ If the patch was pasted in chat, create a temporary file and apply it.
 - Fixed smoke checklist (branch-only): `references/smoke_checklist.md`
 - Invariants that must not regress: `references/invariants.md`
 - Prompt to send Lovable: `references/lovable_prompt.md`
-
