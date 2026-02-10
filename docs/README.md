@@ -1,11 +1,11 @@
 # Docs Index
 
 Tags
-- `[APP]`: user-facing product concepts and flows
-- `[MVP]`: launch checklist and acceptance criteria
-- `[ASS]`: agentic seed system and DAS/LAS planning
+- `[APP]`: application (user-facing product concepts and flows)
+- `[MVP]`: minimum viable product (launch checklist and acceptance criteria)
+- `[ASS]`: agentic seed system (seeding pipeline) and DAS/LAS planning
 - `[GRAPH]`: mermaid graphs for systems
-- `[SCHEMA]`: stable data contracts
+- `[SCHEMA]`: schemas (stable data contracts)
 - `[LOVABLE]`: Lovable-specific notes/workflows
 
 Core docs (keep these in sync)
