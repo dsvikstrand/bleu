@@ -8,8 +8,9 @@ flowchart TD
   AP_CFG{{AP config}} --> AP([Persona AP])
   AUTH_CFG{{Auth config}} --> AUTH([Auth bootstrap + store])
   INTENT_CFG{{Intent config}} --> INTENT([Intent: controls or prompts])
-  GEN_CFG{{DAS gen policy config}} --> POLICY([DAS policy])
-  EVAL_CFG{{ASS eval config v2}} --> EVALS([Eval instances per node])
+  GEN_CFG{{ASS gen policy config v1}} --> POLICY([Gen policy])
+  EVAL_CFG{{ASS eval policy config v2}} --> EVALS([Eval instances per node])
+  DOMAIN_CFG{{Domain assets}} --> DOMAIN([Domain assets])
 
   AP --> AUTH --> INTENT
 
@@ -18,6 +19,8 @@ flowchart TD
   POLICY -.-> BP_EVAL
   EVALS -.-> LIB_EVAL
   EVALS -.-> BP_EVAL
+  DOMAIN -.-> LIB_EVAL
+  DOMAIN -.-> BP_EVAL
 
   %% Two eval lanes (faithful, but compact)
   INTENT --> LIB_GEN([LIB_GEN generate library])
@@ -46,5 +49,6 @@ flowchart TD
   class AP,AUTH,INTENT,POLICY,LIB_GEN,BP_GEN,AI,APPLY,STOP stage;
   class LIB_EVAL,BP_EVAL eval;
   class OUT,LIB_OK,BP_OK out;
-  class AP_CFG,AUTH_CFG,INTENT_CFG,GEN_CFG,EVAL_CFG cfg;
+  class AP_CFG,AUTH_CFG,INTENT_CFG,GEN_CFG,EVAL_CFG,DOMAIN_CFG cfg;
   class EVALS stage;
+  class DOMAIN cfg;

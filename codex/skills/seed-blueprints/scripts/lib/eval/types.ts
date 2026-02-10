@@ -21,6 +21,7 @@ export type EvalContext = {
   candidate: number;
   persona: PersonaV0 | null;
   mode: 'seed' | 'user';
+  domain_id: string | null;
 };
 
 export type EvalClass<Input = unknown, Params = Record<string, unknown>> = {
@@ -46,4 +47,3 @@ export type AssEvalConfigV2 = {
     }
   >;
 };
-

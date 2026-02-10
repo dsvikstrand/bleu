@@ -71,6 +71,21 @@ This config is independent from the DAS generation policy config:
 - DAS config controls retries and selection (`maxAttempts`, `kCandidates`, etc.)
 - ASS eval config controls which evals run on each node
 
+## Domains (Eval Asset Namespace)
+
+Some eval classes require "assets" (golden drafts, rubrics, fixtures). Those assets live under a domain namespace:
+
+- Root: `domains/v0/<domain_id>/`
+- Example: `domains/v0/fitness/golden/...`
+
+The runner resolves one active domain per run and passes it into evals as `ctx.domain_id`:
+
+- CLI override: `--domain <id>`
+- Else: persona `default_domain` (if present) or `persona.safety.domain`
+- Else: if using promptless controls, the chosen `control_pack.library.controls.domain` (when not `custom`)
+
+Eval classes that require domain assets should hard-fail with a clear `expected_path` when missing.
+
 ## Promptless Controls (Current)
 We support a promptless intent layer (`ControlPackV0`) that is rendered into a `PromptPackV0` for backend compatibility.
 

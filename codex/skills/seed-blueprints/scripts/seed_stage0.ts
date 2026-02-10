@@ -307,6 +307,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--run-id') out.runId = argv[++i] ?? '';
     else if (a === '--run-type') out.runType = argv[++i] ?? '';
     else if (a === '--asp') out.asp = argv[++i] ?? '';
+    else if (a === '--domain') out.domain = argv[++i] ?? '';
     else if (a === '--library-json') out.libraryJson = argv[++i] ?? '';
     else if (a === '--auth-store') out.authStore = argv[++i] ?? '';
     else if (a === '--auth-env') out.authEnv = argv[++i] ?? '';
@@ -754,6 +755,7 @@ async function main() {
         '  --run-id <id>              Override run_id folder name',
         '  --run-type <type>          Run type: seed | library_only | blueprint_only (default: seed; can also be set in spec.run_type)',
         '  --asp <id>                 Override persona id (sets asp.id) without editing the spec JSON',
+        '  --domain <id>              Optional active domain id for eval assets (example: fitness, skincare)',
         '  --library-json <path>      Input library.json (required for run-type blueprint_only)',
         '  --auth-store <path>        Optional local JSON store for rotating tokens (recommended: seed/seed_auth.local)',
         '  --auth-env <path>          Optional env file that sets SEED_USER_EMAIL/SEED_USER_PASSWORD (recommended: seed/auth/<asp_id>.env.local)',
@@ -793,6 +795,7 @@ async function main() {
   const dasConfigPath = String(args.dasConfig || 'seed/ass_gen_policy_v1.json');
   const assEvalConfigPath = String((args as any).assEvalConfig || '').trim();
   const authOnly = Boolean((args as any).authOnly);
+  const domainArgRaw = String((args as any).domain || '').trim();
 
   if (!fs.existsSync(specPath)) die(`Spec not found: ${specPath}`);
 
@@ -839,6 +842,34 @@ async function main() {
     personaPromptBlock = loaded.promptBlock;
     personaPromptHash = loaded.promptHash;
     personaPathRel = path.relative(process.cwd(), loaded.personaPath).replace(/\\/g, '/');
+  }
+
+  const normalizeDomainId = (raw: unknown): string => {
+    return String(raw || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 64);
+  };
+
+  let activeDomainId: string | null = null;
+  let activeDomainSource: 'cli' | 'persona' | 'control_pack' | 'none' = 'none';
+  if (domainArgRaw) {
+    const v = normalizeDomainId(domainArgRaw);
+    if (v) {
+      activeDomainId = v;
+      activeDomainSource = 'cli';
+    }
+  } else {
+    const personaDefault = normalizeDomainId((persona as any)?.default_domain || '');
+    const personaSafetyDomain = normalizeDomainId(persona?.safety?.domain || '');
+    const v = personaDefault || personaSafetyDomain;
+    if (v) {
+      activeDomainId = v;
+      activeDomainSource = 'persona';
+    }
   }
 
   const runId = sanitizeRunId(String(args.runId || spec.run_id || 'run')) || crypto.randomUUID();
@@ -965,6 +996,10 @@ async function main() {
             prompt_pack_path: 'requests/prompt_pack.json',
           }
         : { enabled: false },
+    domain: {
+      active_domain_id: activeDomainId,
+      source: activeDomainSource,
+    },
     runContextHash,
     das: dasEnabled
       ? {
@@ -1155,6 +1190,7 @@ async function main() {
       candidate: args.candidate,
       persona,
       mode: 'seed',
+      domain_id: activeDomainId,
     };
 
     for (const inst of args.evals || []) {
@@ -1288,6 +1324,13 @@ async function main() {
         }
         controlPack = pack;
         writePack(pack, { dasEnabled: false, selected: { attempt: 1, candidate: 1 }, gates: evalOut.gates });
+        const cpDomain = normalizeDomainId((pack as any)?.library?.controls?.domain || '');
+        if (cpDomain && cpDomain !== 'custom') {
+          activeDomainId = cpDomain;
+          activeDomainSource = 'control_pack';
+          runMeta.domain = { active_domain_id: activeDomainId, source: activeDomainSource };
+          writeJsonFile(outPath.logs('run_meta.json'), runMeta);
+        }
         renderAndApply(pack);
         return { ok: true };
       }
@@ -1462,6 +1505,13 @@ async function main() {
       if (!selected) throw new Error(`DAS failed: no passing control_pack candidate after ${attemptCount} attempt(s)`);
       controlPack = selected.pack;
       writePack(selected.pack, { dasEnabled: true, policy, selected: decision.selected || null });
+      const cpDomain = normalizeDomainId((selected.pack as any)?.library?.controls?.domain || '');
+      if (cpDomain && cpDomain !== 'custom') {
+        activeDomainId = cpDomain;
+        activeDomainSource = 'control_pack';
+        runMeta.domain = { active_domain_id: activeDomainId, source: activeDomainSource };
+        writeJsonFile(outPath.logs('run_meta.json'), runMeta);
+      }
       renderAndApply(selected.pack);
       return { ok: true };
     });

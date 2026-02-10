@@ -1,8 +1,10 @@
+import fs from 'node:fs';
 import type { ControlPackV0 } from '../../control_pack_v0';
 import type { PromptPackV0 } from '../../prompt_pack_v0';
 import type { PersonaV0 } from '../../persona_v0';
 import type { GeneratedBlueprint, InventorySchema } from '../../seed_types';
 import { validateBlueprints } from '../../validate_blueprints';
+import { resolveDomainAsset } from '../domain_assets';
 import type { EvalClass } from '../types';
 import { mkEvalResult } from '../utils';
 
@@ -513,6 +515,41 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
         return mkEvalResult('testonly_fail_once', false, 'warn', 0, 'forced_retry', { attempt: ctx.attempt });
       }
       return mkEvalResult('testonly_fail_once', true, 'info', 1, 'ok', { failOnAttempt, attempt: ctx.attempt });
+    },
+  },
+  {
+    id: 'requires_domain_golden_stub_v0',
+    run: (_input: unknown, _params: Record<string, unknown>, ctx) => {
+      const domainId = String(ctx.domain_id || '').trim();
+      if (!domainId) {
+        return mkEvalResult('requires_domain_golden_stub_v0', false, 'hard_fail', 0, 'missing_domain_id', {
+          expected: 'set --domain or provide persona default_domain/safety.domain',
+        });
+      }
+
+      let asset: { absPath: string; relPath: string };
+      try {
+        asset = resolveDomainAsset(domainId, 'golden/stub.json');
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        return mkEvalResult('requires_domain_golden_stub_v0', false, 'hard_fail', 0, 'invalid_domain_asset_path', {
+          domain_id: domainId,
+          error: err.message.slice(0, 200),
+        });
+      }
+
+      const ok = fs.existsSync(asset.absPath);
+      return mkEvalResult(
+        'requires_domain_golden_stub_v0',
+        ok,
+        ok ? 'info' : 'hard_fail',
+        ok ? 1 : 0,
+        ok ? 'ok' : 'missing_domain_asset',
+        {
+          domain_id: domainId,
+          expected_path: asset.relPath,
+        }
+      );
     },
   },
 ];
