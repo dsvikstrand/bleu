@@ -1938,14 +1938,25 @@ async function main() {
     return;
   }
 
-  // Auth: prefer explicit access token; optionally refresh via refresh token and persist rotation in authStorePath.
-  const supabaseUrlForAuth =
+  // Auth:
+  // - Primary path (persona runs): email+password (password grant) + per-persona auth store (refresh rotation).
+  // - Escape hatches: explicit SEED_USER_ACCESS_TOKEN / SEED_USER_REFRESH_TOKEN.
+  //
+  // Make this robust in shells where `.env` wasn't sourced: we opportunistically read `.env` for the Supabase URL/key.
+  let supabaseUrlForAuth =
     String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
-  const supabaseAnonKeyForAuth = String(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '');
+  let supabaseAnonKeyForAuth = String(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '');
+  if (!supabaseUrlForAuth || !supabaseAnonKeyForAuth) {
+    const fromDotEnv = readEnvFile(path.join(process.cwd(), '.env'));
+    if (!supabaseUrlForAuth) supabaseUrlForAuth = String(fromDotEnv.SUPABASE_URL || fromDotEnv.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+    if (!supabaseAnonKeyForAuth)
+      supabaseAnonKeyForAuth = String(fromDotEnv.SUPABASE_ANON_KEY || fromDotEnv.VITE_SUPABASE_PUBLISHABLE_KEY || '');
+  }
 
   const store = readAuthStore(authStorePath);
-  let accessToken = (process.env.SEED_USER_ACCESS_TOKEN?.trim() || store.access_token || '').trim();
-  let refreshToken = (process.env.SEED_USER_REFRESH_TOKEN?.trim() || store.refresh_token || '').trim();
+  // Prefer the per-persona auth store over ambient shell tokens to prevent accidental cross-persona contamination.
+  let accessToken = (store.access_token || process.env.SEED_USER_ACCESS_TOKEN?.trim() || '').trim();
+  let refreshToken = (store.refresh_token || process.env.SEED_USER_REFRESH_TOKEN?.trim() || '').trim();
 
   const passwordGrantSession = async () => {
     const creds = getSeedCredsFromEnv();
@@ -2000,6 +2011,7 @@ async function main() {
   };
 
   const ensureValidAccessToken = async () => {
+    const hasPasswordGrant = Boolean(getSeedCredsFromEnv());
     if (accessToken && !isJwtExpired(accessToken)) return;
     // Prefer refresh token rotation when available.
     if (refreshToken) {
@@ -2018,7 +2030,7 @@ async function main() {
           }
         }
         // Fall back to password grant when configured (headless persona accounts).
-        if (getSeedCredsFromEnv()) {
+        if (hasPasswordGrant) {
           await passwordGrantSession();
           return;
         }
@@ -2026,11 +2038,15 @@ async function main() {
       }
     }
     // No refresh token: try password grant if configured.
-    if (getSeedCredsFromEnv()) {
+    if (hasPasswordGrant) {
       await passwordGrantSession();
       return;
     }
-    if (!accessToken) throw new Error('Missing SEED_USER_ACCESS_TOKEN. Set it in your shell before running Stage 0.');
+    if (!accessToken) {
+      throw new Error(
+        'Missing auth. Provide a per-persona env file with SEED_USER_EMAIL/SEED_USER_PASSWORD, or set SEED_USER_ACCESS_TOKEN.'
+      );
+    }
     throw new Error('SEED_USER_ACCESS_TOKEN is expired and no refresh token or password grant is available.');
   };
 
