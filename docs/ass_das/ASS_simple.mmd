@@ -8,15 +8,18 @@ flowchart TD
   AP_CFG{{AP config}} --> AP([Persona AP])
   AUTH_CFG{{Auth config}} --> AUTH([Auth bootstrap + store])
   INTENT_CFG{{Intent config}} --> INTENT([Intent: controls or prompts])
+  TAX_CFG{{Eval taxonomy}} --> TAX([Control taxonomy])
   GEN_CFG{{ASS gen policy config v1}} --> POLICY([Gen policy])
   EVAL_CFG{{ASS eval policy config v2}} --> EVALS([Eval instances per node])
   DOMAIN_CFG{{Domain assets}} --> DOMAIN([Domain assets])
 
-  AP --> AUTH --> INTENT
+  AP --> AUTH --> INTENT --> TAX
 
   %% DAS policy (drives retries + select-best)
   POLICY -.-> LIB_EVAL
   POLICY -.-> BP_EVAL
+  TAX -.-> LIB_EVAL
+  TAX -.-> BP_EVAL
   EVALS -.-> LIB_EVAL
   EVALS -.-> BP_EVAL
   DOMAIN -.-> LIB_EVAL
@@ -46,9 +49,9 @@ flowchart TD
   classDef eval fill:#0b2a2f,stroke:#0ea5b7,color:#e6feff,stroke-width:2px;
   classDef out fill:#0f3d2e,stroke:#1b6b4b,color:#e7fff2;
 
-  class AP,AUTH,INTENT,POLICY,LIB_GEN,BP_GEN,AI,APPLY,STOP stage;
+  class AP,AUTH,INTENT,TAX,POLICY,LIB_GEN,BP_GEN,AI,APPLY,STOP stage;
   class LIB_EVAL,BP_EVAL eval;
   class OUT,LIB_OK,BP_OK out;
-  class AP_CFG,AUTH_CFG,INTENT_CFG,GEN_CFG,EVAL_CFG,DOMAIN_CFG cfg;
+  class AP_CFG,AUTH_CFG,INTENT_CFG,TAX_CFG,GEN_CFG,EVAL_CFG,DOMAIN_CFG cfg;
   class EVALS stage;
   class DOMAIN cfg;

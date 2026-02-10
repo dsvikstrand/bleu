@@ -1,5 +1,25 @@
 import type { PersonaV0 } from '../persona_v0';
 
+export type EvalControlsTaxonomyV1 = {
+  version: 1;
+  domain: {
+    allowCustom: boolean;
+    values: Array<{ id: string; label?: string }>;
+  };
+  audience: {
+    values: Array<{ id: string; label?: string; expects?: string[] }>;
+  };
+  style: {
+    values: Array<{ id: string; label?: string; expects?: string[] }>;
+  };
+  strictness: {
+    values: Array<{ id: string; label?: string; expects?: string[] }>;
+  };
+  length_hint: {
+    values: Array<{ id: string; label?: string; expects?: string[] }>;
+  };
+};
+
 export type EvalSeverity = 'info' | 'warn' | 'hard_fail';
 
 export type EvalResult = {
@@ -22,6 +42,7 @@ export type EvalContext = {
   persona: PersonaV0 | null;
   mode: 'seed' | 'user';
   domain_id: string | null;
+  controls_taxonomy: EvalControlsTaxonomyV1 | null;
 };
 
 export type EvalClass<Input = unknown, Params = Record<string, unknown>> = {

@@ -90,6 +90,18 @@ The runner resolves one active domain per run and passes it into evals as `ctx.d
 
 Eval classes that require domain assets should hard-fail with a clear `expected_path` when missing.
 
+## Eval Taxonomy (Global, Planned)
+
+Some controls are shared across all domains (for example `style`, `audience`, `strictness`, `length_hint`). To keep evals stable across:
+- seeding runs (ASS)
+- future user generation runs
+
+we define a global, machine-readable taxonomy:
+- `eval/taxonomy/controls_v1.json`
+- Schema doc: `docs/schemas/eval_controls_taxonomy_schema.md`
+
+Eval classes can use the taxonomy for deterministic validation (example: `controls_taxonomy_alignment_v0`).
+
 ## Promptless Controls (Current)
 We support a promptless intent layer (`ControlPackV0`) that is rendered into a `PromptPackV0` for backend compatibility.
 
@@ -131,6 +143,15 @@ The runner will:
 - Auto-load `seed/auth/<asp_id>.env.local` if present (or use `--auth-env <path>`).
 - Use refresh token rotation when possible; if refresh breaks (example: refresh token already used) and email/password is available, fall back to Supabase password grant to self-heal.
 - Support `--auth-only` to test/refresh persona auth without calling the agentic backend.
+
+## Mode Policy (Seed vs User, Planned)
+
+We treat eval classes and assets as repo-global building blocks. What differs between seeding and user generation is how the system reacts to failures:
+
+- `seed` mode: strict (hard_fail blocks publish, retries/select-best allowed)
+- `user` mode: softer (warn + helpful messaging; minimal retries; no silent failures)
+
+We record mode in `logs/run_meta.json` today, and will wire UI messaging later.
 
 Local helper (optional):
 - `seed/scripts/sync_persona_auth_env.ts` can write `seed/auth/<asp_id>.env.local` files from `seed/secrets.local.json` (keyed by persona id).

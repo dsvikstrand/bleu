@@ -78,6 +78,77 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
     },
   },
   {
+    id: 'controls_taxonomy_alignment_v0',
+    run: (pack: ControlPackV0, _params: Record<string, unknown>, ctx) => {
+      const taxonomy = (ctx as any).controls_taxonomy as any;
+      if (!taxonomy || typeof taxonomy !== 'object') {
+        return mkEvalResult('controls_taxonomy_alignment_v0', false, 'hard_fail', 0, 'missing_taxonomy', {
+          expected: 'provide --eval-taxonomy (default eval/taxonomy/controls_v1.json)',
+        });
+      }
+
+      const issues: Array<{ field: string; value: string; reason: string }> = [];
+      const allowed = (section: any): Set<string> => {
+        const vals = Array.isArray(section?.values) ? section.values : [];
+        return new Set(vals.map((v: any) => normalizeText(v?.id)).filter(Boolean));
+      };
+
+      const libControls = (pack as any)?.library?.controls || {};
+      const domain = normalizeText(libControls.domain || '');
+      const domainCustom = String(libControls.domain_custom || '').trim();
+
+      if (domain) {
+        const known = allowed(taxonomy.domain);
+        const allowCustom = Boolean(taxonomy.domain?.allowCustom);
+        if (domain === 'custom') {
+          if (!allowCustom) issues.push({ field: 'domain', value: domain, reason: 'custom_not_allowed' });
+          if (!domainCustom) issues.push({ field: 'domain_custom', value: domainCustom, reason: 'required_for_custom' });
+        } else if (!known.has(domain)) {
+          issues.push({ field: 'domain', value: domain, reason: 'unknown_value' });
+        }
+      }
+
+      const audience = normalizeText(libControls.audience || '');
+      if (audience) {
+        const known = allowed(taxonomy.audience);
+        if (!known.has(audience)) issues.push({ field: 'audience', value: audience, reason: 'unknown_value' });
+      }
+
+      const style = normalizeText(libControls.style || '');
+      if (style) {
+        const known = allowed(taxonomy.style);
+        if (!known.has(style)) issues.push({ field: 'style', value: style, reason: 'unknown_value' });
+      }
+
+      const strictness = normalizeText(libControls.strictness || '');
+      if (strictness) {
+        const known = allowed(taxonomy.strictness);
+        if (!known.has(strictness)) issues.push({ field: 'strictness', value: strictness, reason: 'unknown_value' });
+      }
+
+      const lengthHint = normalizeText(libControls.length_hint || '');
+      if (lengthHint) {
+        const known = allowed(taxonomy.length_hint);
+        if (!known.has(lengthHint)) issues.push({ field: 'length_hint', value: lengthHint, reason: 'unknown_value' });
+      }
+
+      const ok = issues.length === 0;
+      return mkEvalResult(
+        'controls_taxonomy_alignment_v0',
+        ok,
+        ok ? 'info' : 'warn',
+        ok ? 1 : 0,
+        ok ? 'ok' : 'invalid_controls',
+        {
+          node_id: ctx.node_id,
+          domain_id: ctx.domain_id,
+          issueCount: issues.length,
+          issues,
+        }
+      );
+    },
+  },
+  {
     id: 'bounds_inventory',
     run: (inv: InventorySchema) => {
       const cats = Array.isArray(inv?.categories) ? inv.categories : [];

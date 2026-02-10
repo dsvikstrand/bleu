@@ -15,7 +15,15 @@ import { validateBlueprints, type BlueprintValidationResult } from './lib/valida
 import { readAssEvalConfigV2 } from './lib/eval/config_v2';
 import { getEvalClass } from './lib/eval/registry';
 import { mkEvalResult } from './lib/eval/utils';
-import type { AssEvalConfigV2, EvalContext, EvalInstance, EvalResult, EvalSeverity, UnknownEvalPolicy } from './lib/eval/types';
+import type {
+  AssEvalConfigV2,
+  EvalContext,
+  EvalControlsTaxonomyV1,
+  EvalInstance,
+  EvalResult,
+  EvalSeverity,
+  UnknownEvalPolicy,
+} from './lib/eval/types';
 
 type AspProfile = {
   id: string;
@@ -308,6 +316,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--run-type') out.runType = argv[++i] ?? '';
     else if (a === '--asp') out.asp = argv[++i] ?? '';
     else if (a === '--domain') out.domain = argv[++i] ?? '';
+    else if (a === '--mode') out.mode = argv[++i] ?? '';
     else if (a === '--library-json') out.libraryJson = argv[++i] ?? '';
     else if (a === '--auth-store') out.authStore = argv[++i] ?? '';
     else if (a === '--auth-env') out.authEnv = argv[++i] ?? '';
@@ -323,6 +332,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--das') out.das = true;
     else if (a === '--das-config') out.dasConfig = argv[++i] ?? '';
     else if (a === '--ass-eval-config') out.assEvalConfig = argv[++i] ?? '';
+    else if (a === '--eval-taxonomy') out.evalTaxonomy = argv[++i] ?? '';
     else if (a === '--yes') out.yes = argv[++i] ?? '';
     else if (a === '--limit-blueprints') out.limitBlueprints = Number(argv[++i] ?? 0);
     else if (a.startsWith('--')) die(`Unknown flag: ${a}`);
@@ -756,6 +766,7 @@ async function main() {
         '  --run-type <type>          Run type: seed | library_only | blueprint_only (default: seed; can also be set in spec.run_type)',
         '  --asp <id>                 Override persona id (sets asp.id) without editing the spec JSON',
         '  --domain <id>              Optional active domain id for eval assets (example: fitness, skincare)',
+        '  --mode <seed|user>          Eval mode (default: seed). User mode is recorded for future UX policy.',
         '  --library-json <path>      Input library.json (required for run-type blueprint_only)',
         '  --auth-store <path>        Optional local JSON store for rotating tokens (recommended: seed/seed_auth.local)',
         '  --auth-env <path>          Optional env file that sets SEED_USER_EMAIL/SEED_USER_PASSWORD (recommended: seed/auth/<asp_id>.env.local)',
@@ -771,6 +782,7 @@ async function main() {
         '  --das                      Enable DAS v1 (dynamic gates, retries, select-best; uses das config)',
         '  --das-config <path>        DAS config JSON path (default: seed/ass_gen_policy_v1.json)',
         '  --ass-eval-config <path>   ASS eval config v2 JSON path (config-driven eval instances per node)',
+        '  --eval-taxonomy <path>      Eval controls taxonomy v1 JSON path (default: eval/taxonomy/controls_v1.json)',
         '  --yes <token>              Stage 1 guard token (must be APPLY_STAGE1)',
         '  --limit-blueprints <n>     Limit generated/apply blueprints to N (useful for testing Stage 1)',
       ].join('\n') + '\n'
@@ -796,6 +808,9 @@ async function main() {
   const assEvalConfigPath = String((args as any).assEvalConfig || '').trim();
   const authOnly = Boolean((args as any).authOnly);
   const domainArgRaw = String((args as any).domain || '').trim();
+  const evalTaxonomyPathArg = String((args as any).evalTaxonomy || '').trim();
+  const modeRaw = String((args as any).mode || '').trim().toLowerCase();
+  const mode: 'seed' | 'user' = modeRaw === 'user' ? 'user' : 'seed';
 
   if (!fs.existsSync(specPath)) die(`Spec not found: ${specPath}`);
 
@@ -927,6 +942,22 @@ async function main() {
       die(`ASS eval config invalid: ${err.message}`);
     }
   }
+
+  const defaultEvalTaxonomyPath = path.join('eval', 'taxonomy', 'controls_v1.json');
+  const evalTaxonomyPath = evalTaxonomyPathArg || defaultEvalTaxonomyPath;
+  let evalTaxonomy: EvalControlsTaxonomyV1 | null = null;
+  let evalTaxonomyHash = '';
+  if (evalTaxonomyPath) {
+    if (!fs.existsSync(evalTaxonomyPath)) die(`Eval taxonomy not found: ${evalTaxonomyPath}`);
+    const raw = readRawFile(evalTaxonomyPath);
+    evalTaxonomyHash = sha256Hex(raw);
+    try {
+      evalTaxonomy = JSON.parse(raw) as EvalControlsTaxonomyV1;
+    } catch {
+      die(`Eval taxonomy is not valid JSON: ${evalTaxonomyPath}`);
+    }
+    if (Number((evalTaxonomy as any)?.version || 0) !== 1) die('Eval taxonomy version must be 1');
+  }
   const createdAt = nowIso();
 
   writeJsonFile(outPath.root('manifest.json'), {
@@ -996,10 +1027,18 @@ async function main() {
             prompt_pack_path: 'requests/prompt_pack.json',
           }
         : { enabled: false },
+    mode,
     domain: {
       active_domain_id: activeDomainId,
       source: activeDomainSource,
     },
+    eval_taxonomy: evalTaxonomyPath
+      ? {
+          path: path.relative(process.cwd(), evalTaxonomyPath).replace(/\\/g, '/'),
+          hash: evalTaxonomyHash,
+          version: Number((evalTaxonomy as any)?.version || 0) || 0,
+        }
+      : null,
     runContextHash,
     das: dasEnabled
       ? {
@@ -1053,8 +1092,10 @@ async function main() {
       composePrompts,
       applyStage1,
       limitBlueprints,
+      mode,
       ...(dasEnabled ? { dasEnabled: true, dasConfigPath, dasConfigHash } : {}),
       ...(assEvalConfigPath ? { assEvalConfigPath, assEvalConfigHash } : {}),
+      ...(evalTaxonomyPath ? { evalTaxonomyPath, evalTaxonomyHash } : {}),
       ...(aspId ? { aspId } : {}),
       ...(personaHash ? { personaHash } : {}),
       runContextHash,
@@ -1069,6 +1110,15 @@ async function main() {
       path: assEvalConfigPath,
       hash: assEvalConfigHash,
       config: assEvalConfig,
+    });
+  }
+  if (evalTaxonomyPath) {
+    writeJsonFile(outPath.logs('eval_taxonomy_resolved.json'), {
+      version: 1,
+      createdAt: nowIso(),
+      path: path.relative(process.cwd(), evalTaxonomyPath).replace(/\\/g, '/'),
+      hash: evalTaxonomyHash,
+      taxonomy: evalTaxonomy,
     });
   }
 
@@ -1189,8 +1239,9 @@ async function main() {
       attempt: args.attempt,
       candidate: args.candidate,
       persona,
-      mode: 'seed',
+      mode,
       domain_id: activeDomainId,
+      controls_taxonomy: evalTaxonomy,
     };
 
     for (const inst of args.evals || []) {
@@ -1382,6 +1433,30 @@ async function main() {
           } else {
             delete (pack.library as any).controls.domain_custom;
           }
+        }
+
+        const forceAudience = String(params.force_audience || '').trim();
+        if (forceAudience) {
+          (pack.library as any).controls = (pack.library as any).controls || {};
+          (pack.library as any).controls.audience = forceAudience;
+        }
+
+        const forceStyle = String(params.force_style || '').trim();
+        if (forceStyle) {
+          (pack.library as any).controls = (pack.library as any).controls || {};
+          (pack.library as any).controls.style = forceStyle;
+        }
+
+        const forceStrictness = String(params.force_strictness || '').trim();
+        if (forceStrictness) {
+          (pack.library as any).controls = (pack.library as any).controls || {};
+          (pack.library as any).controls.strictness = forceStrictness;
+        }
+
+        const forceLengthHint = String(params.force_length_hint || '').trim();
+        if (forceLengthHint) {
+          (pack.library as any).controls = (pack.library as any).controls || {};
+          (pack.library as any).controls.length_hint = forceLengthHint;
         }
 
         const forceFocus = String(params.force_focus || '').trim();
