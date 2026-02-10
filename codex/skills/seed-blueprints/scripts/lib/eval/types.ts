@@ -93,7 +93,7 @@ export type EvalContext = {
 
 export type EvalClass<Input = unknown, Params = Record<string, unknown>> = {
   id: string;
-  run: (input: Input, params: Params, ctx: EvalContext) => EvalResult;
+  run: (input: Input, params: Params, ctx: EvalContext) => EvalResult | Promise<EvalResult>;
 };
 
 export type EvalInstance = {

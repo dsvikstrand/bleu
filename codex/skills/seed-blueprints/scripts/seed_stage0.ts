@@ -1269,6 +1269,11 @@ async function main() {
         continue;
       }
 
+      if (name === 'testOnly_failOnce' || name === 'testonly_fail_once') {
+        evals.push({ eval_id: 'testonly_fail_once' });
+        continue;
+      }
+
       // Unknown gates from legacy policy: keep them visible and fail hard by default.
       evals.push({ eval_id: name });
     }
@@ -1276,14 +1281,14 @@ async function main() {
     return evals;
   };
 
-  const runEvalInstancesForNode = (args: {
+  const runEvalInstancesForNode = async (args: {
     nodeId: DasNodeId;
     attempt: number;
     candidate: number;
     evals: EvalInstance[];
     input: unknown;
     inventoryForCrossref?: InventorySchema;
-  }): { gates: DasGateResult[]; ok: boolean; score: number } => {
+  }): Promise<{ gates: DasGateResult[]; ok: boolean; score: number }> => {
     const gates: DasGateResult[] = [];
     let totalScore = 0;
 
@@ -1329,10 +1334,35 @@ async function main() {
 
       let res: EvalResult;
       try {
-        res = cls.run(input as any, params as any, ctx);
+        res = await cls.run(input as any, params as any, ctx);
       } catch (e) {
         const err = e instanceof Error ? e : new Error(String(e));
         res = mkEvalResult(evalId, false, 'hard_fail', 0, 'eval_threw', { message: err.message.slice(0, 300) });
+      }
+
+      // Extract any large/verbose blobs into files so decision_log stays readable.
+      if (res && res.data && typeof res.data === 'object') {
+        const dataAny: any = res.data as any;
+        const judgeRaw = dataAny.__judge_raw;
+        const goldenScorecard = dataAny.__golden_scorecard;
+        if (judgeRaw || goldenScorecard) {
+          const baseDir = outPath.ai('llm_eval');
+          ensureDir(baseDir);
+          const stem = `${String(args.nodeId)}_a${args.attempt}_c${args.candidate}_${String(evalId).replace(/[^a-z0-9-_]+/gi, '_')}`;
+          if (judgeRaw) {
+            const p = path.join(baseDir, `${stem}.judge_raw.json`);
+            writeJsonFile(p, judgeRaw);
+            delete dataAny.__judge_raw;
+            dataAny.judge_raw_path = relPath(p);
+          }
+          if (goldenScorecard) {
+            const p = path.join(baseDir, `${stem}.golden_scorecard.json`);
+            writeJsonFile(p, goldenScorecard);
+            delete dataAny.__golden_scorecard;
+            dataAny.golden_scorecard_path = relPath(p);
+          }
+          res = { ...res, data: dataAny };
+        }
       }
 
       if (inst?.severity && !res.ok) {
@@ -1425,7 +1455,7 @@ async function main() {
         });
         applyControlDefaultsFromRegistry(pack, personaRegistryEntry);
         const evals: EvalInstance[] = [{ eval_id: 'structural_control_pack' }, { eval_id: 'bounds_control_pack' }];
-        const evalOut = runEvalInstancesForNode({ nodeId, attempt: 1, candidate: 1, evals, input: pack });
+        const evalOut = await runEvalInstancesForNode({ nodeId, attempt: 1, candidate: 1, evals, input: pack });
         if (!evalOut.ok) {
           throw new Error(`CONTROL_PACK gates failed: ${evalOut.gates.filter((g) => !g.ok).map((g) => g.reason).join(', ')}`);
         }
@@ -1596,7 +1626,7 @@ async function main() {
           });
 
           const evals = resolveEvalInstancesForNode(nodeId, policy);
-          const evalOut = runEvalInstancesForNode({
+          const evalOut = await runEvalInstancesForNode({
             nodeId,
             attempt,
             candidate: cand,
@@ -1688,7 +1718,7 @@ async function main() {
           blueprintCount,
         });
         const evals: EvalInstance[] = [{ eval_id: 'structural_prompt_pack' }, { eval_id: 'bounds_prompt_pack' }];
-        const evalOut = runEvalInstancesForNode({ nodeId, attempt: 1, candidate: 1, evals, input: pack });
+        const evalOut = await runEvalInstancesForNode({ nodeId, attempt: 1, candidate: 1, evals, input: pack });
         if (!evalOut.ok) {
           throw new Error(`PROMPT_PACK gates failed: ${evalOut.gates.filter((g) => !g.ok).map((g) => g.reason).join(', ')}`);
         }
@@ -1794,7 +1824,7 @@ async function main() {
           });
 
           const evals = resolveEvalInstancesForNode(nodeId, policy);
-          const evalOut = runEvalInstancesForNode({
+          const evalOut = await runEvalInstancesForNode({
             nodeId,
             attempt,
             candidate: cand,
@@ -2121,7 +2151,7 @@ async function main() {
         });
 
         const evals = resolveEvalInstancesForNode(nodeId, policy);
-        const evalOut = runEvalInstancesForNode({
+        const evalOut = await runEvalInstancesForNode({
           nodeId,
           attempt,
           candidate: cand,
@@ -2334,7 +2364,7 @@ async function main() {
         });
 
         const evals = resolveEvalInstancesForNode(nodeId, policy);
-        const evalOut = runEvalInstancesForNode({
+        const evalOut = await runEvalInstancesForNode({
           nodeId,
           attempt,
           candidate: cand,

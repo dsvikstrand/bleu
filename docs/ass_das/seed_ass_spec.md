@@ -91,6 +91,19 @@ Runner flag:
 
 All `bounds_*` eval classes should prefer `ctx.bounds` and only fall back to hardcoded defaults if bounds assets are missing.
 
+## Eval Methods (Asset Namespace)
+
+Some eval classes have method-specific tunables (criteria packs, judge model, prompt version). Those live under:
+
+- Root: `eval/methods/v0/<eval_id>/`
+
+Example (LLM golden regression for LIB_GEN):
+- `eval/methods/v0/llm_golden_regression_inventory_v0/global_pack_v0.json`
+- `eval/methods/v0/llm_golden_regression_inventory_v0/domains/<domain_id>/pack_v0.json`
+
+Scorecard schema (for optional, committed golden baselines):
+- `docs/schemas/eval_scorecard_schema.md`
+
 ## Domains (Eval Asset Namespace)
 
 Some eval classes require "assets" (golden drafts, rubrics, fixtures). Those assets live under a domain namespace:

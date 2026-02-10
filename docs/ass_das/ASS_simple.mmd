@@ -9,10 +9,13 @@ flowchart TD
   AUTH_CFG{{Auth config}} --> AUTH([Auth bootstrap + store])
   INTENT_CFG{{Intent config}} --> INTENT([Intent: controls or prompts])
   TAX_CFG{{Eval taxonomy}} --> TAX([Control taxonomy])
+  METHOD_CFG{{Eval methods assets}} --> METHOD([Eval methods: criteria packs + judge cfg])
   GEN_CFG{{ASS gen policy config v1}} --> POLICY([Gen policy])
   EVAL_CFG{{ASS eval policy config v2}} --> EVALS([Eval instances per node])
   ESTACK([Eval stack: eval classes per gate])
   DOMAIN_CFG{{Domain assets}} --> DOMAIN["Domain assets: rubric + golden"]
+  METHOD -.-> LIB_EVAL
+  METHOD -.-> BP_EVAL
 
   AP --> AUTH --> INTENT --> TAX
 

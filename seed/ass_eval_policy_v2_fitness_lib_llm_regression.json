@@ -8,12 +8,6 @@
         { "eval_id": "bounds_inventory" },
         { "eval_id": "domain_forbidden_terms_inventory_v0" },
         {
-          "eval_id": "golden_regression_inventory_v0",
-          "params": {
-            "minScore": 0.03
-          }
-        },
-        {
           "eval_id": "inventory_quality_heuristics_v0",
           "params": {
             "minCategories": 4,
@@ -37,3 +31,4 @@
     }
   }
 }
+
