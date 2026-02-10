@@ -119,6 +119,12 @@ Outputs under `seed/outputs/<run_id>/` (layout v2):
 ## Stage 0.5 (LAS) – Execute AI (Still No Writes)
 Stage 0.5 optionally runs two expensive calls to validate the happy path end-to-end:
 
+## AI Credits Bypass (Dev Only)
+The backend supports bypassing per-user AI credit limits during development/testing:
+
+- Set `AI_CREDITS_BYPASS=true` in the backend environment.
+- Keep it off in production.
+
 - Review: `POST /api/analyze-blueprint` (SSE stream collected into text)
 - Banner: `POST /api/generate-banner` with `dryRun: true` (base64; no Storage upload)
 

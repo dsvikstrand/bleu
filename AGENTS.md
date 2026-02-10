@@ -60,17 +60,14 @@ If a message ends with `UDO`, treat it as approval to execute the actions you pr
 - `lovable-main` is the legacy Lovable branch and deploys to `/lovable-backend/`.
 - `main-pre-agentic` keeps a backup pointer to the old main before the swap.
 
-## 9) AI credits bypass (dev only) (Suggestion: move this out of agents and place it somewhere code focused)
-Set `AI_CREDITS_BYPASS=true` in the backend environment to bypass credit limits while building/testing. Keep it off in production.
-
-## 10) REC (go with your recommendations)
+## 9) REC (go with your recommendations)
 If I type REC -> "use/go with your recommendations"
 for example: if you give me a follow up question:
 (codex) - "Would you like option A or B?"/"How should I do X"
 (me) - "REC" -> "Please use/go with your recommendations"
 
 
-## 11) Remote server: Oracle (SSH alias + multiplexing)
+## 10) Remote server: Oracle (SSH alias + multiplexing)
 
 Use the SSH alias (no raw IPs/keys in commands).
 
@@ -104,7 +101,7 @@ Troubleshooting
 - If you see `Permission denied (publickey)`: confirm the key path and that `/root/.ssh/id_ed25519_codex_agentic` exists in this environment, and that the public key is in `~/.ssh/authorized_keys` on the server.
 - First connect may prompt to accept the host key; answer `yes` once.
 
-## 12) [have]/[todo] status tags
+## 11) [have]/[todo] status tags
 
 Use `[have]` and `[todo]` at the start of bullet items when describing project state, plans, and reviews (especially for ASS/DAS work).
 
@@ -128,7 +125,7 @@ b1) [todo] Implement the LIB_GEN eval gate + retry wiring
 b2) [todo] Run a DAS smoke test and link the run_log.json
 ```
 
-## 13) Mermaid (.mmd) rendering gotchas
+## 12) Mermaid (.mmd) rendering gotchas
 
 m1) Keep node and edge labels ASCII-only. Avoid unicode symbols (example: `✔`) and emojis.
 m2) Avoid `<` and `>` in labels (example: use `PERSONA_ID` instead of `<id>`).
