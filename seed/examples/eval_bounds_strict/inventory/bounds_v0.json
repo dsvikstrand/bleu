@@ -1,0 +1,8 @@
+{
+  "version": 0,
+  "maxCategories": 1,
+  "maxCategoryNameLen": 80,
+  "maxItemsPerCategory": 80,
+  "maxItemNameLen": 80
+}
+

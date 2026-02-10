@@ -71,6 +71,26 @@ This config is independent from the DAS generation policy config:
 - DAS config controls retries and selection (`maxAttempts`, `kCandidates`, etc.)
 - ASS eval config controls which evals run on each node
 
+## Bounds (Eval Asset Namespace)
+
+Some eval classes use generic "bounds" limits (length/count ceilings). Those live under:
+
+- Root: `eval/bounds/v0/`
+
+Files (v0):
+- `eval/bounds/v0/inventory/bounds_v0.json`
+- `eval/bounds/v0/blueprints/bounds_v0.json`
+- `eval/bounds/v0/prompt_pack/bounds_v0.json`
+- `eval/bounds/v0/control_pack/bounds_v0.json`
+
+Schema doc:
+- `docs/schemas/eval_bounds_schema.md`
+
+Runner flag:
+- `--eval-bounds <dir>` (default: `eval/bounds/v0`)
+
+All `bounds_*` eval classes should prefer `ctx.bounds` and only fall back to hardcoded defaults if bounds assets are missing.
+
 ## Domains (Eval Asset Namespace)
 
 Some eval classes require "assets" (golden drafts, rubrics, fixtures). Those assets live under a domain namespace:

@@ -1,0 +1,10 @@
+{
+  "version": 0,
+  "maxGoalLen": 200,
+  "maxNameLen": 80,
+  "maxNotesLen": 1200,
+  "maxTags": 12,
+  "maxTagLen": 40,
+  "maxBlueprints": 8
+}
+

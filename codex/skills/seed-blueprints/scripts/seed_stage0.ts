@@ -13,11 +13,13 @@ import { composeControlPackV0, renderControlPackToPromptPackV0, type ControlPack
 import { type GeneratedBlueprint, type InventorySchema } from './lib/seed_types';
 import { validateBlueprints, type BlueprintValidationResult } from './lib/validate_blueprints';
 import { readAssEvalConfigV2 } from './lib/eval/config_v2';
+import { loadBoundsAssetsV0 } from './lib/eval/bounds_assets';
 import { getEvalClass } from './lib/eval/registry';
 import { mkEvalResult } from './lib/eval/utils';
 import type {
   AssEvalConfigV2,
   EvalContext,
+  EvalBoundsV0,
   EvalControlsTaxonomyV1,
   EvalInstance,
   EvalResult,
@@ -333,6 +335,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--das-config') out.dasConfig = argv[++i] ?? '';
     else if (a === '--ass-eval-config') out.assEvalConfig = argv[++i] ?? '';
     else if (a === '--eval-taxonomy') out.evalTaxonomy = argv[++i] ?? '';
+    else if (a === '--eval-bounds') out.evalBounds = argv[++i] ?? '';
     else if (a === '--yes') out.yes = argv[++i] ?? '';
     else if (a === '--limit-blueprints') out.limitBlueprints = Number(argv[++i] ?? 0);
     else if (a.startsWith('--')) die(`Unknown flag: ${a}`);
@@ -782,7 +785,8 @@ async function main() {
         '  --das                      Enable DAS v1 (dynamic gates, retries, select-best; uses das config)',
         '  --das-config <path>        DAS config JSON path (default: seed/ass_gen_policy_v1.json)',
         '  --ass-eval-config <path>   ASS eval config v2 JSON path (config-driven eval instances per node)',
-        '  --eval-taxonomy <path>      Inventory controls taxonomy v1 JSON path (default: eval/taxonomy/inventory_controls_v1.json)',
+        '  --eval-taxonomy <path>     Inventory controls taxonomy v1 JSON path (default: eval/taxonomy/inventory_controls_v1.json)',
+        '  --eval-bounds <dir>        Eval bounds base dir (default: eval/bounds/v0)',
         '  --yes <token>              Stage 1 guard token (must be APPLY_STAGE1)',
         '  --limit-blueprints <n>     Limit generated/apply blueprints to N (useful for testing Stage 1)',
       ].join('\n') + '\n'
@@ -809,6 +813,7 @@ async function main() {
   const authOnly = Boolean((args as any).authOnly);
   const domainArgRaw = String((args as any).domain || '').trim();
   const evalTaxonomyPathArg = String((args as any).evalTaxonomy || '').trim();
+  const evalBoundsPathArg = String((args as any).evalBounds || '').trim();
   const modeRaw = String((args as any).mode || '').trim().toLowerCase();
   const mode: 'seed' | 'user' = modeRaw === 'user' ? 'user' : 'seed';
 
@@ -958,6 +963,23 @@ async function main() {
     }
     if (Number((evalTaxonomy as any)?.version || 0) !== 1) die('Eval taxonomy version must be 1');
   }
+
+  const defaultEvalBoundsBaseDir = path.join('eval', 'bounds', 'v0');
+  const evalBoundsBaseDir = evalBoundsPathArg || defaultEvalBoundsBaseDir;
+  let evalBounds: EvalBoundsV0 | null = null;
+  let evalBoundsHash = '';
+  let evalBoundsFiles: any = null;
+  if (evalBoundsBaseDir) {
+    try {
+      const loaded = loadBoundsAssetsV0({ baseDir: evalBoundsBaseDir, readRawFile, sha256Hex });
+      evalBounds = loaded.bounds;
+      evalBoundsHash = loaded.hash;
+      evalBoundsFiles = loaded.files;
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      die(`Eval bounds invalid: ${err.message}`);
+    }
+  }
   const createdAt = nowIso();
 
   writeJsonFile(outPath.root('manifest.json'), {
@@ -1039,6 +1061,21 @@ async function main() {
           version: Number((evalTaxonomy as any)?.version || 0) || 0,
         }
       : null,
+    eval_bounds: evalBoundsBaseDir
+      ? {
+          baseDir: path.relative(process.cwd(), evalBoundsBaseDir).replace(/\\/g, '/'),
+          hash: evalBoundsHash,
+          version: Number((evalBounds as any)?.version || 0) || 0,
+          files: evalBoundsFiles
+            ? Object.fromEntries(
+                Object.entries(evalBoundsFiles).map(([k, v]: any) => [
+                  k,
+                  { path: path.relative(process.cwd(), String(v.path)).replace(/\\/g, '/'), hash: String(v.hash), version: Number(v.version || 0) || 0 },
+                ])
+              )
+            : null,
+        }
+      : null,
     runContextHash,
     das: dasEnabled
       ? {
@@ -1096,6 +1133,7 @@ async function main() {
       ...(dasEnabled ? { dasEnabled: true, dasConfigPath, dasConfigHash } : {}),
       ...(assEvalConfigPath ? { assEvalConfigPath, assEvalConfigHash } : {}),
       ...(evalTaxonomyPath ? { evalTaxonomyPath, evalTaxonomyHash } : {}),
+      ...(evalBoundsBaseDir ? { evalBoundsBaseDir, evalBoundsHash } : {}),
       ...(aspId ? { aspId } : {}),
       ...(personaHash ? { personaHash } : {}),
       runContextHash,
@@ -1119,6 +1157,23 @@ async function main() {
       path: path.relative(process.cwd(), evalTaxonomyPath).replace(/\\/g, '/'),
       hash: evalTaxonomyHash,
       taxonomy: evalTaxonomy,
+    });
+  }
+  if (evalBoundsBaseDir) {
+    writeJsonFile(outPath.logs('eval_bounds_resolved.json'), {
+      version: 0,
+      createdAt: nowIso(),
+      baseDir: path.relative(process.cwd(), evalBoundsBaseDir).replace(/\\/g, '/'),
+      hash: evalBoundsHash,
+      bounds: evalBounds,
+      files: evalBoundsFiles
+        ? Object.fromEntries(
+            Object.entries(evalBoundsFiles).map(([k, v]: any) => [
+              k,
+              { path: path.relative(process.cwd(), String(v.path)).replace(/\\/g, '/'), hash: String(v.hash), version: Number(v.version || 0) || 0 },
+            ])
+          )
+        : null,
     });
   }
 
@@ -1242,6 +1297,7 @@ async function main() {
       mode,
       domain_id: activeDomainId,
       controls_taxonomy: evalTaxonomy,
+      bounds: evalBounds,
     };
 
     for (const inst of args.evals || []) {

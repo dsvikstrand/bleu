@@ -11,7 +11,8 @@ flowchart TD
   TAX_CFG{{Eval taxonomy}} --> TAX([Control taxonomy])
   GEN_CFG{{ASS gen policy config v1}} --> POLICY([Gen policy])
   EVAL_CFG{{ASS eval policy config v2}} --> EVALS([Eval instances per node])
-  DOMAIN_CFG{{Domain assets}} --> DOMAIN([Domain assets (rubric, golden)])
+  ESTACK([Eval stack: eval classes per gate])
+  DOMAIN_CFG{{Domain assets}} --> DOMAIN["Domain assets: rubric + golden"]
 
   AP --> AUTH --> INTENT --> TAX
 
@@ -20,8 +21,9 @@ flowchart TD
   POLICY -.-> BP_EVAL
   TAX -.-> LIB_EVAL
   TAX -.-> BP_EVAL
-  EVALS -.-> LIB_EVAL
-  EVALS -.-> BP_EVAL
+  EVALS -.-> ESTACK
+  ESTACK -.-> LIB_EVAL
+  ESTACK -.-> BP_EVAL
   DOMAIN -.-> LIB_EVAL
   DOMAIN -.-> BP_EVAL
 

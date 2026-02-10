@@ -150,18 +150,16 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
   },
   {
     id: 'bounds_inventory',
-    run: (inv: InventorySchema) => {
+    run: (inv: InventorySchema, _params: Record<string, unknown>, ctx) => {
       const cats = Array.isArray(inv?.categories) ? inv.categories : [];
-      const limits = {
-        maxCategories: 30,
-        maxCategoryNameLen: 80,
-        maxItemsPerCategory: 80,
-        maxItemNameLen: 80,
-      };
+      const fallback = { version: 0, maxCategories: 30, maxCategoryNameLen: 80, maxItemsPerCategory: 80, maxItemNameLen: 80 };
+      const limits = ((ctx as any)?.bounds?.inventory as any) || fallback;
+      const bounds_source = limits === fallback ? 'fallback_hardcoded' : 'eval_bounds_assets';
       if (cats.length > limits.maxCategories) {
         return mkEvalResult('bounds_inventory', false, 'warn', 0, 'too_many_categories', {
           categoryCount: cats.length,
           maxCategories: limits.maxCategories,
+          bounds_source,
         });
       }
       for (const c of cats) {
@@ -170,6 +168,7 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
           return mkEvalResult('bounds_inventory', false, 'warn', 0, 'category_name_too_long', {
             categoryNameLen: name.length,
             maxCategoryNameLen: limits.maxCategoryNameLen,
+            bounds_source,
           });
         }
         const items = Array.isArray(c?.items) ? c.items : [];
@@ -177,6 +176,7 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
           return mkEvalResult('bounds_inventory', false, 'warn', 0, 'too_many_items_in_category', {
             itemCount: items.length,
             maxItemsPerCategory: limits.maxItemsPerCategory,
+            bounds_source,
           });
         }
         for (const it of items) {
@@ -185,11 +185,12 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
             return mkEvalResult('bounds_inventory', false, 'warn', 0, 'item_name_too_long', {
               itemNameLen: itNameLen,
               maxItemNameLen: limits.maxItemNameLen,
+              bounds_source,
             });
           }
         }
       }
-      return mkEvalResult('bounds_inventory', true, 'info', 1, 'ok', limits);
+      return mkEvalResult('bounds_inventory', true, 'info', 1, 'ok', { ...limits, bounds_source });
     },
   },
   {
@@ -318,41 +319,45 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
   },
   {
     id: 'bounds_blueprints',
-    run: (blueprints: GeneratedBlueprint[]) => {
-      const limits = {
-        maxSteps: 20,
-        maxStepTitleLen: 120,
-        maxStepDescriptionLen: 800,
-        maxItemsPerStep: 40,
-      };
+    run: (blueprints: GeneratedBlueprint[], _params: Record<string, unknown>, ctx) => {
+      const fallback = { version: 0, maxSteps: 20, maxStepTitleLen: 120, maxStepDescriptionLen: 800, maxItemsPerStep: 40 };
+      const limits = ((ctx as any)?.bounds?.blueprints as any) || fallback;
+      const bounds_source = limits === fallback ? 'fallback_hardcoded' : 'eval_bounds_assets';
       for (const bp of blueprints || []) {
         if ((bp.steps || []).length > limits.maxSteps) {
           return mkEvalResult('bounds_blueprints', false, 'warn', 0, 'too_many_steps', {
             stepCount: (bp.steps || []).length,
             maxSteps: limits.maxSteps,
+            bounds_source,
           });
         }
         for (const st of bp.steps || []) {
           const titleLen = String(st?.title || '').length;
           if (titleLen > limits.maxStepTitleLen) {
-            return mkEvalResult('bounds_blueprints', false, 'warn', 0, 'step_title_too_long', { titleLen, maxStepTitleLen: limits.maxStepTitleLen });
+            return mkEvalResult('bounds_blueprints', false, 'warn', 0, 'step_title_too_long', {
+              titleLen,
+              maxStepTitleLen: limits.maxStepTitleLen,
+              bounds_source,
+            });
           }
           const descLen = String(st?.description || '').length;
           if (descLen > limits.maxStepDescriptionLen) {
             return mkEvalResult('bounds_blueprints', false, 'warn', 0, 'step_description_too_long', {
               descLen,
               maxStepDescriptionLen: limits.maxStepDescriptionLen,
+              bounds_source,
             });
           }
           if ((st.items || []).length > limits.maxItemsPerStep) {
             return mkEvalResult('bounds_blueprints', false, 'warn', 0, 'too_many_items_in_step', {
               itemCount: (st.items || []).length,
               maxItemsPerStep: limits.maxItemsPerStep,
+              bounds_source,
             });
           }
         }
       }
-      return mkEvalResult('bounds_blueprints', true, 'info', 1, 'ok', limits);
+      return mkEvalResult('bounds_blueprints', true, 'info', 1, 'ok', { ...limits, bounds_source });
     },
   },
   {
@@ -393,8 +398,9 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
   },
   {
     id: 'bounds_prompt_pack',
-    run: (pack: PromptPackV0) => {
-      const limits = {
+    run: (pack: PromptPackV0, _params: Record<string, unknown>, ctx) => {
+      const fallback = {
+        version: 0,
         maxGoalLen: 200,
         maxTitleLen: 80,
         maxDescriptionLen: 240,
@@ -403,35 +409,44 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
         maxTagLen: 40,
         maxBlueprints: 8,
       };
+      const limits = ((ctx as any)?.bounds?.prompt_pack as any) || fallback;
+      const bounds_source = limits === fallback ? 'fallback_hardcoded' : 'eval_bounds_assets';
 
       const goal = String(pack?.goal || '');
-      if (goal.length > limits.maxGoalLen) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'goal_too_long', limits);
+      if (goal.length > limits.maxGoalLen) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'goal_too_long', { ...limits, bounds_source });
 
       const lib = pack?.library;
       const libTitleLen = String(lib?.title || '').length;
-      if (libTitleLen > limits.maxTitleLen) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'library_title_too_long', limits);
+      if (libTitleLen > limits.maxTitleLen)
+        return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'library_title_too_long', { ...limits, bounds_source });
       const libDescLen = String(lib?.description || '').length;
-      if (libDescLen > limits.maxDescriptionLen) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'library_description_too_long', limits);
+      if (libDescLen > limits.maxDescriptionLen)
+        return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'library_description_too_long', { ...limits, bounds_source });
       const libNotesLen = String(lib?.notes || '').length;
-      if (libNotesLen > limits.maxNotesLen) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'library_notes_too_long', limits);
+      if (libNotesLen > limits.maxNotesLen)
+        return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'library_notes_too_long', { ...limits, bounds_source });
 
       const bps = Array.isArray(pack?.blueprints) ? pack.blueprints : [];
-      if (bps.length > limits.maxBlueprints) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'too_many_blueprints', limits);
+      if (bps.length > limits.maxBlueprints) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'too_many_blueprints', { ...limits, bounds_source });
       for (const bp of bps) {
         const tLen = String(bp?.title || '').length;
-        if (tLen > limits.maxTitleLen) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'blueprint_title_too_long', limits);
+        if (tLen > limits.maxTitleLen)
+          return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'blueprint_title_too_long', { ...limits, bounds_source });
         const dLen = String(bp?.description || '').length;
-        if (dLen > limits.maxDescriptionLen) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'blueprint_description_too_long', limits);
+        if (dLen > limits.maxDescriptionLen)
+          return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'blueprint_description_too_long', { ...limits, bounds_source });
         const nLen = String(bp?.notes || '').length;
-        if (nLen > limits.maxNotesLen) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'blueprint_notes_too_long', limits);
+        if (nLen > limits.maxNotesLen)
+          return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'blueprint_notes_too_long', { ...limits, bounds_source });
         const tags = (bp?.tags || []).map((x) => String(x || '')).filter(Boolean);
-        if (tags.length > limits.maxTags) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'too_many_tags', limits);
+        if (tags.length > limits.maxTags) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'too_many_tags', { ...limits, bounds_source });
         for (const tag of tags) {
-          if (String(tag).length > limits.maxTagLen) return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'tag_too_long', limits);
+          if (String(tag).length > limits.maxTagLen)
+            return mkEvalResult('bounds_prompt_pack', false, 'warn', 0, 'tag_too_long', { ...limits, bounds_source });
         }
       }
 
-      return mkEvalResult('bounds_prompt_pack', true, 'info', 1, 'ok', limits);
+      return mkEvalResult('bounds_prompt_pack', true, 'info', 1, 'ok', { ...limits, bounds_source });
     },
   },
   {
@@ -544,41 +559,44 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
   },
   {
     id: 'bounds_control_pack',
-    run: (pack: ControlPackV0) => {
-      const limits = {
-        maxGoalLen: 200,
-        maxNameLen: 80,
-        maxNotesLen: 1200,
-        maxTags: 12,
-        maxTagLen: 40,
-        maxBlueprints: 8,
-      };
+    run: (pack: ControlPackV0, _params: Record<string, unknown>, ctx) => {
+      const fallback = { version: 0, maxGoalLen: 200, maxNameLen: 80, maxNotesLen: 1200, maxTags: 12, maxTagLen: 40, maxBlueprints: 8 };
+      const limits = ((ctx as any)?.bounds?.control_pack as any) || fallback;
+      const bounds_source = limits === fallback ? 'fallback_hardcoded' : 'eval_bounds_assets';
       const goal = String(pack?.goal || '');
-      if (goal.length > limits.maxGoalLen) return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'goal_too_long', limits);
+      if (goal.length > limits.maxGoalLen) return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'goal_too_long', { ...limits, bounds_source });
       const libNameLen = String(pack?.library?.name || '').length;
-      if (libNameLen > limits.maxNameLen) return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'library_name_too_long', limits);
+      if (libNameLen > limits.maxNameLen)
+        return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'library_name_too_long', { ...limits, bounds_source });
       const libNotesLen = String(pack?.library?.notes || '').length;
-      if (libNotesLen > limits.maxNotesLen) return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'library_notes_too_long', limits);
+      if (libNotesLen > limits.maxNotesLen)
+        return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'library_notes_too_long', { ...limits, bounds_source });
       const libTags = ((pack?.library?.tags || []) as any[]).map((x) => String(x || '')).filter(Boolean);
-      if (libTags.length > limits.maxTags) return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'too_many_library_tags', limits);
+      if (libTags.length > limits.maxTags)
+        return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'too_many_library_tags', { ...limits, bounds_source });
       for (const tag of libTags) {
-        if (String(tag).length > limits.maxTagLen) return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'library_tag_too_long', limits);
+        if (String(tag).length > limits.maxTagLen)
+          return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'library_tag_too_long', { ...limits, bounds_source });
       }
 
       const bps = Array.isArray(pack?.blueprints) ? pack.blueprints : [];
-      if (bps.length > limits.maxBlueprints) return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'too_many_blueprints', limits);
+      if (bps.length > limits.maxBlueprints) return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'too_many_blueprints', { ...limits, bounds_source });
       for (const bp of bps) {
         const nameLen = String(bp?.name || '').length;
-        if (nameLen > limits.maxNameLen) return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'blueprint_name_too_long', limits);
+        if (nameLen > limits.maxNameLen)
+          return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'blueprint_name_too_long', { ...limits, bounds_source });
         const notesLen = String(bp?.notes || '').length;
-        if (notesLen > limits.maxNotesLen) return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'blueprint_notes_too_long', limits);
+        if (notesLen > limits.maxNotesLen)
+          return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'blueprint_notes_too_long', { ...limits, bounds_source });
         const tags = ((bp?.tags || []) as any[]).map((x) => String(x || '')).filter(Boolean);
-        if (tags.length > limits.maxTags) return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'too_many_blueprint_tags', limits);
+        if (tags.length > limits.maxTags)
+          return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'too_many_blueprint_tags', { ...limits, bounds_source });
         for (const tag of tags) {
-          if (String(tag).length > limits.maxTagLen) return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'blueprint_tag_too_long', limits);
+          if (String(tag).length > limits.maxTagLen)
+            return mkEvalResult('bounds_control_pack', false, 'warn', 0, 'blueprint_tag_too_long', { ...limits, bounds_source });
         }
       }
-      return mkEvalResult('bounds_control_pack', true, 'info', 1, 'ok', limits);
+      return mkEvalResult('bounds_control_pack', true, 'info', 1, 'ok', { ...limits, bounds_source });
     },
   },
   {
