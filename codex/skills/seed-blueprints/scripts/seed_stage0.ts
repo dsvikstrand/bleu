@@ -786,7 +786,7 @@ async function main() {
         '  --das                      Enable DAS v1 (dynamic gates, retries, select-best; uses das config)',
         '  --das-config <path>        DAS config JSON path (default: seed/ass_gen_policy_v1.json)',
         '  --ass-eval-config <path>   ASS eval config v2 JSON path (config-driven eval instances per node)',
-        '  --eval-taxonomy <path>     Inventory controls taxonomy v1 JSON path (default: eval/taxonomy/inventory_controls_v1.json)',
+        '  --eval-taxonomy <path>     Controls taxonomy v1 path (file or dir; default: eval/taxonomy)',
         '  --eval-bounds <dir>        Eval bounds base dir (default: eval/bounds/v0)',
         '  --bootstrap-llm-golden-scores  Write method-owned golden scorecards for LLM golden regression evals (requires OPENAI_API_KEY)',
         '  --yes <token>              Stage 1 guard token (must be APPLY_STAGE1)',
