@@ -2,7 +2,7 @@
 
 Tags
 - `[APP]`: application (user-facing product concepts and flows)
-- `[MVP]`: minimum viable product (launch checklist and acceptance criteria)
+- `[MVP]`: minimum viable product (launch checklist and acceptance criteria) (deprecated for now)
 - `[ASS]`: Agentic Seed System (the seeding pipeline project)
 - `[LAS]`: Linear Agentic System (baseline sequential pipeline)
 - `[DAS]`: Dynamic Agentic System (gates, retries, select-best)
@@ -13,9 +13,8 @@ Tags
 
 Core docs (keep these in sync)
 - `[APP]` `docs/app/product-spec.md` (product + concepts + user flows)
-- `[MVP]` `docs/app/mvp_checklist.md` (MVP readiness + launch checklist)
 - `[ASS] [LAS] [DAS] [AG]` `docs/ass_das/seed_ass_spec.md` (ASS spec: stages, auth, artifacts, eval)
-- `[ASS] [GRAPH]` `docs/ass_das/seed_las_stage0.mmd` (current graph)
+- `[ASS] [GRAPH]` `docs/ass_das/ASS_simple.mmd` (conceptual flow, eval-centered)
 
 Schemas (stable reference)
 - `[SCHEMA] [AG]` `docs/schemas/persona_schema.md`

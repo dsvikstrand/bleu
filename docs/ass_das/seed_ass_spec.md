@@ -13,7 +13,7 @@ The baseline is a **linear agentic system (LAS)**. We will evolve it into a **dy
 - Runner: `codex/skills/seed-blueprints/scripts/seed_stage0.ts`
 - Input spec: `seed/seed_spec_v0.json`
 - Outputs: `seed/outputs/<run_id>/...`
-- Mermaid graph: `docs/ass_das/seed_las_stage0.mmd`
+- Mermaid graph: `docs/ass_das/ASS_simple.mmd`
 
 ## Inputs
 `seed/seed_spec_v0.json`

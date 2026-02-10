@@ -1,0 +1,58 @@
+flowchart TD
+  %% ASS (Agentic Seed System) - Conceptual Flow (simplified)
+  %% Focus: personas (AP) and eval-driven DAS loop
+  %% Source of truth: codex/skills/seed-blueprints/scripts/seed_stage0.ts
+  %% Mermaid: keep labels ASCII, single-line, and short.
+  %% Stage markers
+  ST_PERS([Persona AP]) --> ST_BOOT([Identity bootstrap])
+  ST_BOOT --> ST_INTENT([Intent layer])
+  ST_INTENT --> ST_GEN([Generate content])
+  ST_GEN --> ST_EVAL([Eval gates])
+  ST_EVAL -->|pass| ST_ENRICH([Optional AI enrich])
+  ST_EVAL -->|fail and attempts left| ST_RETRY([Retry or select best])
+  ST_EVAL -->|hard fail| ST_STOP([Stop run])
+  ST_RETRY --> ST_GEN
+  ST_ENRICH --> ST_APPLY([Optional apply/publish])
+  ST_APPLY --> ST_DONE([Done])
+
+  %% Persona
+  AP_FILE["personas/v0/PERSONA_ID.json"] --> ST_PERS
+  AP_REG["seed/persona_registry_v0.json"] --> ST_PERS
+
+  %% Auth + stores (no manual tokens)
+  SECRETS["seed/secrets.local.json (gitignored)"] --> ST_BOOT
+  ENV_OUT["personas/auth_local/PERSONA_ID.env.local (generated)"] --> ST_BOOT
+  STORE["personas/auth_local/PERSONA_ID.local (rotating store)"] --> ST_BOOT
+
+  %% Intent (promptless controls or prompts)
+  CP["ControlPack (promptless controls)"] --> ST_INTENT
+  PP["PromptPack (rendered prompts)"] --> ST_INTENT
+  NOTE_INTENT{{"NOTE: UI is promptless; runner renders controls into prompts for backend"}} --> ST_INTENT
+
+  %% Generation nodes (conceptual)
+  LIB["LIB_GEN (library/inventory)"] --> ST_GEN
+  BP["BP_GEN (blueprints)"] --> ST_GEN
+  NOTE_RUN{{"NOTE: run_type can be seed / library_only / blueprint_only"}} --> ST_GEN
+
+  %% Eval center (DAS loop)
+  CFG["DAS config (per-node attempts/candidates/gates)"] --> ST_EVAL
+  WIRE["Cheap wiring gates (structural/bounds/persona_align_v0)"] --> ST_EVAL
+  REAL["Real content gates (planned): inventory + blueprint quality"] --> ST_EVAL
+  LOGS["logs/decision_log.json (why retry/select)"] --> ST_EVAL
+
+  %% Outputs
+  ART["artifacts/ (library.json, blueprints.json, validation.json)"] --> ST_DONE
+  RUNLOG["logs/run_log.json + logs/run_meta.json"] --> ST_DONE
+
+  %% Styling
+  classDef stage fill:#0b1220,stroke:#253047,color:#e7eefc,stroke-width:1px;
+  classDef inputs fill:#102a43,stroke:#1e4e8c,color:#e7f0ff;
+  classDef eval fill:#0b2a2f,stroke:#0ea5b7,color:#e6feff,stroke-width:2px;
+  classDef note fill:#111827,stroke:#374151,color:#e5e7eb,stroke-dasharray: 3 3;
+  classDef out fill:#0f3d2e,stroke:#1b6b4b,color:#e7fff2;
+
+  class ST_PERS,ST_BOOT,ST_INTENT,ST_GEN,ST_ENRICH,ST_APPLY,ST_DONE,ST_RETRY,ST_STOP stage;
+  class AP_FILE,AP_REG,SECRETS,ENV_OUT,STORE,CP,PP,LIB,BP inputs;
+  class ST_EVAL eval;
+  class NOTE_INTENT,NOTE_RUN note;
+  class ART,RUNLOG,LOGS out;
