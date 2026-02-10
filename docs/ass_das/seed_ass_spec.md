@@ -13,7 +13,7 @@ The baseline is a **linear agentic system (LAS)**. We will evolve it into a **dy
 - Runner: `codex/skills/seed-blueprints/scripts/seed_stage0.ts`
 - Input spec: `seed/seed_spec_v0.json`
 - Outputs: `seed/outputs/<run_id>/...`
-- Mermaid graph: `docs/seed_las_stage0.mmd`
+- Mermaid graph: `docs/ass_das/seed_las_stage0.mmd`
 
 ## Inputs
 `seed/seed_spec_v0.json`
@@ -57,7 +57,7 @@ Notes:
 ## Promptless Controls (Current)
 We support a promptless intent layer (`ControlPackV0`) that is rendered into a `PromptPackV0` for backend compatibility.
 
-- Schema doc: `docs/control_pack_schema.md`
+- Schema doc: `docs/schemas/control_pack_schema.md`
 - Runner flag: `--compose-controls`
 - Output: `requests/control_pack.json` (plus the rendered `requests/prompt_pack.json`)
 
@@ -67,7 +67,7 @@ Personas are not "seed-only". They are a reusable contract that can be used by:
 - Future interactive agent runs (agents that act like users)
 
 Schema doc:
-- `docs/persona_schema.md`
+- `docs/schemas/persona_schema.md`
 
 Storage:
 - `personas/v0/<persona_id>.json`

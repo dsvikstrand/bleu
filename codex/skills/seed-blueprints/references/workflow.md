@@ -17,9 +17,9 @@
 **No DB writes in Stage 0.**
 
 ## Planning docs
-- Mermaid graph: `docs/seed_las_stage0.mmd`
-- ASS baseline + DAS roadmap: `docs/seed_ass_spec.md`
-- Persona contract (current): `docs/persona_schema.md`
+- Mermaid graph: `docs/ass_das/seed_las_stage0.mmd`
+- ASS baseline + DAS roadmap: `docs/ass_das/seed_ass_spec.md`
+- Persona contract (current): `docs/schemas/persona_schema.md`
 
 ## Persona utilities
 
