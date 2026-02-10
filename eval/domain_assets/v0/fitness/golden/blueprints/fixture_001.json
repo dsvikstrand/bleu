@@ -1,0 +1,43 @@
+{
+  "title": "4-Week Strength Foundation (Home, Busy Beginners)",
+  "steps": [
+    {
+      "title": "Warm-up (5 minutes)",
+      "description": "Raise your heart rate and prep joints with simple, low-impact moves.",
+      "items": [
+        { "category": "Warm-up Exercises", "name": "Marching in Place", "context": "Start easy, breathe through your nose if possible." },
+        { "category": "Warm-up Exercises", "name": "Dynamic Arm Circles", "context": "Small circles first, then bigger as shoulders loosen." },
+        { "category": "Warm-up Exercises", "name": "Hip Openers", "context": "Slow and controlled. Stop before pain." }
+      ]
+    },
+    {
+      "title": "Strength A (Full body)",
+      "description": "A simple circuit you can repeat 2-3 times with good form.",
+      "items": [
+        { "category": "Bodyweight Strength Movements", "name": "Chair Squats", "context": "Use a chair as depth target. Keep knees tracking over toes." },
+        { "category": "Bodyweight Strength Movements", "name": "Wall Push-ups", "context": "Move feet farther from the wall to increase difficulty." },
+        { "category": "Bodyweight Strength Movements", "name": "Glute Bridges", "context": "Pause for 1 second at the top. Keep ribs down." },
+        { "category": "Bodyweight Strength Movements", "name": "Bird Dogs", "context": "Slow reps. Keep hips level and core braced." }
+      ]
+    },
+    {
+      "title": "Strength B (Bands or dumbbells)",
+      "description": "Optional equipment day. Keep it controlled and repeatable.",
+      "items": [
+        { "category": "Resistance Tools", "name": "Resistance Bands (Light to Medium)", "context": "Choose tension that allows clean reps without shrugging." },
+        { "category": "Bodyweight Strength Movements", "name": "Incline Rows (using sturdy furniture)", "context": "Pull elbows toward ribs. Stop if setup feels unstable." },
+        { "category": "Resistance Tools", "name": "Dumbbells (5-15 lbs)", "context": "Pick a weight you can control for 8-12 reps." }
+      ]
+    },
+    {
+      "title": "Cool-down (5 minutes)",
+      "description": "Bring your breathing down and restore range of motion.",
+      "items": [
+        { "category": "Mobility and Flexibility", "name": "Cat-Cow Stretch", "context": "Move with your breath. Keep it gentle." },
+        { "category": "Mobility and Flexibility", "name": "Hamstring Stretch", "context": "Hinge at hips. Avoid bouncing." },
+        { "category": "Recovery and Support", "name": "Foam Roller (for warm-up and recovery)", "context": "Light pressure. Avoid rolling directly on joints." }
+      ]
+    }
+  ]
+}
+

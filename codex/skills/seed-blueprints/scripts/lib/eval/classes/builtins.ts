@@ -9,6 +9,7 @@ import { resolveDomainAsset } from '../domain_assets';
 import type { EvalClass } from '../types';
 import { mkEvalResult } from '../utils';
 import { llmGoldenRegressionInventoryV0 } from './llm_golden_regression_inventory_v0';
+import { llmGoldenRegressionBlueprintsV0 } from './llm_golden_regression_blueprints_v0';
 
 function normalizeSlug(input: string) {
   return String(input || '')
@@ -971,4 +972,5 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
     },
   },
   llmGoldenRegressionInventoryV0,
+  llmGoldenRegressionBlueprintsV0,
 ];
