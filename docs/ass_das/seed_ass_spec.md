@@ -101,7 +101,10 @@ Example (LLM golden regression for LIB_GEN):
 - `eval/methods/v0/llm_golden_regression_inventory_v0/global_pack_v0.json`
 - `eval/methods/v0/llm_golden_regression_inventory_v0/domains/<domain_id>/pack_v0.json`
 
-Scorecard schema (for optional, committed golden baselines):
+Method-owned scorecards (optional, committed golden baselines):
+- `eval/methods/v0/llm_golden_regression_inventory_v0/artifacts/golden_scores/<domain_id>/<fixture_id>.score_v0.json`
+
+Scorecard schema:
 - `docs/schemas/eval_scorecard_schema.md`
 
 ## Domains (Eval Asset Namespace)

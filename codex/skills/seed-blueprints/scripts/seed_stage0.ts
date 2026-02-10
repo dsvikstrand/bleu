@@ -336,6 +336,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--ass-eval-config') out.assEvalConfig = argv[++i] ?? '';
     else if (a === '--eval-taxonomy') out.evalTaxonomy = argv[++i] ?? '';
     else if (a === '--eval-bounds') out.evalBounds = argv[++i] ?? '';
+    else if (a === '--bootstrap-llm-golden-scores') out.bootstrapLlmGoldenScores = true;
     else if (a === '--yes') out.yes = argv[++i] ?? '';
     else if (a === '--limit-blueprints') out.limitBlueprints = Number(argv[++i] ?? 0);
     else if (a.startsWith('--')) die(`Unknown flag: ${a}`);
@@ -787,6 +788,7 @@ async function main() {
         '  --ass-eval-config <path>   ASS eval config v2 JSON path (config-driven eval instances per node)',
         '  --eval-taxonomy <path>     Inventory controls taxonomy v1 JSON path (default: eval/taxonomy/inventory_controls_v1.json)',
         '  --eval-bounds <dir>        Eval bounds base dir (default: eval/bounds/v0)',
+        '  --bootstrap-llm-golden-scores  Write method-owned golden scorecards for LLM golden regression evals (requires OPENAI_API_KEY)',
         '  --yes <token>              Stage 1 guard token (must be APPLY_STAGE1)',
         '  --limit-blueprints <n>     Limit generated/apply blueprints to N (useful for testing Stage 1)',
       ].join('\n') + '\n'
@@ -814,6 +816,7 @@ async function main() {
   const domainArgRaw = String((args as any).domain || '').trim();
   const evalTaxonomyPathArg = String((args as any).evalTaxonomy || '').trim();
   const evalBoundsPathArg = String((args as any).evalBounds || '').trim();
+  const bootstrapLlmGoldenScores = Boolean((args as any).bootstrapLlmGoldenScores);
   const modeRaw = String((args as any).mode || '').trim().toLowerCase();
   const mode: 'seed' | 'user' = modeRaw === 'user' ? 'user' : 'seed';
 
@@ -1134,6 +1137,7 @@ async function main() {
       ...(assEvalConfigPath ? { assEvalConfigPath, assEvalConfigHash } : {}),
       ...(evalTaxonomyPath ? { evalTaxonomyPath, evalTaxonomyHash } : {}),
       ...(evalBoundsBaseDir ? { evalBoundsBaseDir, evalBoundsHash } : {}),
+      ...(bootstrapLlmGoldenScores ? { bootstrapLlmGoldenScores: true } : {}),
       ...(aspId ? { aspId } : {}),
       ...(personaHash ? { personaHash } : {}),
       runContextHash,
@@ -1279,6 +1283,17 @@ async function main() {
     }
 
     return evals;
+  };
+
+  const maybeBootstrapEvalInstances = (evals: EvalInstance[]): EvalInstance[] => {
+    if (!bootstrapLlmGoldenScores) return evals;
+    return (evals || []).map((e) => {
+      if (String(e?.eval_id || '').trim() !== 'llm_golden_regression_inventory_v0') return e;
+      const p = { ...(e.params || {}) } as Record<string, unknown>;
+      p.write_scorecard = true;
+      p.on_missing_api_key = 'hard_fail';
+      return { ...e, params: p };
+    });
   };
 
   const runEvalInstancesForNode = async (args: {
@@ -1625,7 +1640,7 @@ async function main() {
             output: pack,
           });
 
-          const evals = resolveEvalInstancesForNode(nodeId, policy);
+          const evals = maybeBootstrapEvalInstances(resolveEvalInstancesForNode(nodeId, policy));
           const evalOut = await runEvalInstancesForNode({
             nodeId,
             attempt,
@@ -1823,7 +1838,7 @@ async function main() {
             output: pack,
           });
 
-          const evals = resolveEvalInstancesForNode(nodeId, policy);
+          const evals = maybeBootstrapEvalInstances(resolveEvalInstancesForNode(nodeId, policy));
           const evalOut = await runEvalInstancesForNode({
             nodeId,
             attempt,
@@ -2150,7 +2165,7 @@ async function main() {
           output: res.data,
         });
 
-        const evals = resolveEvalInstancesForNode(nodeId, policy);
+        const evals = maybeBootstrapEvalInstances(resolveEvalInstancesForNode(nodeId, policy));
         const evalOut = await runEvalInstancesForNode({
           nodeId,
           attempt,
@@ -2363,7 +2378,7 @@ async function main() {
           output: list,
         });
 
-        const evals = resolveEvalInstancesForNode(nodeId, policy);
+        const evals = maybeBootstrapEvalInstances(resolveEvalInstancesForNode(nodeId, policy));
         const evalOut = await runEvalInstancesForNode({
           nodeId,
           attempt,

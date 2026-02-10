@@ -31,8 +31,10 @@ type MethodDomainPackV0 = {
 
 type ScorecardV0 = {
   version: 0;
+  eval_id: string;
   domain_id: string;
   golden_fixture_id: string;
+  golden_fixture_path: string;
   golden_fixture_hash: string;
   judge_model: string;
   prompt_version: string;
@@ -73,11 +75,12 @@ function defaultMethodPaths(evalId: string, domainId: string) {
   return {
     globalPackPath: path.join(base, 'global_pack_v0.json'),
     domainPackPath: path.join(base, 'domains', domainId, 'pack_v0.json'),
+    scorecardDir: path.join(base, 'artifacts', 'golden_scores', domainId),
   };
 }
 
-function defaultScorecardPath(domainId: string, goldenFixtureId: string) {
-  return path.join('eval', 'domains', 'v0', domainId, 'golden_scores', 'libraries', `${goldenFixtureId.replace(/\\.json$/i, '')}.score_v0.json`);
+function defaultScorecardPath(methodScorecardDir: string, goldenFixtureId: string) {
+  return path.join(methodScorecardDir, `${goldenFixtureId.replace(/\\.json$/i, '')}.score_v0.json`);
 }
 
 function buildJudgeInput(args: {
@@ -164,7 +167,11 @@ export const llmGoldenRegressionInventoryV0: EvalClass<InventorySchema, Record<s
         ok ? 'warn' : 'hard_fail',
         0,
         ok ? 'skipped_missing_openai_api_key' : 'missing_openai_api_key',
-        { skipped: ok, on_missing_api_key: onMissing }
+        {
+          skipped: ok,
+          on_missing_api_key: onMissing,
+          hint: 'Set OPENAI_API_KEY to enable this eval. Use --bootstrap-llm-golden-scores to write scorecards.',
+        }
       );
     }
 
@@ -183,10 +190,11 @@ export const llmGoldenRegressionInventoryV0: EvalClass<InventorySchema, Record<s
       });
     }
 
-    const methodPaths = defaultMethodPaths('llm_golden_regression_inventory_v0', domainId);
+    const evalIdConst = 'llm_golden_regression_inventory_v0';
+    const methodPaths = defaultMethodPaths(evalIdConst, domainId);
     const globalPackPath = String((params as any)?.global_pack_path || methodPaths.globalPackPath).trim();
     const domainPackPath = String((params as any)?.domain_pack_path || methodPaths.domainPackPath).trim();
-    const scorecardPath = String((params as any)?.scorecard_path || defaultScorecardPath(domainId, goldenFixtureId)).trim();
+    const scorecardPath = String((params as any)?.scorecard_path || defaultScorecardPath(methodPaths.scorecardDir, goldenFixtureId)).trim();
 
     // Load golden fixture (domain-owned).
     let goldenDir: { absPath: string; relPath: string };
@@ -221,6 +229,7 @@ export const llmGoldenRegressionInventoryV0: EvalClass<InventorySchema, Record<s
       });
     }
     const goldenHash = sha256Hex(goldenRaw);
+    const goldenFixturePathRel = path.join(goldenDir.relPath, goldenFixtureId).replace(/\\/g, '/');
 
     // Load packs (method-owned).
     if (!fs.existsSync(globalPackPath)) {
@@ -260,6 +269,8 @@ export const llmGoldenRegressionInventoryV0: EvalClass<InventorySchema, Record<s
         return null;
       }
       if (Number(card?.version || 0) !== 0) return null;
+      if (String(card?.eval_id || '') !== evalIdConst) return null;
+      if (String(card?.golden_fixture_path || '') !== goldenFixturePathRel) return null;
       if (String(card?.golden_fixture_hash || '') !== goldenHash) return null;
       if (String(card?.judge_model || '') !== judgeModel) return null;
       if (String(card?.prompt_version || '') !== promptVersion) return null;
@@ -291,8 +302,10 @@ export const llmGoldenRegressionInventoryV0: EvalClass<InventorySchema, Record<s
       goldenRawText = gRes.rawText;
       goldenScorecardGenerated = {
         version: 0,
+        eval_id: evalIdConst,
         domain_id: domainId,
         golden_fixture_id: goldenFixtureId,
+        golden_fixture_path: goldenFixturePathRel,
         golden_fixture_hash: goldenHash,
         judge_model: judgeModel,
         prompt_version: promptVersion,
@@ -344,7 +357,7 @@ export const llmGoldenRegressionInventoryV0: EvalClass<InventorySchema, Record<s
       node_id: ctx.node_id,
       golden_fixture_id: goldenFixtureId,
       golden_fixture_hash: goldenHash,
-      golden_fixture_path: path.join(goldenDir.relPath, goldenFixtureId).replace(/\\/g, '/'),
+      golden_fixture_path: goldenFixturePathRel,
       global_pack_path: globalPackPath.replace(/\\/g, '/'),
       domain_pack_path: fs.existsSync(domainPackPath) ? domainPackPath.replace(/\\/g, '/') : null,
       scorecard_path: scorecardPath.replace(/\\/g, '/'),
