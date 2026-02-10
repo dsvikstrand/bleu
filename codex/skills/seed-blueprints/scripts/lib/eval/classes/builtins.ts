@@ -87,6 +87,110 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
     },
   },
   {
+    id: 'inventory_quality_heuristics_v0',
+    run: (inv: InventorySchema, params: Record<string, unknown>) => {
+      const cats = Array.isArray(inv?.categories) ? inv.categories : [];
+      const minCategories = Math.max(0, Number((params as any)?.minCategories ?? 4) || 0);
+      const minItemsTotal = Math.max(0, Number((params as any)?.minItemsTotal ?? 20) || 0);
+      const minItemsPerCategory = Math.max(0, Number((params as any)?.minItemsPerCategory ?? 3) || 0);
+      const maxDupRatioRaw = (params as any)?.maxDupRatio;
+      const maxDupRatio = maxDupRatioRaw === undefined || maxDupRatioRaw === null ? 0.15 : Math.max(0, Number(maxDupRatioRaw) || 0);
+      const maxDominantCategoryRatioRaw = (params as any)?.maxDominantCategoryRatio;
+      const maxDominantCategoryRatio =
+        maxDominantCategoryRatioRaw === undefined || maxDominantCategoryRatioRaw === null
+          ? 0.55
+          : Math.max(0, Number(maxDominantCategoryRatioRaw) || 0);
+      const minItemLen = Math.max(1, Number((params as any)?.minItemLen ?? 4) || 1);
+      const maxShortItemRatioRaw = (params as any)?.maxShortItemRatio;
+      const maxShortItemRatio =
+        maxShortItemRatioRaw === undefined || maxShortItemRatioRaw === null ? 0.3 : Math.max(0, Number(maxShortItemRatioRaw) || 0);
+
+      const normalizeItem = (s: unknown) => String(s || '').trim().toLowerCase();
+
+      let totalItems = 0;
+      let dominantCategoryCount = 0;
+      let minItemsInAnyCategory = Number.POSITIVE_INFINITY;
+      let shortItems = 0;
+      const all: string[] = [];
+      const perCategory: Array<{ name: string; count: number }> = [];
+
+      for (const c of cats) {
+        const items = Array.isArray((c as any)?.items) ? ((c as any).items as unknown[]) : [];
+        const count = items.length;
+        perCategory.push({ name: String((c as any)?.name || ''), count });
+        totalItems += count;
+        dominantCategoryCount = Math.max(dominantCategoryCount, count);
+        minItemsInAnyCategory = Math.min(minItemsInAnyCategory, count);
+        for (const it of items) {
+          const v = normalizeItem(it);
+          if (!v) continue;
+          all.push(v);
+          if (v.length < minItemLen) shortItems += 1;
+        }
+      }
+
+      const uniq = new Set(all);
+      const uniqCount = uniq.size;
+      const dupCount = Math.max(0, all.length - uniqCount);
+      const dupRatio = all.length > 0 ? dupCount / all.length : 0;
+      const dominantCategoryRatio = totalItems > 0 ? dominantCategoryCount / totalItems : 0;
+      const shortItemRatio = all.length > 0 ? shortItems / all.length : 0;
+
+      const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+      const safeDiv = (a: number, b: number) => (b > 0 ? a / b : 0);
+
+      const sCats = minCategories > 0 ? clamp01(safeDiv(cats.length, minCategories)) : 1;
+      const sTotal = minItemsTotal > 0 ? clamp01(safeDiv(totalItems, minItemsTotal)) : 1;
+      const sPerCat = minItemsPerCategory > 0 ? clamp01(safeDiv(Number.isFinite(minItemsInAnyCategory) ? minItemsInAnyCategory : 0, minItemsPerCategory)) : 1;
+      const sDup = maxDupRatio > 0 ? clamp01(1 - safeDiv(dupRatio, maxDupRatio)) : 1;
+      const sDom = maxDominantCategoryRatio > 0 ? clamp01(1 - safeDiv(dominantCategoryRatio, maxDominantCategoryRatio)) : 1;
+      const sShort = maxShortItemRatio > 0 ? clamp01(1 - safeDiv(shortItemRatio, maxShortItemRatio)) : 1;
+
+      const score = clamp01((sCats + sTotal + sPerCat + sDup + sDom + sShort) / 6);
+
+      const failures: string[] = [];
+      if (minCategories > 0 && cats.length < minCategories) failures.push('too_few_categories');
+      if (minItemsTotal > 0 && totalItems < minItemsTotal) failures.push('too_few_items_total');
+      if (minItemsPerCategory > 0 && (Number.isFinite(minItemsInAnyCategory) ? minItemsInAnyCategory : 0) < minItemsPerCategory)
+        failures.push('too_few_items_in_a_category');
+      if (maxDupRatio > 0 && dupRatio > maxDupRatio) failures.push('too_many_duplicates');
+      if (maxDominantCategoryRatio > 0 && dominantCategoryRatio > maxDominantCategoryRatio) failures.push('category_dominance_too_high');
+      if (maxShortItemRatio > 0 && shortItemRatio > maxShortItemRatio) failures.push('too_many_short_items');
+
+      const ok = failures.length === 0;
+      const data = {
+        thresholds: {
+          minCategories,
+          minItemsTotal,
+          minItemsPerCategory,
+          maxDupRatio,
+          maxDominantCategoryRatio,
+          minItemLen,
+          maxShortItemRatio,
+        },
+        stats: {
+          categoryCount: cats.length,
+          totalItems,
+          minItemsInAnyCategory: Number.isFinite(minItemsInAnyCategory) ? minItemsInAnyCategory : 0,
+          dominantCategoryCount,
+          dominantCategoryRatio,
+          uniqCount,
+          dupCount,
+          dupRatio,
+          shortItems,
+          shortItemRatio,
+        },
+        perCategory: perCategory
+          .slice()
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 8),
+        failures,
+      };
+
+      return mkEvalResult('inventory_quality_heuristics_v0', ok, ok ? 'info' : 'warn', score, ok ? 'ok' : 'quality_issues', data);
+    },
+  },
+  {
     id: 'structural_blueprints',
     run: (blueprints: GeneratedBlueprint[]) => {
       if (!Array.isArray(blueprints) || blueprints.length === 0) {
@@ -412,4 +516,3 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
     },
   },
 ];
-

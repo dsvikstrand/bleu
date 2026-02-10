@@ -50,6 +50,7 @@ Stable per-gate contract:
 
 Initial focus (B1): deterministic eval classes only (examples):
 - `structural_inventory`, `bounds_inventory`
+- `inventory_quality_heuristics_v0`
 - `structural_blueprints`, `bounds_blueprints`, `crossref_blueprints_to_inventory`
 - `structural_control_pack`, `bounds_control_pack`, `persona_alignment_controls_v0`
 - `structural_prompt_pack`, `bounds_prompt_pack`, `persona_alignment_prompts_v0`
