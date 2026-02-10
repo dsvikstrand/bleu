@@ -6,7 +6,7 @@ Purpose:
 - Deterministic and machine-readable.
 
 File:
-- `eval/taxonomy/controls_v1.json`
+- `eval/taxonomy/inventory_controls_v1.json`
 
 Top-level fields:
 - `version`: number, must be `1`
@@ -22,4 +22,3 @@ Required sections:
 Conventions:
 - All `id` fields should be lowercase slugs: `[a-z0-9_-]+`.
 - `expects` should describe output characteristics (not prompts).
-

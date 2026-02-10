@@ -97,7 +97,7 @@ Some controls are shared across all domains (for example `style`, `audience`, `s
 - future user generation runs
 
 we define a global, machine-readable taxonomy:
-- `eval/taxonomy/controls_v1.json`
+- `eval/taxonomy/inventory_controls_v1.json`
 - Schema doc: `docs/schemas/eval_controls_taxonomy_schema.md`
 
 Eval classes can use the taxonomy for deterministic validation (example: `controls_taxonomy_alignment_v0`).

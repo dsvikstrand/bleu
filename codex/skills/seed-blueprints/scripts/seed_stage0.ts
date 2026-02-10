@@ -782,7 +782,7 @@ async function main() {
         '  --das                      Enable DAS v1 (dynamic gates, retries, select-best; uses das config)',
         '  --das-config <path>        DAS config JSON path (default: seed/ass_gen_policy_v1.json)',
         '  --ass-eval-config <path>   ASS eval config v2 JSON path (config-driven eval instances per node)',
-        '  --eval-taxonomy <path>      Eval controls taxonomy v1 JSON path (default: eval/taxonomy/controls_v1.json)',
+        '  --eval-taxonomy <path>      Inventory controls taxonomy v1 JSON path (default: eval/taxonomy/inventory_controls_v1.json)',
         '  --yes <token>              Stage 1 guard token (must be APPLY_STAGE1)',
         '  --limit-blueprints <n>     Limit generated/apply blueprints to N (useful for testing Stage 1)',
       ].join('\n') + '\n'
@@ -943,7 +943,7 @@ async function main() {
     }
   }
 
-  const defaultEvalTaxonomyPath = path.join('eval', 'taxonomy', 'controls_v1.json');
+  const defaultEvalTaxonomyPath = path.join('eval', 'taxonomy', 'inventory_controls_v1.json');
   const evalTaxonomyPath = evalTaxonomyPathArg || defaultEvalTaxonomyPath;
   let evalTaxonomy: EvalControlsTaxonomyV1 | null = null;
   let evalTaxonomyHash = '';
