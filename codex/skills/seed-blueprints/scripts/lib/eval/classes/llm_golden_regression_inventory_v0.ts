@@ -104,6 +104,28 @@ function buildJudgeInput(args: {
   ].join('\n');
 }
 
+function validateScoreIdsStrict(args: {
+  criteria: CriteriaItemV0[];
+  scores: Array<{ id: string; score: number }>;
+}): { ok: true } | { ok: false; reason: string; missing: string[]; extra: string[]; dupes: string[] } {
+  const expected = (args.criteria || []).map((c) => String(c.id || '').trim()).filter(Boolean);
+  const seen: Record<string, number> = {};
+  for (const s of args.scores || []) {
+    const id = String((s as any)?.id || '').trim();
+    if (!id) continue;
+    seen[id] = (seen[id] || 0) + 1;
+  }
+  const dupes = Object.keys(seen).filter((k) => seen[k] > 1).sort();
+  const missing = expected.filter((id) => !seen[id]).sort();
+  const extra = Object.keys(seen)
+    .filter((id) => !expected.includes(id))
+    .sort();
+  if (missing.length || extra.length || dupes.length) {
+    return { ok: false, reason: 'score_id_mismatch', missing, extra, dupes };
+  }
+  return { ok: true };
+}
+
 async function scoreWithOpenAI(args: {
   model: string;
   promptVersion: string;
@@ -149,6 +171,13 @@ async function scoreWithOpenAI(args: {
   const clamp = (x: number) => Math.max(args.scale.min, Math.min(args.scale.max, x));
   const scores = v.scores.map((s) => ({ id: s.id, score: clamp(Number(s.score)) }));
   const overall = clamp(Number(v.overall));
+
+  const strict = validateScoreIdsStrict({ criteria: args.criteria, scores });
+  if (!strict.ok) {
+    throw new Error(
+      `Judge score ids mismatch (missing=${strict.missing.length}, extra=${strict.extra.length}, dupes=${strict.dupes.length})`
+    );
+  }
   return { scores, overall, rawText: outputText };
 }
 
