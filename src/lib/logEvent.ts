@@ -1,4 +1,7 @@
-import { apiFetch } from '@/lib/api';
+import { supabase } from '@/integrations/supabase/client';
+import { config, getFunctionUrl } from '@/config/runtime';
+
+const LOG_EVENT_URL = getFunctionUrl('log-event');
 
 type LogEventPayload = {
   eventName: string;
@@ -15,20 +18,35 @@ export async function logMvpEvent({
   path,
   metadata,
 }: LogEventPayload) {
-  if (!eventName) return;
+  if (!LOG_EVENT_URL || !eventName) return;
+
+  let accessToken: string | null = null;
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    accessToken = sessionData.session?.access_token ?? null;
+  } catch {
+    accessToken = null;
+  }
+
+  const authHeader = accessToken
+    ? `Bearer ${accessToken}`
+    : `Bearer ${config.supabaseAnonKey}`;
 
   try {
-    await apiFetch('log-event', {
-      body: {
+    await fetch(LOG_EVENT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: authHeader,
+      },
+      body: JSON.stringify({
         event_name: eventName,
         user_id: userId ?? null,
         blueprint_id: blueprintId ?? null,
         path: path ?? window.location.pathname,
         metadata: metadata ?? {},
-      },
+      }),
       keepalive: true,
-      pinnedToEdge: true,
-      stream: true,
     });
   } catch {
     // Fire-and-forget: logging should never block UX.

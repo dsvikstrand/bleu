@@ -19,8 +19,6 @@ export type ApiOptions = {
   stream?: boolean;
   /** If true, uses keepalive (fire-and-forget requests like logging). */
   keepalive?: boolean;
-  /** If true, always routes to Supabase Edge Function, ignoring agentic backend toggle. */
-  pinnedToEdge?: boolean;
 };
 
 /**
@@ -55,9 +53,7 @@ export async function apiFetch<T = unknown>(
   fnName: string,
   opts: ApiOptions = {},
 ): Promise<T> {
-  const url = opts.pinnedToEdge
-    ? `${config.supabaseUrl.replace(/\/$/, "")}/functions/v1/${fnName}`
-    : getFunctionUrl(fnName);
+  const url = getFunctionUrl(fnName);
   const authHeader = await getAuthHeader();
 
   const res = await fetch(url, {
