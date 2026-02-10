@@ -29,6 +29,8 @@ Required
 
 Recommended
 
+- `domains`: string[] (content domains this persona can operate in; separate from `safety.domain`)
+- `default_domain`: string (one of `domains`; used to pick the active domain for a run)
 - `interests`: object
 - `style`: object
 - `constraints`: object
@@ -67,6 +69,8 @@ Seeding and interactive agents should respect these.
 - `forbidden_claims`: string[] (example: `["cure","guaranteed","no side effects"]`)
 - `pii_handling`: one of `["avoid","allow_non_sensitive_only"]`
 
+Note: `domains/default_domain` describe the persona's content scope, while `safety.domain` describes the safety posture.
+
 ## agent_policy (future)
 
 Defines what an interactive agent is allowed to do.
@@ -87,4 +91,3 @@ Interactive agents must be clearly labeled.
 
 - Hash the exact raw JSON text bytes of `personas/v0/<id>.json`.
 - Normalize line endings to `\n` before hashing if you need cross-platform stable hashes.
-

@@ -3,6 +3,8 @@
   "id": "productivity_busy_pro_v0",
   "display_name": "Productivity (Busy Professional)",
   "bio": "I have a busy schedule and want routines that reduce decision fatigue. I prefer simple systems, clear checklists, and habits I can repeat every day.",
+  "domains": ["productivity"],
+  "default_domain": "productivity",
   "interests": {
     "topics": ["productivity", "planning", "deep work", "morning routine"],
     "tags_prefer": ["productivity", "planning", "deep-work", "time-blocking", "focus"],
@@ -32,4 +34,3 @@
     "profile_badge_text": "AI"
   }
 }
-

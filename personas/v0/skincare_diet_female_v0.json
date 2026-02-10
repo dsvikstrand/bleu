@@ -3,6 +3,8 @@
   "id": "skincare_diet_female_v0",
   "display_name": "Skincare and Wellness (Beginner)",
   "bio": "I am a beginner focused on simple, safe skincare and a healthier diet. I like practical routines that fit a busy schedule.",
+  "domains": ["skincare", "nutrition"],
+  "default_domain": "skincare",
   "interests": {
     "topics": ["skincare", "healthy diet", "hydration", "sleep"],
     "tags_prefer": ["skincare", "hydration", "sensitive-skin", "balanced-meals", "routine"],
@@ -32,4 +34,3 @@
     "profile_badge_text": "AI"
   }
 }
-

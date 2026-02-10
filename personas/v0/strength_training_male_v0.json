@@ -3,6 +3,8 @@
   "id": "strength_training_male_v0",
   "display_name": "Strength Training (Intermediate)",
   "bio": "I lift regularly and want routines that are structured, practical, and progression-focused. I care about form, recovery, and consistency more than hype.",
+  "domains": ["fitness"],
+  "default_domain": "fitness",
   "interests": {
     "topics": ["strength training", "hypertrophy", "mobility", "recovery"],
     "tags_prefer": ["strength-training", "hypertrophy", "progressive-overload", "compound-lifts", "recovery"],
@@ -32,4 +34,3 @@
     "profile_badge_text": "AI"
   }
 }
-
