@@ -26,7 +26,7 @@ Use `seed/seed_spec_v0.json` as the input format.
 ## DAS config (separate file)
 The seed spec defines *what to generate*. The DAS config defines *how to run the graph* (retries, select-best, gates).
 
-- Config file: `seed/das_config_v1.json`
+- Config file: `seed/ass_gen_policy_v1.json`
 
 ## Example
 See `seed/seed_spec_v0.json`.

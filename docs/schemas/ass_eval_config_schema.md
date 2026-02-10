@@ -3,7 +3,7 @@
 This document describes the **ASS eval config v2** format, used by the ASS runner to configure **eval instances per node**.
 
 File example:
-- `seed/ass_eval_config_v2.example.json`
+- `seed/ass_eval_policy_v2.example.json`
 
 Runner flag:
 - `--ass-eval-config <path>`
@@ -52,4 +52,3 @@ Common nodes you will configure:
 - `PROMPT_PACK`
 - `LIB_GEN`
 - `BP_GEN`
-

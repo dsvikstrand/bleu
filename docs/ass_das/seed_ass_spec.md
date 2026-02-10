@@ -62,7 +62,7 @@ Notes:
 ## ASS Eval Config v2 (Current)
 ASS eval config v2 describes **eval instances per node** (which eval classes run, and with what params).
 
-- Example: `seed/ass_eval_config_v2.example.json`
+- Example: `seed/ass_eval_policy_v2.example.json`
 - Schema: `docs/schemas/ass_eval_config_schema.md`
 - Runner flag: `--ass-eval-config <path>`
 - Resolved config log: `logs/ass_eval_config_resolved.json`
@@ -177,7 +177,7 @@ Hard checks we already have:
 ## DAS v1 (Dynamic Gates + Retries)
 DAS v1 adds **gates + retries + select-best** on generation nodes when enabled.
 
-- Config: `seed/das_config_v1.json` (per-node `maxAttempts`, `kCandidates`, legacy `eval[]`)
+- Config: `seed/ass_gen_policy_v1.json` (per-node `maxAttempts`, `kCandidates`, legacy `eval[]`)
 - Test configs:
   - `seed/das_config_v1_test_controls_persona_align_pass.json` (CONTROL_PACK persona_alignment_v0 pass)
   - `seed/das_config_v1_test_controls_persona_align_retry.json` (CONTROL_PACK forced retry via testOnly_failOnce)

@@ -767,7 +767,7 @@ async function main() {
         '  --compose-prompts          Compose user-like prompts from persona + goal (writes requests/prompt_pack.json)',
         '  --apply                    Stage 1 apply mode (writes to Supabase)',
         '  --das                      Enable DAS v1 (dynamic gates, retries, select-best; uses das config)',
-        '  --das-config <path>        DAS config JSON path (default: seed/das_config_v1.json)',
+        '  --das-config <path>        DAS config JSON path (default: seed/ass_gen_policy_v1.json)',
         '  --ass-eval-config <path>   ASS eval config v2 JSON path (config-driven eval instances per node)',
         '  --yes <token>              Stage 1 guard token (must be APPLY_STAGE1)',
         '  --limit-blueprints <n>     Limit generated/apply blueprints to N (useful for testing Stage 1)',
@@ -790,7 +790,7 @@ async function main() {
   const composePrompts = !!args.composePrompts;
   const reviewFocus = String(args.reviewFocus || '').trim();
   const dasEnabled = Boolean(args.das || args.dasConfig);
-  const dasConfigPath = String(args.dasConfig || 'seed/das_config_v1.json');
+  const dasConfigPath = String(args.dasConfig || 'seed/ass_gen_policy_v1.json');
   const assEvalConfigPath = String((args as any).assEvalConfig || '').trim();
   const authOnly = Boolean((args as any).authOnly);
 

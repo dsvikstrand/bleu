@@ -251,7 +251,7 @@ npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \
 DAS v1 adds retry loops and "select best out of k candidates" to generation nodes.
 
 Config:
-- `seed/das_config_v1.json` (per-node `maxAttempts`, `kCandidates`, `eval[]`)
+- `seed/ass_gen_policy_v1.json` (per-node `maxAttempts`, `kCandidates`, `eval[]`)
 - `seed/das_config_v1_test_retry.json` (forces one retry on `PROMPT_PACK` and `LIB_GEN` for validation)
 
 New artifacts (when DAS is enabled):
