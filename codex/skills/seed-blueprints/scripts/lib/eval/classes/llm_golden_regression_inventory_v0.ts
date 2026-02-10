@@ -124,7 +124,6 @@ async function scoreWithOpenAI(args: {
       'Do not include markdown fences. Do not include any text outside JSON.',
     ].join('\n'),
     input: buildJudgeInput({ inventory: args.inventory, criteria: args.criteria, scale: args.scale }),
-    temperature: 0,
   });
 
   const outputText = response.output_text?.trim();
