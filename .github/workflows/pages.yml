@@ -36,6 +36,14 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Validate required frontend env
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          test -n "$VITE_SUPABASE_URL" || (echo "Missing secret: VITE_SUPABASE_URL" && exit 1)
+          test -n "$VITE_SUPABASE_PUBLISHABLE_KEY" || (echo "Missing secret: VITE_SUPABASE_PUBLISHABLE_KEY" && exit 1)
+
       - name: Build
         run: npm run build
         env:
