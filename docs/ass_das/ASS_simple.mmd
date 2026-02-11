@@ -5,16 +5,16 @@ flowchart TD
   %% Mermaid: keep labels ASCII, single-line, and short.
 
   %% Core stages (minimal)
-  AP_CFG{{AP config}} --> AP([Persona AP])
-  AUTH_CFG{{Auth config}} --> AUTH([Auth bootstrap + store])
-  INTENT_CFG{{Intent config}} --> INTENT([Intent: controls or prompts])
-  TAX_CFG{{Eval taxonomy (per node)}} --> TAX([Control taxonomy])
-  METHOD_CFG{{Eval methods assets}} --> METHOD([Eval methods: criteria packs + judge cfg])
-  GEN_CFG{{ASS gen policy config v1}} --> POLICY([Gen policy])
-  EVAL_CFG{{ASS eval policy config v2}} --> EVALS([Eval instances per node])
-  ESTACK([Eval stack: eval classes per gate])
-  SAFE([Safety and PII gates])
-  DOMAIN_CFG{{Domain assets}} --> DOMAIN["Domain assets: rubric + golden"]
+  AP_CFG["AP config"] --> AP["Persona AP"]
+  AUTH_CFG["Auth config"] --> AUTH["Auth bootstrap and store"]
+  INTENT_CFG["Intent config"] --> INTENT["Intent controls or prompts"]
+  TAX_CFG["Eval taxonomy per node"] --> TAX["Control taxonomy"]
+  METHOD_CFG["Eval methods assets"] --> METHOD["Eval methods criteria packs and judge cfg"]
+  GEN_CFG["ASS gen policy config v1"] --> POLICY["Gen policy"]
+  EVAL_CFG["ASS eval policy config v2"] --> EVALS["Eval instances per node"]
+  ESTACK["Eval stack classes per gate"]
+  SAFE["Safety and PII gates"]
+  DOMAIN_CFG["Domain assets"] --> DOMAIN["Domain assets rubric and golden"]
   METHOD -.-> LIB_EVAL
   METHOD -.-> BP_EVAL
 
@@ -33,22 +33,22 @@ flowchart TD
   DOMAIN -.-> BP_EVAL
 
   %% Two eval lanes (faithful, but compact)
-  INTENT --> LIB_GEN([LIB_GEN generate library])
-  LIB_GEN --> SAFE --> LIB_EVAL([LIB_EVAL gates + retry/select])
-  LIB_EVAL -->|pass| LIB_OK([LIB_OK])
+  INTENT --> LIB_GEN["LIB_GEN generate library"]
+  LIB_GEN --> SAFE --> LIB_EVAL["LIB_EVAL gates and retry select"]
+  LIB_EVAL -->|pass| LIB_OK["LIB_OK"]
   LIB_EVAL -->|retry| LIB_GEN
-  LIB_EVAL -->|hard fail| STOP([Stop run])
+  LIB_EVAL -->|hard fail| STOP["Stop run"]
 
-  LIB_OK --> BP_GEN([BP_GEN generate blueprints])
-  BP_GEN --> SAFE --> BP_EVAL([BP_EVAL gates + retry/select])
-  BP_EVAL -->|pass| BP_OK([BP_OK])
+  LIB_OK --> BP_GEN["BP_GEN generate blueprints"]
+  BP_GEN --> SAFE --> BP_EVAL["BP_EVAL gates and retry select"]
+  BP_EVAL -->|pass| BP_OK["BP_OK"]
   BP_EVAL -->|retry| BP_GEN
   BP_EVAL -->|hard fail| STOP
 
   %% Shared tail
-  BP_OK --> AI([Optional AI review + banner])
-  AI --> APPLY([Optional apply/publish])
-  APPLY --> OUT([Outputs + logs])
+  BP_OK --> AI["Optional AI review and banner"]
+  AI --> APPLY["Optional apply publish"]
+  APPLY --> OUT["Outputs and logs"]
 
   %% Styling
   classDef stage fill:#0b1220,stroke:#253047,color:#e7eefc,stroke-width:1px;
