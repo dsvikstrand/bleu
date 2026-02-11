@@ -32,6 +32,8 @@ export interface InventoryListItem extends InventoryRow {
   blueprint_count: number;
 }
 
+export type InventorySort = 'popular' | 'latest';
+
 interface CreateInventoryInput {
   title: string;
   promptInventory: string;
@@ -130,20 +132,23 @@ async function hydrateInventories(rows: InventoryRow[], userId?: string | null) 
   }));
 }
 
-export function useInventorySearch(search: string) {
+export function useInventorySearch(search: string, sort: InventorySort = 'popular') {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['inventory-search', search, user?.id],
+    queryKey: ['inventory-search', search, sort, user?.id],
     queryFn: async () => {
       const trimmed = search.trim();
       let inventories: InventoryRow[] = [];
+      const orderBy = sort === 'latest'
+        ? { column: 'created_at', ascending: false }
+        : { column: 'likes_count', ascending: false };
 
       if (!trimmed) {
         let query = supabase
           .from('inventories')
           .select(INVENTORY_FIELDS)
-          .order('likes_count', { ascending: false })
+          .order(orderBy.column, { ascending: orderBy.ascending })
           .limit(60);
 
         if (user?.id) {
@@ -176,7 +181,7 @@ export function useInventorySearch(search: string) {
               .from('inventories')
               .select(INVENTORY_FIELDS)
               .in('id', inventoryIds)
-              .order('likes_count', { ascending: false });
+              .order(orderBy.column, { ascending: orderBy.ascending });
 
             matchedInventories.push(...(data || []));
           }
@@ -187,7 +192,7 @@ export function useInventorySearch(search: string) {
         .from('inventories')
         .select(INVENTORY_FIELDS)
         .ilike('title', `%${trimmed}%`)
-        .order('likes_count', { ascending: false });
+        .order(orderBy.column, { ascending: orderBy.ascending });
 
       if (titleMatches) matchedInventories.push(...titleMatches);
 

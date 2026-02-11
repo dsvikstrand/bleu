@@ -6,7 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useInventorySearch, useToggleInventoryLike } from '@/hooks/useInventories';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useInventorySearch, useToggleInventoryLike, type InventorySort } from '@/hooks/useInventories';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useSuggestedInventories } from '@/hooks/useSuggestedInventories';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,6 +21,7 @@ import { logMvpEvent } from '@/lib/logEvent';
 export default function Inventory() {
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [sort, setSort] = useState<InventorySort>('popular');
   const [showLibraryInfo, setShowLibraryInfo] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -38,7 +40,7 @@ export default function Inventory() {
     });
   }, [user?.id]);
 
-  const { data: inventories, isLoading } = useInventorySearch(effectiveQuery);
+  const { data: inventories, isLoading } = useInventorySearch(effectiveQuery, sort);
   const { data: popularTags = [], isLoading: tagsLoading } = usePopularInventoryTags(12);
   const { data: suggestedInventories = [], isLoading: suggestedLoading } = useSuggestedInventories(6);
   const toggleLike = useToggleInventoryLike();
@@ -186,6 +188,18 @@ export default function Inventory() {
                 </div>
               </SheetContent>
             </Sheet>
+
+            <div className="w-full sm:w-56">
+              <Select value={sort} onValueChange={(value) => setSort(value as InventorySort)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="popular">Most liked</SelectItem>
+                  <SelectItem value="latest">Newest</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardContent>
         </Card>
 
@@ -208,7 +222,9 @@ export default function Inventory() {
               </Button>
             </div>
           ) : (
-            <h2 className="text-sm font-semibold text-muted-foreground">Popular libraries</h2>
+            <h2 className="text-sm font-semibold text-muted-foreground">
+              {sort === 'latest' ? 'Newest libraries' : 'Popular libraries'}
+            </h2>
           )}
 
           {isLoading ? (
