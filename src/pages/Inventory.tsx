@@ -79,7 +79,8 @@ export default function Inventory() {
     if (slug) setQuery(''); // Clear text search when tag selected
   };
 
-  const showSuggestions = !effectiveQuery && user;
+  // Keep newest sorting strict: suggestions should not preempt latest ordering.
+  const showSuggestions = !effectiveQuery && user && sort === 'popular';
 
   const displayInventories = useMemo(() => {
     if (!showSuggestions) return mainInventories;
