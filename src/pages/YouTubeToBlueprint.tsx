@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCreateBlueprint, useUpdateBlueprint } from '@/hooks/useBlueprints';
+import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { getFunctionUrl } from '@/config/runtime';
 import { logMvpEvent } from '@/lib/logEvent';
 
@@ -103,10 +103,10 @@ function toBlueprintStepsForSave(steps: YouTubeDraftStep[]) {
 }
 
 export default function YouTubeToBlueprint() {
+  const navigate = useNavigate();
   const { session, user } = useAuth();
   const { toast } = useToast();
   const createBlueprint = useCreateBlueprint();
-  const updateBlueprint = useUpdateBlueprint();
 
   const [videoUrl, setVideoUrl] = useState('');
   const [generateReview, setGenerateReview] = useState(true);
@@ -116,18 +116,16 @@ export default function YouTubeToBlueprint() {
   const [progressValue, setProgressValue] = useState(0);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [result, setResult] = useState<YouTubeToBlueprintSuccessResponse | null>(null);
-  const [savedBlueprintId, setSavedBlueprintId] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const progressResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const urlValidation = useMemo(() => validateYouTubeInput(videoUrl), [videoUrl]);
   useEffect(() => {
     if (!isGenerating) return;
-    setProgressValue(8);
+    setProgressValue(18);
     const timer = setInterval(() => {
-      setProgressValue((current) => Math.min(90, current + Math.max(1, (90 - current) * 0.08)));
-    }, 450);
+      setProgressValue((current) => Math.min(93, current + Math.max(1, (93 - current) * 0.1)));
+    }, 350);
     return () => clearInterval(timer);
   }, [isGenerating]);
 
@@ -144,7 +142,6 @@ export default function YouTubeToBlueprint() {
   async function submit() {
     setErrorText(null);
     setResult(null);
-    setSavedBlueprintId(null);
 
     if (!urlValidation.ok) {
       setErrorText(urlValidation.code === 'playlist'
@@ -226,51 +223,16 @@ export default function YouTubeToBlueprint() {
       }
       progressResetTimerRef.current = setTimeout(() => {
         setProgressValue(0);
-      }, 650);
+      }, 1500);
     }
   }
 
-  async function saveDraft() {
-    if (!result || !user || isSaving) return;
-    setIsSaving(true);
+  async function publishGeneratedBlueprint() {
+    if (!result || !user || isPublishing) return;
+    setIsPublishing(true);
     try {
       const created = await createBlueprint.mutateAsync({
         inventoryId: null,
-        title: result.draft.title,
-        selectedItems: {},
-        steps: toBlueprintStepsForSave(result.draft.steps),
-        mixNotes: result.draft.notes,
-        reviewPrompt: 'youtube_mvp',
-        bannerUrl: result.banner.url,
-        llmReview: result.review.summary,
-        tags: result.draft.tags,
-        isPublic: false,
-      });
-      setSavedBlueprintId(created.id);
-      await logMvpEvent({
-        eventName: 'youtube_save_draft',
-        userId: user.id,
-        blueprintId: created.id,
-        metadata: { source: 'youtube_mvp' },
-      });
-      toast({ title: 'Draft saved', description: 'Your YouTube blueprint draft was saved.' });
-    } catch (error) {
-      toast({
-        title: 'Save failed',
-        description: error instanceof Error ? error.message : 'Could not save draft.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
-  async function publish() {
-    if (!result || !user || !savedBlueprintId || isPublishing) return;
-    setIsPublishing(true);
-    try {
-      await updateBlueprint.mutateAsync({
-        blueprintId: savedBlueprintId,
         title: result.draft.title,
         selectedItems: {},
         steps: toBlueprintStepsForSave(result.draft.steps),
@@ -284,10 +246,10 @@ export default function YouTubeToBlueprint() {
       await logMvpEvent({
         eventName: 'youtube_publish',
         userId: user.id,
-        blueprintId: savedBlueprintId,
+        blueprintId: created.id,
         metadata: { source: 'youtube_mvp' },
       });
-      toast({ title: 'Published', description: 'Blueprint published successfully.' });
+      navigate(`/blueprint/${created.id}`);
     } catch (error) {
       toast({
         title: 'Publish failed',
@@ -334,7 +296,12 @@ export default function YouTubeToBlueprint() {
               {isGenerating ? 'Generating...' : 'Generate Blueprint'}
             </Button>
 
-            {progressValue > 0 && <Progress value={progressValue} className="h-2" />}
+            {progressValue > 0 && (
+              <div className="space-y-1">
+                <Progress value={progressValue} className="h-3 border border-border/60 bg-muted/50" />
+                <p className="text-xs text-muted-foreground">{Math.round(progressValue)}%</p>
+              </div>
+            )}
             {stageText && <p className="text-sm text-muted-foreground">{stageText}</p>}
             {errorText && <p className="text-sm text-destructive">{errorText}</p>}
           </CardContent>
@@ -380,21 +347,16 @@ export default function YouTubeToBlueprint() {
 
               {!user ? (
                 <div className="rounded-lg border border-border/60 p-3 flex items-center justify-between gap-3">
-                  <p className="text-sm text-muted-foreground">Log in to save this blueprint draft.</p>
+                  <p className="text-sm text-muted-foreground">Log in to publish this blueprint.</p>
                   <Button asChild size="sm">
-                    <Link to="/auth">Log in to save</Link>
+                    <Link to="/auth">Log in to publish</Link>
                   </Button>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={saveDraft} disabled={isSaving || !!savedBlueprintId}>
-                    {savedBlueprintId ? 'Draft saved' : (isSaving ? 'Saving draft...' : 'Save Draft')}
+                  <Button onClick={publishGeneratedBlueprint} disabled={isPublishing}>
+                    {isPublishing ? 'Publishing...' : 'Publish'}
                   </Button>
-                  {savedBlueprintId && (
-                    <Button variant="outline" onClick={publish} disabled={isPublishing}>
-                      {isPublishing ? 'Publishing...' : 'Publish'}
-                    </Button>
-                  )}
                 </div>
               )}
             </CardContent>

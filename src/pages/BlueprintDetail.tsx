@@ -172,14 +172,12 @@ export default function BlueprintDetail() {
 
             {blueprint.banner_url && (
               <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/30">
-                <div className="aspect-[4/1] w-full">
-                  <img
-                    src={blueprint.banner_url}
-                    alt="Blueprint banner"
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                </div>
+                <img
+                  src={blueprint.banner_url}
+                  alt="Blueprint banner"
+                  className="w-full h-auto max-h-[560px] object-contain"
+                  loading="lazy"
+                />
               </div>
             )}
 
