@@ -9,13 +9,17 @@ import type {
   InventoryRequest,
   InventorySchema,
   LLMClient,
+  YouTubeBlueprintResult,
+  YouTubeBlueprintRequest,
 } from './types';
 import {
   BLUEPRINT_SYSTEM_PROMPT,
   BLUEPRINT_GENERATION_SYSTEM_PROMPT,
   INVENTORY_SYSTEM_PROMPT,
+  YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
   buildBlueprintUserPrompt,
   buildBlueprintGenerationUserPrompt,
+  buildYouTubeBlueprintUserPrompt,
   buildInventoryUserPrompt,
   extractJson,
 } from './prompts';
@@ -46,6 +50,20 @@ const BlueprintGenerationValidator = z.object({
       ),
     })
   ),
+});
+
+const YouTubeBlueprintValidator = z.object({
+  title: z.string(),
+  description: z.string(),
+  notes: z.string().nullable().optional(),
+  tags: z.array(z.string()).optional(),
+  steps: z.array(
+    z.object({
+      name: z.string(),
+      notes: z.string(),
+      timestamp: z.string().nullable().optional(),
+    })
+  ).min(1),
 });
 
 export function createOpenAIClient(): LLMClient {
@@ -135,6 +153,20 @@ export function createOpenAIClient(): LLMClient {
 
       const parsed = JSON.parse(extractJson(outputText));
       return BlueprintGenerationValidator.parse(parsed);
+    },
+    async generateYouTubeBlueprint(input: YouTubeBlueprintRequest): Promise<YouTubeBlueprintResult> {
+      const response = await client.responses.create({
+        model,
+        instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
+        input: buildYouTubeBlueprintUserPrompt(input),
+      });
+
+      const outputText = response.output_text?.trim();
+      if (!outputText) {
+        throw new Error('No output text from OpenAI');
+      }
+      const parsed = JSON.parse(extractJson(outputText));
+      return YouTubeBlueprintValidator.parse(parsed);
     },
   };
 }

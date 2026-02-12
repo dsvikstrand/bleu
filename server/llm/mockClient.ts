@@ -7,6 +7,8 @@ import type {
   InventoryRequest,
   InventorySchema,
   LLMClient,
+  YouTubeBlueprintRequest,
+  YouTubeBlueprintResult,
 } from './types';
 
 export function createMockClient(): LLMClient {
@@ -94,6 +96,18 @@ export function createMockClient(): LLMClient {
       return {
         title,
         steps,
+      };
+    },
+    async generateYouTubeBlueprint(input: YouTubeBlueprintRequest): Promise<YouTubeBlueprintResult> {
+      return {
+        title: `Blueprint from ${input.videoUrl}`,
+        description: 'Mock YouTube blueprint generated from transcript.',
+        notes: 'Mock notes.',
+        tags: ['youtube', 'guide'],
+        steps: [
+          { name: 'Step 1', notes: 'Review the key ideas in the video.', timestamp: null },
+          { name: 'Step 2', notes: 'Apply the main action item.', timestamp: null },
+        ],
       };
     },
   };

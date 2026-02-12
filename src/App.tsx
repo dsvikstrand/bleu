@@ -19,6 +19,7 @@ import InventoryDetail from "./pages/InventoryDetail";
 import InventoryBuild from "./pages/InventoryBuild";
 import BlueprintDetail from "./pages/BlueprintDetail";
 import BlueprintRemix from "./pages/BlueprintRemix";
+import YouTubeToBlueprint from "./pages/YouTubeToBlueprint";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "@/components/shared/RequireAuth";
@@ -37,6 +38,7 @@ const App = () => (
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/blueprints" element={<Blueprints />} />
+            <Route path="/youtube" element={<YouTubeToBlueprint />} />
             <Route path="/wall" element={<Wall />} />
             <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
             <Route path="/auth" element={<Auth />} />

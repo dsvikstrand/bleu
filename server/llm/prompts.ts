@@ -136,6 +136,37 @@ ${lines}
 Generate the blueprint now in the required JSON format.`;
 }
 
+export const YOUTUBE_BLUEPRINT_SYSTEM_PROMPT = `You transform a video transcript into a practical step-by-step blueprint.
+
+Rules:
+- Output STRICT JSON only.
+- Produce at least 1 step.
+- Keep steps actionable and concise.
+- If transcript lacks clear instructions, produce a summary-style blueprint with one step.
+- Never include personal data.
+- Timestamps are optional; use null when unknown.
+
+Response format:
+{
+  "title": "string",
+  "description": "string",
+  "steps": [
+    { "name": "string", "notes": "string", "timestamp": "string|null" }
+  ],
+  "notes": "string|null",
+  "tags": ["string"]
+}`;
+
+export function buildYouTubeBlueprintUserPrompt(input: { videoUrl: string; transcript: string }) {
+  const trimmedTranscript = input.transcript.trim().slice(0, 18_000);
+  return `Video URL: ${input.videoUrl}
+
+Transcript:
+${trimmedTranscript}
+
+Generate a usable blueprint now.`;
+}
+
 export function extractJson(text: string) {
   let jsonContent = text.trim();
   if (jsonContent.startsWith('```json')) {

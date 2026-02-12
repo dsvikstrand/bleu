@@ -63,9 +63,29 @@ export interface BlueprintGenerationResult {
   steps: BlueprintStep[];
 }
 
+export interface YouTubeDraftStep {
+  name: string;
+  notes: string;
+  timestamp?: string | null;
+}
+
+export interface YouTubeBlueprintRequest {
+  videoUrl: string;
+  transcript: string;
+}
+
+export interface YouTubeBlueprintResult {
+  title: string;
+  description: string;
+  steps: YouTubeDraftStep[];
+  notes?: string | null;
+  tags?: string[];
+}
+
 export interface LLMClient {
   generateInventory(input: InventoryRequest): Promise<InventorySchema>;
   analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string>;
   generateBanner(input: BannerRequest): Promise<BannerResult>;
   generateBlueprint(input: BlueprintGenerationRequest): Promise<BlueprintGenerationResult>;
+  generateYouTubeBlueprint(input: YouTubeBlueprintRequest): Promise<YouTubeBlueprintResult>;
 }
