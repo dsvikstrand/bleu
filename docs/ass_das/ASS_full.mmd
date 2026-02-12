@@ -1,0 +1,64 @@
+flowchart TD
+  %% ASS (Agentic Seed System) - Conceptual Flow (simplified)
+  %% Focus: personas (AP) and eval-driven DAS loop
+  %% Source of truth: codex/skills/seed-blueprints/scripts/seed_stage0.ts
+  %% Mermaid: keep labels ASCII, single-line, and short.
+
+  %% Core stages (minimal)
+  AP_CFG["AP config"] --> AP["Persona AP"]
+  AUTH_CFG["Auth config"] --> AUTH["Auth bootstrap and store"]
+  INTENT_CFG["Intent config"] --> INTENT["Intent controls or prompts"]
+  TAX_CFG["Eval taxonomy per node"] --> TAX["Control taxonomy"]
+  METHOD_CFG["Eval methods assets"] --> METHOD["Eval methods criteria packs and judge cfg"]
+  GEN_CFG["ASS gen policy config v1"] --> POLICY["Gen policy"]
+  EVAL_CFG["ASS eval policy config v2"] --> EVALS["Eval instances per node"]
+  ESTACK["Eval stack classes per gate"]
+  SAFE["Safety and PII gates"]
+  DOMAIN_CFG["Domain assets"] --> DOMAIN["Domain assets rubric and golden"]
+  METHOD -.-> LIB_EVAL
+  METHOD -.-> BP_EVAL
+
+  AP --> AUTH --> INTENT --> TAX
+
+  %% DAS policy (drives retries + select-best)
+  POLICY -.-> LIB_EVAL
+  POLICY -.-> BP_EVAL
+  TAX -.-> LIB_EVAL
+  TAX -.-> BP_EVAL
+  EVALS -.-> ESTACK
+  ESTACK -.-> SAFE
+  ESTACK -.-> LIB_EVAL
+  ESTACK -.-> BP_EVAL
+  DOMAIN -.-> LIB_EVAL
+  DOMAIN -.-> BP_EVAL
+
+  %% Two eval lanes (faithful, but compact)
+  INTENT --> LIB_GEN["LIB_GEN generate library"]
+  LIB_GEN --> SAFE --> LIB_EVAL["LIB_EVAL gates and retry select"]
+  LIB_EVAL -->|pass| LIB_OK["LIB_OK"]
+  LIB_EVAL -->|retry| LIB_GEN
+  LIB_EVAL -->|hard fail| STOP["Stop run"]
+
+  LIB_OK --> BP_GEN["BP_GEN generate blueprints"]
+  BP_GEN --> SAFE --> BP_EVAL["BP_EVAL gates and retry select"]
+  BP_EVAL -->|pass| BP_OK["BP_OK"]
+  BP_EVAL -->|retry| BP_GEN
+  BP_EVAL -->|hard fail| STOP
+
+  %% Shared tail
+  BP_OK --> AI["Optional AI review and banner"]
+  AI --> APPLY["Optional apply publish"]
+  APPLY --> OUT["Outputs and logs"]
+
+  %% Styling
+  classDef stage fill:#0b1220,stroke:#253047,color:#e7eefc,stroke-width:1px;
+  classDef cfg fill:#102a43,stroke:#1e4e8c,color:#e7f0ff,stroke-dasharray: 3 3;
+  classDef eval fill:#0b2a2f,stroke:#0ea5b7,color:#e6feff,stroke-width:2px;
+  classDef out fill:#0f3d2e,stroke:#1b6b4b,color:#e7fff2;
+
+  class AP,AUTH,INTENT,TAX,POLICY,LIB_GEN,BP_GEN,AI,APPLY,STOP,SAFE stage;
+  class LIB_EVAL,BP_EVAL eval;
+  class OUT,LIB_OK,BP_OK out;
+  class AP_CFG,AUTH_CFG,INTENT_CFG,TAX_CFG,GEN_CFG,EVAL_CFG,DOMAIN_CFG cfg;
+  class EVALS stage;
+  class DOMAIN cfg;

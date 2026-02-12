@@ -18,6 +18,7 @@
 ## New Structure (Incremental Reorg)
 - `docs/design-docs/index.md`
 - `docs/exec-plans/index.md`
+- `docs/exec-plans/active/channels-first-ux-program.md` (active UX program)
 - `docs/generated/index.md`
 - `docs/product-specs/index.md`
 - `docs/references/index.md`
