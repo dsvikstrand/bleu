@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { createClient } from '@supabase/supabase-js';
+import fs from 'node:fs';
+import path from 'node:path';
+import OpenAI from 'openai';
 import { z } from 'zod';
 import { createLLMClient } from './llm/client';
 import { consumeCredit, getCredits } from './credits';
@@ -209,6 +212,213 @@ const YouTubeToBlueprintRequestSchema = z.object({
   generate_banner: z.boolean().default(false),
   source: z.literal('youtube_mvp').default('youtube_mvp'),
 });
+const GENERIC_YT2BP_FAILURE_MESSAGE = 'Could not complete the blueprint. Please test another video.';
+
+type YouTubeDraftStep = {
+  name: string;
+  notes: string;
+  timestamp: string | null;
+};
+
+type YouTubeDraft = {
+  title: string;
+  description: string;
+  steps: YouTubeDraftStep[];
+  notes: string | null;
+  tags: string[];
+};
+
+type QualityCriterion = {
+  id: string;
+  text: string;
+  required: boolean;
+  min_score: number;
+};
+
+type Yt2bpQualityConfig = {
+  enabled: boolean;
+  judge_model: string;
+  prompt_version: string;
+  scale: { min: number; max: number };
+  retry_policy: { max_retries: number; selection: 'best_overall' };
+  criteria: QualityCriterion[];
+};
+
+const QualityJudgeResponseSchema = z.object({
+  scores: z.array(
+    z.object({
+      id: z.string().min(1),
+      score: z.number().finite(),
+    })
+  ),
+  overall: z.number().finite().optional(),
+});
+
+function readYt2bpQualityConfig(): Yt2bpQualityConfig {
+  const fallback: Yt2bpQualityConfig = {
+    enabled: true,
+    judge_model: 'o4-mini',
+    prompt_version: 'yt2bp_quality_v0',
+    scale: { min: 0, max: 5 },
+    retry_policy: { max_retries: 2, selection: 'best_overall' },
+    criteria: [
+      { id: 'step_purpose_clarity', text: 'Each step has a clear purpose.', required: true, min_score: 3.5 },
+      { id: 'step_actionability', text: 'Steps are actionable and specific.', required: true, min_score: 3.5 },
+      { id: 'step_redundancy_control', text: 'Steps are not overly redundant or fragmented.', required: true, min_score: 3.5 },
+      { id: 'sequence_progression', text: 'Steps follow a natural and coherent progression.', required: true, min_score: 3.5 },
+      { id: 'coverage_sufficiency', text: 'The set covers core actions without critical gaps.', required: true, min_score: 3.5 },
+    ],
+  };
+
+  const configPath = path.join(process.cwd(), 'eval', 'methods', 'v0', 'llm_blueprint_quality_v0', 'global_pack_v0.json');
+  let loaded = fallback;
+  if (fs.existsSync(configPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      loaded = {
+        ...fallback,
+        ...parsed,
+        scale: { ...fallback.scale, ...(parsed?.scale || {}) },
+        retry_policy: { ...fallback.retry_policy, ...(parsed?.retry_policy || {}) },
+        criteria: Array.isArray(parsed?.criteria) ? parsed.criteria : fallback.criteria,
+      };
+    } catch {
+      loaded = fallback;
+    }
+  }
+
+  const envEnabledRaw = String(process.env.YT2BP_QUALITY_ENABLED ?? '').trim().toLowerCase();
+  const enabled =
+    envEnabledRaw === ''
+      ? Boolean(loaded.enabled)
+      : !(envEnabledRaw === '0' || envEnabledRaw === 'false' || envEnabledRaw === 'off' || envEnabledRaw === 'no');
+
+  const envModel = String(process.env.YT2BP_QUALITY_MODEL || '').trim();
+  const envMaxRetriesRaw = Number(process.env.YT2BP_QUALITY_MAX_RETRIES);
+  const envMinScoreRaw = Number(process.env.YT2BP_QUALITY_MIN_SCORE);
+  const envMinScore = Number.isFinite(envMinScoreRaw) ? envMinScoreRaw : null;
+
+  const min = Number(loaded.scale?.min ?? 0);
+  const max = Number(loaded.scale?.max ?? 5);
+  const clamp = (n: number) => Math.max(min, Math.min(max, n));
+
+  const criteria = (loaded.criteria || [])
+    .map((c) => ({
+      id: String(c?.id || '').trim(),
+      text: String(c?.text || '').trim(),
+      required: Boolean(c?.required),
+      min_score: clamp(Number.isFinite(Number(c?.min_score)) ? Number(c?.min_score) : 3.5),
+    }))
+    .filter((c) => c.id && c.text);
+
+  const criteriaWithOverride = envMinScore === null
+    ? criteria
+    : criteria.map((c) => ({ ...c, min_score: clamp(envMinScore) }));
+
+  const maxRetriesBase = Number(loaded.retry_policy?.max_retries ?? 2);
+  const maxRetries = Number.isFinite(envMaxRetriesRaw) ? envMaxRetriesRaw : maxRetriesBase;
+
+  return {
+    enabled,
+    judge_model: envModel || String(loaded.judge_model || fallback.judge_model),
+    prompt_version: String(loaded.prompt_version || fallback.prompt_version),
+    scale: { min, max },
+    retry_policy: {
+      max_retries: Math.max(0, Math.min(5, Math.floor(maxRetries))),
+      selection: 'best_overall',
+    },
+    criteria: criteriaWithOverride.length ? criteriaWithOverride : fallback.criteria,
+  };
+}
+
+function buildYt2bpQualityJudgeInput(draft: YouTubeDraft, config: Yt2bpQualityConfig) {
+  const criteriaLines = config.criteria
+    .map((c) => `- ${c.id}: ${c.text} (required=${c.required}, min_score=${c.min_score})`)
+    .join('\n');
+  return [
+    'Grade this blueprint quality.',
+    `Scale: ${config.scale.min}..${config.scale.max}`,
+    `PromptVersion: ${config.prompt_version}`,
+    '',
+    'Criteria:',
+    criteriaLines,
+    '',
+    'Blueprint JSON:',
+    JSON.stringify(draft, null, 2),
+    '',
+    'Return ONLY strict JSON:',
+    '{"scores":[{"id":"criterion_id","score":0}],"overall":0}',
+  ].join('\n');
+}
+
+async function scoreYt2bpQualityWithOpenAI(
+  draft: YouTubeDraft,
+  config: Yt2bpQualityConfig
+): Promise<{
+  ok: boolean;
+  overall: number;
+  scores: Array<{ id: string; score: number; min_score: number; required: boolean; pass: boolean }>;
+  failures: string[];
+}> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
+
+  const client = new OpenAI({ apiKey });
+  const response = await client.responses.create({
+    model: config.judge_model,
+    instructions: [
+      'You are a strict JSON generator.',
+      'Do not include markdown.',
+      'Output only JSON with fields: scores, overall.',
+    ].join('\n'),
+    input: buildYt2bpQualityJudgeInput(draft, config),
+  });
+
+  const outputText = String(response.output_text || '').trim();
+  if (!outputText) throw new Error('No output text from quality judge');
+  let jsonText = outputText;
+  if (jsonText.startsWith('```json')) jsonText = jsonText.slice(7);
+  if (jsonText.startsWith('```')) jsonText = jsonText.slice(3);
+  if (jsonText.endsWith('```')) jsonText = jsonText.slice(0, -3);
+  jsonText = jsonText.trim();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new Error('Quality judge output is not valid JSON');
+  }
+
+  const judged = QualityJudgeResponseSchema.parse(parsed);
+  const expectedIds = config.criteria.map((c) => c.id).sort();
+  const actualIds = judged.scores.map((s) => s.id).sort();
+  if (
+    expectedIds.length !== actualIds.length ||
+    expectedIds.some((id, i) => id !== actualIds[i])
+  ) {
+    throw new Error('Quality judge criterion id mismatch');
+  }
+
+  const scoreMap = new Map(judged.scores.map((s) => [s.id, Number(s.score)]));
+  const clamp = (n: number) => Math.max(config.scale.min, Math.min(config.scale.max, n));
+
+  const scores = config.criteria.map((criterion) => {
+    const score = clamp(Number(scoreMap.get(criterion.id) ?? config.scale.min));
+    const pass = !criterion.required || score >= criterion.min_score;
+    return {
+      id: criterion.id,
+      score,
+      min_score: criterion.min_score,
+      required: criterion.required,
+      pass,
+    };
+  });
+  const failures = scores.filter((s) => !s.pass).map((s) => s.id);
+  const overall = Number.isFinite(Number(judged.overall))
+    ? clamp(Number(judged.overall))
+    : scores.reduce((sum, s) => sum + s.score, 0) / Math.max(1, scores.length);
+  return { ok: failures.length === 0, overall, scores, failures };
+}
 
 
 app.get('/api/health', (_req, res) => {
@@ -638,14 +848,17 @@ async function runYouTubePipeline(input: {
 }) {
   const startedAt = Date.now();
   const transcript = await getTranscriptForVideo(input.videoId);
-
   const client = createLLMClient();
-  const rawDraft = await client.generateYouTubeBlueprint({
-    videoUrl: input.videoUrl,
-    transcript: transcript.text,
-  });
+  const qualityConfig = readYt2bpQualityConfig();
+  const attempts = qualityConfig.enabled ? 1 + qualityConfig.retry_policy.max_retries : 1;
+  let bestFailingQuality: {
+    draft: YouTubeDraft;
+    overall: number;
+    failures: string[];
+  } | null = null;
+  const passingCandidates: Array<{ draft: YouTubeDraft; overall: number }> = [];
 
-  const draft = {
+  const toDraft = (rawDraft: Awaited<ReturnType<typeof client.generateYouTubeBlueprint>>): YouTubeDraft => ({
     title: rawDraft.title?.trim() || 'YouTube Blueprint',
     description: rawDraft.description?.trim() || 'AI-generated blueprint from video transcript.',
     steps: (rawDraft.steps || [])
@@ -657,21 +870,70 @@ async function runYouTubePipeline(input: {
       .filter((step) => step.name && step.notes),
     notes: rawDraft.notes?.trim() || null,
     tags: (rawDraft.tags || []).map((tag) => tag.trim()).filter(Boolean).slice(0, 8),
-  };
+  });
 
-  if (!draft.steps.length) {
-    makePipelineError('GENERATION_FAIL', 'Generated blueprint had no usable steps.');
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const rawDraft = await client.generateYouTubeBlueprint({
+      videoUrl: input.videoUrl,
+      transcript: transcript.text,
+    });
+    const draft = toDraft(rawDraft);
+
+    if (!draft.steps.length) {
+      console.log(
+        `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${attempts} pass=false reason=no_steps`
+      );
+      continue;
+    }
+
+    const flattened = flattenDraftText(draft);
+    const safety = runSafetyChecks(flattened);
+    if (!safety.ok) {
+      makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${safety.blockedTopics.join(', ')}`);
+    }
+    const pii = runPiiChecks(flattened);
+    if (!pii.ok) {
+      makePipelineError('PII_BLOCKED', `PII detected: ${pii.matches.join(', ')}`);
+    }
+
+    if (!qualityConfig.enabled) {
+      passingCandidates.push({ draft, overall: 0 });
+      break;
+    }
+
+    try {
+      const graded = await scoreYt2bpQualityWithOpenAI(draft, qualityConfig);
+      const failIds = graded.failures.join(',') || 'none';
+      console.log(
+        `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${attempts} pass=${graded.ok} overall=${graded.overall.toFixed(2)} failures=${failIds}`
+      );
+      if (graded.ok) {
+        passingCandidates.push({ draft, overall: graded.overall });
+      } else if (!bestFailingQuality || graded.overall > bestFailingQuality.overall) {
+        bestFailingQuality = { draft, overall: graded.overall, failures: graded.failures };
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(
+        `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${attempts} pass=false judge_error=${message.slice(0, 180)}`
+      );
+      makePipelineError('GENERATION_FAIL', GENERIC_YT2BP_FAILURE_MESSAGE);
+    }
   }
 
-  const flattened = flattenDraftText(draft);
-  const safety = runSafetyChecks(flattened);
-  if (!safety.ok) {
-    makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${safety.blockedTopics.join(', ')}`);
+  const selected = passingCandidates
+    .slice()
+    .sort((a, b) => b.overall - a.overall)[0];
+  if (!selected) {
+    if (bestFailingQuality) {
+      console.log(
+        `[yt2bp-quality] run_id=${input.runId} selected=none best_fail_overall=${bestFailingQuality.overall.toFixed(2)} fail_ids=${bestFailingQuality.failures.join(',')}`
+      );
+    }
+    makePipelineError('GENERATION_FAIL', GENERIC_YT2BP_FAILURE_MESSAGE);
   }
-  const pii = runPiiChecks(flattened);
-  if (!pii.ok) {
-    makePipelineError('PII_BLOCKED', `PII detected: ${pii.matches.join(', ')}`);
-  }
+
+  const draft = selected.draft;
   console.log(
     `[yt2bp] run_id=${input.runId} transcript_source=${transcript.source} transcript_chars=${transcript.text.length}`
   );
