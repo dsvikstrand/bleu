@@ -52,9 +52,11 @@ type YouTubeToBlueprintErrorResponse = {
     | 'NO_CAPTIONS'
     | 'TRANSCRIPT_FETCH_FAIL'
     | 'TRANSCRIPT_EMPTY'
+    | 'PROVIDER_FAIL'
     | 'GENERATION_FAIL'
     | 'SAFETY_BLOCKED'
     | 'PII_BLOCKED'
+    | 'RATE_LIMITED'
     | 'TIMEOUT';
   message: string;
   run_id: string | null;
@@ -100,6 +102,25 @@ function toBlueprintStepsForSave(steps: YouTubeDraftStep[]) {
     description: step.notes,
     items: [],
   }));
+}
+
+function toYouTubeErrorMessage(errorCode: YouTubeToBlueprintErrorResponse['error_code']) {
+  switch (errorCode) {
+    case 'INVALID_URL':
+      return 'Please enter a valid single YouTube video URL.';
+    case 'NO_CAPTIONS':
+    case 'TRANSCRIPT_EMPTY':
+      return 'Transcript unavailable for this video. Please try another video.';
+    case 'PROVIDER_FAIL':
+    case 'TRANSCRIPT_FETCH_FAIL':
+      return 'Transcript provider is currently unavailable. Please try another video.';
+    case 'TIMEOUT':
+      return 'This video took too long to process. Please try another video.';
+    case 'RATE_LIMITED':
+      return 'Too many requests right now. Please wait a bit and try again.';
+    default:
+      return GENERIC_FAILURE_TEXT;
+  }
 }
 
 export default function YouTubeToBlueprint() {
@@ -216,13 +237,9 @@ export default function YouTubeToBlueprint() {
         await logMvpEvent({
           eventName: 'youtube_fail',
           userId: user?.id,
-          metadata: { source: 'youtube_mvp', reason: errCode },
+          metadata: { source: 'youtube_mvp', reason: errCode, rate_limited: errCode === 'RATE_LIMITED' },
         });
-        if (errCode === 'NO_CAPTIONS' || errCode === 'TRANSCRIPT_EMPTY') {
-          setErrorText('Transcript unavailable for this video. Please try another video.');
-        } else {
-          setErrorText(GENERIC_FAILURE_TEXT);
-        }
+        setErrorText(toYouTubeErrorMessage(errCode));
         setStageText('Generation failed');
         return;
       }

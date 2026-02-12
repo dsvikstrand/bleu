@@ -45,16 +45,83 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
+const yt2bpAnonLimitPerMin = Number(process.env.YT2BP_ANON_LIMIT_PER_MIN) || 6;
+const yt2bpAuthLimitPerMin = Number(process.env.YT2BP_AUTH_LIMIT_PER_MIN) || 20;
+const yt2bpIpLimitPerHour = Number(process.env.YT2BP_IP_LIMIT_PER_HOUR) || 30;
+
+function getRetryAfterSeconds(req: express.Request) {
+  const resetTime = (req as express.Request & { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime;
+  if (!resetTime) return undefined;
+  const seconds = Math.max(1, Math.ceil((resetTime.getTime() - Date.now()) / 1000));
+  return Number.isFinite(seconds) ? seconds : undefined;
+}
+
+function yt2bpRateLimitHandler(
+  limiter: 'anon' | 'auth' | 'ip_hourly',
+  req: express.Request,
+  res: express.Response,
+) {
+  const retryAfter = getRetryAfterSeconds(req);
+  res.locals.rateLimited = true;
+  res.locals.rateLimiter = limiter;
+  res.locals.bucketErrorCode = 'RATE_LIMITED';
+  return res.status(429).json({
+    ok: false,
+    error_code: 'RATE_LIMITED',
+    message: 'Too many requests right now. Please wait a bit and try again.',
+    retry_after_seconds: retryAfter,
+    run_id: null,
+  });
+}
+
+const yt2bpAnonLimiter = rateLimit({
+  windowMs: 60_000,
+  max: yt2bpAnonLimitPerMin,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip,
+  skip: (_req, res) => Boolean((res.locals.user as { id?: string } | undefined)?.id),
+  handler: (req, res) => yt2bpRateLimitHandler('anon', req, res),
+});
+
+const yt2bpAuthLimiter = rateLimit({
+  windowMs: 60_000,
+  max: yt2bpAuthLimitPerMin,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => {
+    const user = res.locals.user as { id?: string } | undefined;
+    return user?.id || req.ip;
+  },
+  skip: (_req, res) => !Boolean((res.locals.user as { id?: string } | undefined)?.id),
+  handler: (req, res) => yt2bpRateLimitHandler('auth', req, res),
+});
+
+const yt2bpIpHourlyLimiter = rateLimit({
+  windowMs: 3_600_000,
+  max: yt2bpIpLimitPerHour,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip,
+  handler: (req, res) => yt2bpRateLimitHandler('ip_hourly', req, res),
+});
+
 app.use((req, res, next) => {
   const start = process.hrtime.bigint();
   res.on('finish', () => {
     const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+    const extra = [
+      res.locals.bucketErrorCode ? `bucket_error_code=${String(res.locals.bucketErrorCode)}` : '',
+      res.locals.rateLimited ? `rate_limited=${String(res.locals.rateLimited)}` : '',
+      res.locals.rateLimiter ? `limiter=${String(res.locals.rateLimiter)}` : '',
+    ].filter(Boolean);
     const line = [
       req.ip,
       req.method,
       req.originalUrl,
       res.statusCode,
       `${durationMs.toFixed(1)}ms`,
+      ...extra,
     ].join(' ');
     console.log(line);
   });
@@ -311,7 +378,7 @@ app.post('/api/generate-blueprint', async (req, res) => {
   }
 });
 
-app.post('/api/youtube-to-blueprint', async (req, res) => {
+app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt2bpAuthLimiter, async (req, res) => {
   const parsed = YouTubeToBlueprintRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -365,11 +432,14 @@ app.post('/api/youtube-to-blueprint', async (req, res) => {
   } catch (error) {
     const known = mapPipelineError(error);
     if (known) {
+      res.locals.bucketErrorCode = known.error_code;
       const status =
         known.error_code === 'TIMEOUT' ? 504
           : known.error_code === 'INVALID_URL' ? 400
             : known.error_code === 'NO_CAPTIONS' || known.error_code === 'TRANSCRIPT_EMPTY' ? 422
-              : known.error_code === 'PII_BLOCKED' || known.error_code === 'SAFETY_BLOCKED' ? 422
+              : known.error_code === 'PROVIDER_FAIL' ? 502
+                : known.error_code === 'PII_BLOCKED' || known.error_code === 'SAFETY_BLOCKED' ? 422
+                  : known.error_code === 'RATE_LIMITED' ? 429
                 : 500;
       return res.status(status).json({
         ok: false,
@@ -429,11 +499,12 @@ function normalizeGeneratedBlueprint(
 type PipelineErrorCode =
   | 'INVALID_URL'
   | 'NO_CAPTIONS'
-  | 'TRANSCRIPT_FETCH_FAIL'
+  | 'PROVIDER_FAIL'
   | 'TRANSCRIPT_EMPTY'
   | 'GENERATION_FAIL'
   | 'SAFETY_BLOCKED'
   | 'PII_BLOCKED'
+  | 'RATE_LIMITED'
   | 'TIMEOUT';
 
 type PipelineErrorShape = {
@@ -458,6 +529,9 @@ function mapPipelineError(error: unknown): PipelineErrorShape | null {
     return { error_code: error.errorCode, message: error.message };
   }
   if (error instanceof TranscriptProviderError) {
+    if (error.code === 'TRANSCRIPT_FETCH_FAIL') {
+      return { error_code: 'PROVIDER_FAIL', message: 'Transcript provider is currently unavailable. Please try another video.' };
+    }
     return { error_code: error.code, message: error.message };
   }
   return null;
