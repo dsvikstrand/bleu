@@ -1,5 +1,9 @@
 # Eval Scorecard (v0)
 
+Status
+- Legacy reference schema (not active in current runtime).
+- Current active eval stack is global-only and does not read scorecards.
+
 Purpose: store the output of an LLM judge run as a stable artifact, so regression-style evals can compare future generations against a known baseline.
 
 Suggested location (method-owned)

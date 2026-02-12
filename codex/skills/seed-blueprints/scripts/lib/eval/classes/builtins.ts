@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import type { ControlPackV0 } from '../../control_pack_v0';
 import type { PromptPackV0 } from '../../prompt_pack_v0';
 import type { PersonaV0 } from '../../persona_v0';
@@ -66,14 +65,6 @@ function readJsonFileStrict<T>(absPath: string): T {
 
 function normalizeText(input: unknown): string {
   return String(input || '').trim().toLowerCase();
-}
-
-function jaccard(a: Set<string>, b: Set<string>): number {
-  if (!a.size && !b.size) return 1;
-  let inter = 0;
-  for (const x of a) if (b.has(x)) inter += 1;
-  const uni = a.size + b.size - inter;
-  return uni > 0 ? inter / uni : 0;
 }
 
 export const builtinEvalClasses: Array<EvalClass<any, any>> = [
@@ -892,96 +883,6 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
           forbidden_hits: hits.slice(0, 20),
         }
       );
-    },
-  },
-  {
-    id: 'golden_regression_inventory_v0',
-    run: (inv: InventorySchema, params: Record<string, unknown>, ctx) => {
-      const domainId = String(ctx.domain_id || '').trim();
-      if (!domainId) {
-        return mkEvalResult('golden_regression_inventory_v0', false, 'hard_fail', 0, 'missing_domain_id', {
-          expected: 'set --domain or provide persona default_domain/safety.domain',
-        });
-      }
-
-      const minScoreRaw = (params || ({} as any)).minScore;
-      const minScore = minScoreRaw === undefined || minScoreRaw === null ? 0.08 : Math.max(0, Number(minScoreRaw) || 0);
-
-      let dir: { absPath: string; relPath: string };
-      try {
-        dir = resolveDomainAsset(domainId, 'golden/libraries');
-      } catch (e) {
-        const err = e instanceof Error ? e : new Error(String(e));
-        return mkEvalResult('golden_regression_inventory_v0', false, 'hard_fail', 0, 'invalid_domain_asset_path', {
-          domain_id: domainId,
-          error: err.message.slice(0, 200),
-        });
-      }
-
-      if (!fs.existsSync(dir.absPath) || !fs.statSync(dir.absPath).isDirectory()) {
-        return mkEvalResult('golden_regression_inventory_v0', false, 'hard_fail', 0, 'missing_domain_asset', {
-          domain_id: domainId,
-          expected_path: dir.relPath,
-        });
-      }
-
-      const files = fs
-        .readdirSync(dir.absPath)
-        .filter((f) => f.toLowerCase().endsWith('.json'))
-        .slice(0, 50);
-      if (!files.length) {
-        return mkEvalResult('golden_regression_inventory_v0', false, 'hard_fail', 0, 'no_golden_fixtures', {
-          domain_id: domainId,
-          expected_path: dir.relPath + '/*.json',
-        });
-      }
-
-      const invCats = new Set((Array.isArray(inv?.categories) ? inv.categories : []).map((c) => normalizeText((c as any)?.name || '')).filter(Boolean));
-      const invItems = new Set(
-        (Array.isArray(inv?.categories) ? inv.categories : [])
-          .flatMap((c) => (Array.isArray((c as any)?.items) ? (c as any).items : []))
-          .map((x) => normalizeText(x))
-          .filter(Boolean)
-      );
-
-      let best = 0;
-      let bestFile = '';
-      for (const f of files) {
-        const abs = path.join(dir.absPath, f);
-        let g: any;
-        try {
-          g = readJsonFileStrict<any>(abs);
-        } catch {
-          continue;
-        }
-        const gInv = (g && g.generated && g.generated.categories) ? (g.generated as InventorySchema) : (g as InventorySchema);
-        const gCats = new Set(
-          (Array.isArray(gInv?.categories) ? gInv.categories : []).map((c) => normalizeText((c as any)?.name || '')).filter(Boolean)
-        );
-        const gItems = new Set(
-          (Array.isArray(gInv?.categories) ? gInv.categories : [])
-            .flatMap((c) => (Array.isArray((c as any)?.items) ? (c as any).items : []))
-            .map((x) => normalizeText(x))
-            .filter(Boolean)
-        );
-        const catScore = jaccard(invCats, gCats);
-        const itemScore = jaccard(invItems, gItems);
-        const score = 0.35 * catScore + 0.65 * itemScore;
-        if (score > best) {
-          best = score;
-          bestFile = f;
-        }
-      }
-
-      const ok = best >= minScore;
-      return mkEvalResult('golden_regression_inventory_v0', ok, ok ? 'info' : 'warn', best, ok ? 'ok' : 'below_min_score', {
-        domain_id: domainId,
-        golden_dir: dir.relPath,
-        best_file: bestFile || null,
-        best_score: best,
-        minScore,
-        fileCount: files.length,
-      });
     },
   },
   safetyModerationV0,
