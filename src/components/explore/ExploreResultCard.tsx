@@ -32,13 +32,17 @@ function BlueprintCard({
 
   return (
     <Link to={`/blueprint/${result.id}`}>
-      <Card className="p-4 hover:shadow-soft-md transition-all h-full">
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="font-medium text-sm line-clamp-2">{result.title}</h3>
-          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+      <Card className="p-3 border-border/50 bg-card/40 rounded-md hover:bg-muted/10 transition-colors h-full">
+        <p className="text-[11px] font-medium tracking-wide text-muted-foreground mb-1">b/channels</p>
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h3 className="font-semibold text-base leading-tight line-clamp-2">{result.title}</h3>
+          <FileText className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
         </div>
-        
-        <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+        <p className="text-xs text-muted-foreground line-clamp-3 mb-2">
+          {summary}
+        </p>
+
+        <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
           <span className="flex items-center gap-1">
             <Layers className="h-3 w-3" />
             {itemCount} items
@@ -48,9 +52,6 @@ function BlueprintCard({
             {result.likesCount}
           </span>
         </div>
-        <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
-          {summary}
-        </p>
 
         {result.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
@@ -97,17 +98,18 @@ function InventoryCard({
 
   return (
     <Link to={`/inventory/${result.id}`}>
-      <Card className="p-4 hover:shadow-soft-md transition-all h-full">
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="font-medium text-sm line-clamp-2">{result.title}</h3>
-          <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
+      <Card className="p-3 border-border/50 bg-card/40 rounded-md hover:bg-muted/10 transition-colors h-full">
+        <p className="text-[11px] font-medium tracking-wide text-muted-foreground mb-1">b/channels</p>
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h3 className="font-semibold text-base leading-tight line-clamp-2">{result.title}</h3>
+          <Layers className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
         </div>
 
-        <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
+        <p className="text-xs text-muted-foreground line-clamp-3 mb-2">
           {summary}
         </p>
 
-        <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
           <span className="flex items-center gap-1">
             <Heart className="h-3 w-3" />
             {result.likesCount}

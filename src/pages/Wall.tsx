@@ -9,7 +9,6 @@ import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Heart, Share2, Layers, Tag } from 'lucide-react';
@@ -289,10 +288,8 @@ export default function Wall() {
                 </Card>
               ))
             ) : posts && posts.length > 0 ? (
-              <div className="space-y-4">
+              <div className="divide-y divide-border/50 rounded-xl border border-border/50 bg-card/40 backdrop-blur-sm">
                 {posts.map((post) => {
-                  const displayName = post.profile.display_name || 'Anonymous';
-                  const initials = displayName.slice(0, 2).toUpperCase();
                   const itemCount = countSelectedItems(post.selected_items);
                   const preview = buildFeedSummary({
                     primary: post.llm_review,
@@ -301,100 +298,76 @@ export default function Wall() {
                   });
                   const displayTags = post.tags.slice(0, VISIBLE_CHIPS_COUNT);
                   const extraTagCount = post.tags.length - displayTags.length;
+                  const createdLabel = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
 
                   return (
-                    <Link key={post.id} to={`/blueprint/${post.id}`} className="block">
-                      <Card className="overflow-hidden transition hover:border-primary/40 hover:shadow-md">
-                        <CardHeader className="flex flex-row items-center gap-3 pb-2">
-                          <Link 
-                            to={`/u/${post.creator_user_id}`} 
-                            onClick={(event) => event.stopPropagation()}
-                            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                    <Link
+                      key={post.id}
+                      to={`/blueprint/${post.id}`}
+                      className="block px-4 py-3 transition-colors hover:bg-muted/20"
+                    >
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium tracking-wide text-muted-foreground">b/channels</p>
+                        <h3 className="text-base font-semibold leading-tight">{post.title}</h3>
+                        <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
+
+                        {post.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {displayTags.map((tag) => (
+                              <Badge
+                                key={tag.id}
+                                variant="outline"
+                                className={`text-xs cursor-pointer transition-colors border ${
+                                  followedIds.has(tag.id)
+                                    ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                                    : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+                                }`}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  handleTagToggle(tag);
+                                }}
+                              >
+                                #{tag.slug}
+                              </Badge>
+                            ))}
+                            {extraTagCount > 0 && (
+                              <Badge variant="outline" className="text-xs text-muted-foreground">
+                                +{extraTagCount} more
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-3 pt-1 text-xs text-muted-foreground">
+                          <span>{createdLabel}</span>
+                          <span className="inline-flex items-center gap-1">
+                            <Layers className="h-3.5 w-3.5" />
+                            {itemCount} item{itemCount !== 1 ? 's' : ''}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`h-7 px-2 ${post.user_liked ? 'text-red-500' : ''}`}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              handleLike(post.id, post.user_liked);
+                            }}
                           >
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={post.profile.avatar_url || undefined} />
-                              <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                                {initials}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium text-sm">{displayName}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
-                              </p>
-                            </div>
-                          </Link>
-                          <div className="flex-1" />
-                          <Badge variant="secondary" className="bg-primary/10 text-primary">
-                            <Layers className="h-3 w-3 mr-1" />
-                            Blueprint
-                          </Badge>
-                        </CardHeader>
-
-                        <CardContent className="pt-0 space-y-3">
-                          <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-                            <h3 className="font-semibold">{post.title}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {itemCount} item{itemCount !== 1 ? 's' : ''}
-                            </p>
-                            <p className="text-sm pt-2 border-t border-border/50 text-muted-foreground line-clamp-3">
-                              {preview}
-                            </p>
-                          </div>
-                          {post.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                          {displayTags.map((tag) => (
-                            <Badge
-                              key={tag.id}
-                              variant="outline"
-                              className={`text-xs cursor-pointer transition-colors border ${
-                                followedIds.has(tag.id)
-                                  ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                                  : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-                              }`}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                handleTagToggle(tag);
-                              }}
-                            >
-                              #{tag.slug}
-                            </Badge>
-                          ))}
-                          {extraTagCount > 0 && (
-                            <Badge variant="outline" className="text-xs text-muted-foreground">
-                              +{extraTagCount} more
-                            </Badge>
-                          )}
-                            </div>
-                          )}
-                        </CardContent>
-
-                        <CardFooter className="pt-0 flex flex-col gap-4">
-                          <div className="flex items-center gap-4 w-full">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className={post.user_liked ? 'text-red-500' : ''}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                handleLike(post.id, post.user_liked);
-                              }}
-                            >
-                              <Heart className={`h-4 w-4 mr-1 ${post.user_liked ? 'fill-current' : ''}`} />
-                              {post.likes_count}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled
-                              onClick={(event) => event.preventDefault()}
-                            >
-                              <Share2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </CardFooter>
-                      </Card>
+                            <Heart className={`h-4 w-4 mr-1 ${post.user_liked ? 'fill-current' : ''}`} />
+                            {post.likes_count}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            disabled
+                            onClick={(event) => event.preventDefault()}
+                          >
+                            <Share2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
                     </Link>
                   );
                 })}

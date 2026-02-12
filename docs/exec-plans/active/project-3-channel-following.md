@@ -20,6 +20,11 @@ Introduce follow/unfollow channel behavior and channel-prioritized feed logic fo
 - P1 terminology and taxonomy
 - P2 feed row structure
 
+## Future Model Lock (from P2 planning)
+- Blueprint publishing will support up to `3` curated channels per blueprint.
+- Tags remain freeform and user-entered for explore/discovery.
+- Feed rows should later show primary channel + overflow indicator (`+N`) when multiple channels are assigned.
+
 ## Channel Feed Behavior (v0)
 1. user with follows: show followed-channel content first.
 2. user with zero follows: show curated starter channels and prompt follow.

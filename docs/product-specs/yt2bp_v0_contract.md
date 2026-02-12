@@ -5,6 +5,7 @@
 - Version: `v0`
 - Stability rule: v0 changes must be additive or versioned.
 - 2026-02-12 note: Project 2 Step 1 feed-summary hygiene changes are UI-only and do not alter this contract.
+- 2026-02-12 note: Project 2 Step 2 feed-row shell changes are UI-only and do not alter this contract.
 
 ## Request
 ```json

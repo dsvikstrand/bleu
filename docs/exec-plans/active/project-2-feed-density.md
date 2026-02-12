@@ -78,6 +78,13 @@ Acceptance:
 - row hierarchy matches locked order on mobile and desktop
 - no interaction regressions on row/action taps
 
+Step 2 implementation lock:
+- Surface scope: `Wall + Explore` only.
+- Row hierarchy: `b/channels` -> title -> compact summary -> lightweight meta/actions.
+- Author block is removed from list rows in this step (detail pages keep attribution).
+- Container style: subtle separators / reduced card chrome (no heavy nested-card look).
+- Interim context label is generic `b/channels` until creator-assigned channels runtime lands.
+
 ### Step 3 - Channel-First Metadata and Author De-Emphasis
 Objective: reduce user/author prominence in list view and reinforce channel/content focus.
 
