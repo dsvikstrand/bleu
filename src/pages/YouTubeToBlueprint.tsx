@@ -118,24 +118,43 @@ export default function YouTubeToBlueprint() {
   const [result, setResult] = useState<YouTubeToBlueprintSuccessResponse | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const progressResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const phaseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const urlValidation = useMemo(() => validateYouTubeInput(videoUrl), [videoUrl]);
-  useEffect(() => {
-    if (!isGenerating) return;
-    setProgressValue(18);
-    const timer = setInterval(() => {
-      setProgressValue((current) => Math.min(93, current + Math.max(1, (93 - current) * 0.1)));
-    }, 350);
-    return () => clearInterval(timer);
-  }, [isGenerating]);
-
   useEffect(() => {
     return () => {
       if (progressResetTimerRef.current) {
         clearTimeout(progressResetTimerRef.current);
       }
+      if (phaseIntervalRef.current) {
+        clearInterval(phaseIntervalRef.current);
+      }
     };
   }, []);
+
+  function startLoadingPhases(phases: string[]) {
+    if (phaseIntervalRef.current) {
+      clearInterval(phaseIntervalRef.current);
+      phaseIntervalRef.current = null;
+    }
+    const safePhases = phases.length > 0 ? phases : ['Generating blueprint'];
+    let phaseIndex = 0;
+    setStageText(safePhases[phaseIndex]);
+    setProgressValue(15);
+
+    if (safePhases.length === 1) return;
+    phaseIntervalRef.current = setInterval(() => {
+      phaseIndex = Math.min(phaseIndex + 1, safePhases.length - 1);
+      const normalized = phaseIndex / (safePhases.length - 1);
+      const nextProgress = Math.min(92, 15 + Math.round(normalized * 77));
+      setProgressValue(nextProgress);
+      setStageText(safePhases[phaseIndex]);
+      if (phaseIndex >= safePhases.length - 1 && phaseIntervalRef.current) {
+        clearInterval(phaseIntervalRef.current);
+        phaseIntervalRef.current = null;
+      }
+    }, 1400);
+  }
 
   const canSubmit = !isGenerating && videoUrl.trim().length > 0 && urlValidation.ok;
 
@@ -155,15 +174,21 @@ export default function YouTubeToBlueprint() {
       return;
     }
 
-    setIsGenerating(true);
-    setStageText('Fetching transcript and generating your blueprint...');
-
     const payload: YouTubeToBlueprintRequest = {
       video_url: videoUrl.trim(),
       generate_review: generateReview,
       generate_banner: generateBanner,
       source: 'youtube_mvp',
     };
+    setIsGenerating(true);
+    startLoadingPhases([
+      'Submitting video',
+      'Fetching transcript',
+      'Generating blueprint',
+      ...(payload.generate_review ? ['Generating AI review'] : []),
+      ...(payload.generate_banner ? ['Generating banner'] : []),
+      'Finalizing result',
+    ]);
 
     await logMvpEvent({
       eventName: 'youtube_submit',
@@ -198,11 +223,12 @@ export default function YouTubeToBlueprint() {
         } else {
           setErrorText(GENERIC_FAILURE_TEXT);
         }
+        setStageText('Generation failed');
         return;
       }
 
       setResult(json);
-      setStageText('Blueprint ready. Review and save if you want.');
+      setStageText('Blueprint ready. Review and publish if you want.');
       await logMvpEvent({
         eventName: 'youtube_success',
         userId: user?.id,
@@ -215,7 +241,12 @@ export default function YouTubeToBlueprint() {
         metadata: { source: 'youtube_mvp', reason: 'NETWORK' },
       });
       setErrorText(GENERIC_FAILURE_TEXT);
+      setStageText('Generation failed');
     } finally {
+      if (phaseIntervalRef.current) {
+        clearInterval(phaseIntervalRef.current);
+        phaseIntervalRef.current = null;
+      }
       setIsGenerating(false);
       setProgressValue(100);
       if (progressResetTimerRef.current) {

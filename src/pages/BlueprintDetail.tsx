@@ -60,6 +60,7 @@ export default function BlueprintDetail() {
   const { user } = useAuth();
   const { followedIds, toggleFollow } = useTagFollows();
   const [comment, setComment] = useState('');
+  const [isBannerExpanded, setIsBannerExpanded] = useState(false);
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
@@ -171,13 +172,33 @@ export default function BlueprintDetail() {
             </section>
 
             {blueprint.banner_url && (
-              <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/30">
-                <img
-                  src={blueprint.banner_url}
-                  alt="Blueprint banner"
-                  className="w-full h-auto max-h-[560px] object-contain"
-                  loading="lazy"
-                />
+              <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/30 p-2">
+                {isBannerExpanded ? (
+                  <img
+                    src={blueprint.banner_url}
+                    alt="Blueprint banner"
+                    className="w-full h-auto max-h-[560px] object-contain rounded-lg"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="aspect-[3/1] w-full">
+                    <img
+                      src={blueprint.banner_url}
+                      alt="Blueprint banner"
+                      className="h-full w-full object-contain rounded-lg"
+                      loading="lazy"
+                    />
+                  </div>
+                )}
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsBannerExpanded((current) => !current)}
+                  >
+                    {isBannerExpanded ? 'Collapse banner' : 'Expand banner'}
+                  </Button>
+                </div>
               </div>
             )}
 
