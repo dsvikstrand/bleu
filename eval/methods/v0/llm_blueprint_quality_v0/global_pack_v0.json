@@ -7,7 +7,7 @@
     "max": 5
   },
   "retry_policy": {
-    "max_retries": 2,
+    "max_retries": 1,
     "selection": "best_overall"
   },
   "criteria": [

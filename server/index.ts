@@ -288,7 +288,7 @@ function readYt2bpQualityConfig(): Yt2bpQualityConfig {
     judge_model: 'o4-mini',
     prompt_version: 'yt2bp_quality_v0',
     scale: { min: 0, max: 5 },
-    retry_policy: { max_retries: 2, selection: 'best_overall' },
+    retry_policy: { max_retries: 1, selection: 'best_overall' },
     criteria: [
       { id: 'step_purpose_clarity', text: 'Each step has a clear purpose.', required: true, min_score: 3.5 },
       { id: 'step_actionability', text: 'Steps are actionable and specific.', required: true, min_score: 3.5 },
