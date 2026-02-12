@@ -19,7 +19,7 @@ interface OneRowTagChipsProps {
 
 export function OneRowTagChips({ items, gapPx = 6, className }: OneRowTagChipsProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const measureRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const measureRefs = useRef<Record<string, HTMLSpanElement | null>>({});
   const [fitCount, setFitCount] = useState(items.length);
 
   const recalculate = useCallback(() => {
@@ -84,18 +84,21 @@ export function OneRowTagChips({ items, gapPx = 6, className }: OneRowTagChipsPr
       </div>
 
       <div className="pointer-events-none absolute -left-[9999px] -top-[9999px] opacity-0" aria-hidden="true">
-        <div className="flex flex-nowrap">
+        <div className="flex flex-nowrap" style={{ gap: `${gapPx}px` }}>
           {items.map((item) => (
-            <Badge
+            <span
               key={item.key}
-              variant={item.variant || 'outline'}
-              className={item.className}
               ref={(el) => {
                 measureRefs.current[item.key] = el;
               }}
             >
-              {item.label}
-            </Badge>
+              <Badge
+                variant={item.variant || 'outline'}
+                className={item.className}
+              >
+                {item.label}
+              </Badge>
+            </span>
           ))}
         </div>
       </div>

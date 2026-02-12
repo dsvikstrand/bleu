@@ -7,6 +7,7 @@
 - 2026-02-12 note: Project 2 Step 1 feed-summary hygiene changes are UI-only and do not alter this contract.
 - 2026-02-12 note: Project 2 Step 2 feed-row shell changes are UI-only and do not alter this contract.
 - 2026-02-12 note: Project 2 one-row full-tag rendering changes are UI-only and do not alter this contract.
+- 2026-02-12 note: Project 2 one-row tag measurement hotfix is UI-only and does not alter this contract.
 
 ## Request
 ```json
