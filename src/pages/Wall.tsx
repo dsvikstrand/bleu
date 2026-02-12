@@ -234,7 +234,7 @@ export default function Wall() {
 
       <AppHeader />
 
-      <main className="max-w-3xl mx-auto px-4 pb-24">
+      <main className="max-w-3xl mx-auto px-2 sm:px-4 pb-24">
         <section className="mb-6">
           <div className="flex flex-col gap-2">
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Community Wall</p>
@@ -263,7 +263,7 @@ export default function Wall() {
           </Card>
         )}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FeedTab)}>
-          <TabsList className="mb-4">
+          <TabsList className="mb-3 h-9 rounded-md bg-muted/40 p-0.5">
             {FEED_TABS.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value}>
                 {tab.label}
@@ -288,7 +288,7 @@ export default function Wall() {
                 </Card>
               ))
             ) : posts && posts.length > 0 ? (
-              <div className="divide-y divide-border/50 rounded-xl border border-border/50 bg-card/40 backdrop-blur-sm">
+              <div className="divide-y divide-border/40">
                 {posts.map((post) => {
                   const itemCount = countSelectedItems(post.selected_items);
                   const preview = buildFeedSummary({
@@ -304,10 +304,10 @@ export default function Wall() {
                     <Link
                       key={post.id}
                       to={`/blueprint/${post.id}`}
-                      className="block px-4 py-3 transition-colors hover:bg-muted/20"
+                      className="block px-3 py-2.5 transition-colors hover:bg-muted/20"
                     >
                       <div className="space-y-2">
-                        <p className="text-xs font-medium tracking-wide text-muted-foreground">b/channels</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">b/channels</p>
                         <h3 className="text-base font-semibold leading-tight">{post.title}</h3>
                         <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
 
