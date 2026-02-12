@@ -7,6 +7,8 @@ a3) [have] Real endpoint is live: `POST /api/youtube-to-blueprint`.
 a4) [have] Public route and nav entry are live at `/youtube`.
 a5) [have] Focused YT2BP pilot completed and reviewed.
 a6) [have] YT2BP quality gate (LLM grading, min-score, retry) is wired server-side.
+a7) [have] YT2BP content safety gate (LLM grading + one retry) is wired server-side.
+a8) [todo] `instruction_security` gate is documented but not runtime-wired.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract
@@ -110,6 +112,7 @@ c1) [todo] Add optional source attribution in published blueprints.
 c2) [todo] Define final safety/PII blocking behavior per mode (`seed` vs `user`).
 c3) [todo] Decide whether non-signup trial is one-time or rate-limited.
 c4) [todo] Decide first paid transcript provider after MVP signal.
+c5) [todo] Implement runtime `llm_instruction_security_v0` (prompt injection / jailbreak checks).
 
 
 ## Full Implementation Plan (4-Steps)
@@ -141,7 +144,7 @@ e5) [have] Provider switch exists via env (`TRANSCRIPT_PROVIDER`).
 ### Step 3 - Add Guardrails + User-Facing Failure Handling
 f1) [have] Run baseline eval gates before allowing publish-ready output:
 - Structural.
-- Safety baseline enforcement.
+- Safety baseline enforcement (deterministic + `llm_content_safety_grading_v0`).
 - PII baseline enforcement.
 f1b) [have] YT2BP quality grading gate enforces 5 criteria with retry (`K=2`) and hard-fail fallback.
 f2) [have] If generation fails, show simple UX message:

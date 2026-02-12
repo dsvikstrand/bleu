@@ -118,6 +118,8 @@ function toYouTubeErrorMessage(errorCode: YouTubeToBlueprintErrorResponse['error
       return 'This video took too long to process. Please try another video.';
     case 'RATE_LIMITED':
       return 'Too many requests right now. Please wait a bit and try again.';
+    case 'SAFETY_BLOCKED':
+      return 'This video content could not be converted safely. Please try another video.';
     default:
       return GENERIC_FAILURE_TEXT;
   }

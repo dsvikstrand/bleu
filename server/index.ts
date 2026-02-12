@@ -21,7 +21,8 @@ import type {
 const app = express();
 const port = Number(process.env.PORT) || 8787;
 
-app.set('trust proxy', true);
+// We run behind a single reverse proxy (nginx). Avoid permissive `true`.
+app.set('trust proxy', 1);
 
 const corsOrigin = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
@@ -244,6 +245,20 @@ type Yt2bpQualityConfig = {
   criteria: QualityCriterion[];
 };
 
+type SafetyCriterion = {
+  id: string;
+  text: string;
+  required: boolean;
+};
+
+type Yt2bpContentSafetyConfig = {
+  enabled: boolean;
+  judge_model: string;
+  prompt_version: string;
+  retry_policy: { max_retries: number; selection: 'first_pass' };
+  criteria: SafetyCriterion[];
+};
+
 const QualityJudgeResponseSchema = z.object({
   scores: z.array(
     z.object({
@@ -252,6 +267,17 @@ const QualityJudgeResponseSchema = z.object({
     })
   ),
   overall: z.number().finite().optional(),
+});
+
+const ContentSafetyJudgeResponseSchema = z.object({
+  criteria: z.array(
+    z.object({
+      id: z.string().min(1),
+      pass: z.boolean(),
+      rationale: z.string().optional(),
+    })
+  ),
+  blocked: z.boolean(),
 });
 
 function readYt2bpQualityConfig(): Yt2bpQualityConfig {
@@ -328,6 +354,62 @@ function readYt2bpQualityConfig(): Yt2bpQualityConfig {
       selection: 'best_overall',
     },
     criteria: criteriaWithOverride.length ? criteriaWithOverride : fallback.criteria,
+  };
+}
+
+function readYt2bpContentSafetyConfig(): Yt2bpContentSafetyConfig {
+  const fallback: Yt2bpContentSafetyConfig = {
+    enabled: true,
+    judge_model: 'o4-mini',
+    prompt_version: 'yt2bp_content_safety_v0',
+    retry_policy: { max_retries: 1, selection: 'first_pass' },
+    criteria: [
+      { id: 'self_harm', text: 'No encouragement, planning, or reinforcement of self-harm/suicide.', required: true },
+      { id: 'sexual_minors', text: 'No sexual content involving minors or underage persons.', required: true },
+      { id: 'hate_harassment', text: 'No targeted hate, dehumanization, or harassment against protected groups.', required: true },
+    ],
+  };
+
+  const configPath = path.join(process.cwd(), 'eval', 'methods', 'v0', 'llm_content_safety_grading_v0', 'global_pack_v0.json');
+  let loaded = fallback;
+  if (fs.existsSync(configPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      loaded = {
+        ...fallback,
+        ...parsed,
+        retry_policy: { ...fallback.retry_policy, ...(parsed?.retry_policy || {}) },
+        criteria: Array.isArray(parsed?.criteria) ? parsed.criteria : fallback.criteria,
+      };
+    } catch {
+      loaded = fallback;
+    }
+  }
+
+  const envEnabledRaw = String(process.env.YT2BP_CONTENT_SAFETY_ENABLED ?? '').trim().toLowerCase();
+  const enabled =
+    envEnabledRaw === ''
+      ? Boolean(loaded.enabled)
+      : !(envEnabledRaw === '0' || envEnabledRaw === 'false' || envEnabledRaw === 'off' || envEnabledRaw === 'no');
+  const envModel = String(process.env.YT2BP_CONTENT_SAFETY_MODEL || '').trim();
+  const envRetryRaw = Number(process.env.YT2BP_CONTENT_SAFETY_MAX_RETRIES);
+  const maxRetriesBase = Number(loaded.retry_policy?.max_retries ?? 1);
+  const maxRetries = Number.isFinite(envRetryRaw) ? envRetryRaw : maxRetriesBase;
+
+  const criteria = (loaded.criteria || [])
+    .map((c) => ({
+      id: String(c?.id || '').trim(),
+      text: String(c?.text || '').trim(),
+      required: Boolean(c?.required),
+    }))
+    .filter((c) => c.id && c.text);
+
+  return {
+    enabled,
+    judge_model: envModel || String(loaded.judge_model || fallback.judge_model),
+    prompt_version: String(loaded.prompt_version || fallback.prompt_version),
+    retry_policy: { max_retries: Math.max(0, Math.min(3, Math.floor(maxRetries))), selection: 'first_pass' },
+    criteria: criteria.length ? criteria : fallback.criteria,
   };
 }
 
@@ -418,6 +500,80 @@ async function scoreYt2bpQualityWithOpenAI(
     ? clamp(Number(judged.overall))
     : scores.reduce((sum, s) => sum + s.score, 0) / Math.max(1, scores.length);
   return { ok: failures.length === 0, overall, scores, failures };
+}
+
+function buildYt2bpContentSafetyJudgeInput(draft: YouTubeDraft, config: Yt2bpContentSafetyConfig) {
+  const criteriaLines = config.criteria
+    .map((c) => `- ${c.id}: ${c.text}`)
+    .join('\n');
+  return [
+    'You are evaluating generated content safety.',
+    `PromptVersion: ${config.prompt_version}`,
+    '',
+    'Mark each criterion pass=true only if the content is safe for that criterion.',
+    'If any criterion fails, blocked must be true.',
+    '',
+    'Criteria:',
+    criteriaLines,
+    '',
+    'Blueprint JSON:',
+    JSON.stringify(draft, null, 2),
+    '',
+    'Return ONLY strict JSON in this shape:',
+    '{"criteria":[{"id":"criterion_id","pass":true,"rationale":"optional"}],"blocked":false}',
+  ].join('\n');
+}
+
+async function scoreYt2bpContentSafetyWithOpenAI(
+  draft: YouTubeDraft,
+  config: Yt2bpContentSafetyConfig
+): Promise<{
+  ok: boolean;
+  blocked: boolean;
+  failedCriteria: string[];
+  details: Array<{ id: string; pass: boolean; rationale?: string }>;
+}> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
+  const client = new OpenAI({ apiKey });
+
+  const response = await client.responses.create({
+    model: config.judge_model,
+    instructions: [
+      'You are a strict JSON generator.',
+      'Return only JSON.',
+    ].join('\n'),
+    input: buildYt2bpContentSafetyJudgeInput(draft, config),
+  });
+
+  const outputText = String(response.output_text || '').trim();
+  if (!outputText) throw new Error('No output text from content safety judge');
+  let jsonText = outputText;
+  if (jsonText.startsWith('```json')) jsonText = jsonText.slice(7);
+  if (jsonText.startsWith('```')) jsonText = jsonText.slice(3);
+  if (jsonText.endsWith('```')) jsonText = jsonText.slice(0, -3);
+  jsonText = jsonText.trim();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new Error('Content safety judge output is not valid JSON');
+  }
+  const judged = ContentSafetyJudgeResponseSchema.parse(parsed);
+
+  const expectedIds = config.criteria.map((c) => c.id).sort();
+  const actualIds = judged.criteria.map((c) => c.id).sort();
+  if (
+    expectedIds.length !== actualIds.length ||
+    expectedIds.some((id, i) => id !== actualIds[i])
+  ) {
+    throw new Error('Content safety criterion id mismatch');
+  }
+
+  const failedCriteria = judged.criteria.filter((c) => !c.pass).map((c) => c.id);
+  const blocked = Boolean(judged.blocked) || failedCriteria.length > 0;
+  return { ok: !blocked, blocked, failedCriteria, details: judged.criteria };
 }
 
 
@@ -850,7 +1006,9 @@ async function runYouTubePipeline(input: {
   const transcript = await getTranscriptForVideo(input.videoId);
   const client = createLLMClient();
   const qualityConfig = readYt2bpQualityConfig();
-  const attempts = qualityConfig.enabled ? 1 + qualityConfig.retry_policy.max_retries : 1;
+  const contentSafetyConfig = readYt2bpContentSafetyConfig();
+  const qualityAttempts = qualityConfig.enabled ? 1 + qualityConfig.retry_policy.max_retries : 1;
+  const safetyRetryBudget = contentSafetyConfig.enabled ? contentSafetyConfig.retry_policy.max_retries : 0;
   let bestFailingQuality: {
     draft: YouTubeDraft;
     overall: number;
@@ -872,52 +1030,86 @@ async function runYouTubePipeline(input: {
     tags: (rawDraft.tags || []).map((tag) => tag.trim()).filter(Boolean).slice(0, 8),
   });
 
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const rawDraft = await client.generateYouTubeBlueprint({
-      videoUrl: input.videoUrl,
-      transcript: transcript.text,
-    });
-    const draft = toDraft(rawDraft);
+  let safetyRetriesUsed = 0;
+  for (let attempt = 1; attempt <= qualityAttempts; attempt += 1) {
+    let safetyRetryHint = '';
+    let attemptRunCount = 0;
+    const maxRunsForAttempt = 1 + safetyRetryBudget;
+    while (attemptRunCount < maxRunsForAttempt) {
+      attemptRunCount += 1;
+      const globalRunIndex = (attempt - 1) * maxRunsForAttempt + attemptRunCount;
+      const rawDraft = await client.generateYouTubeBlueprint({
+        videoUrl: input.videoUrl,
+        transcript: transcript.text,
+        additionalInstructions: safetyRetryHint || undefined,
+      });
+      const draft = toDraft(rawDraft);
 
-    if (!draft.steps.length) {
-      console.log(
-        `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${attempts} pass=false reason=no_steps`
-      );
-      continue;
-    }
-
-    const flattened = flattenDraftText(draft);
-    const safety = runSafetyChecks(flattened);
-    if (!safety.ok) {
-      makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${safety.blockedTopics.join(', ')}`);
-    }
-    const pii = runPiiChecks(flattened);
-    if (!pii.ok) {
-      makePipelineError('PII_BLOCKED', `PII detected: ${pii.matches.join(', ')}`);
-    }
-
-    if (!qualityConfig.enabled) {
-      passingCandidates.push({ draft, overall: 0 });
-      break;
-    }
-
-    try {
-      const graded = await scoreYt2bpQualityWithOpenAI(draft, qualityConfig);
-      const failIds = graded.failures.join(',') || 'none';
-      console.log(
-        `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${attempts} pass=${graded.ok} overall=${graded.overall.toFixed(2)} failures=${failIds}`
-      );
-      if (graded.ok) {
-        passingCandidates.push({ draft, overall: graded.overall });
-      } else if (!bestFailingQuality || graded.overall > bestFailingQuality.overall) {
-        bestFailingQuality = { draft, overall: graded.overall, failures: graded.failures };
+      if (!draft.steps.length) {
+        console.log(
+          `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} global_run=${globalRunIndex} pass=false reason=no_steps`
+        );
+        break;
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.log(
-        `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${attempts} pass=false judge_error=${message.slice(0, 180)}`
-      );
-      makePipelineError('GENERATION_FAIL', GENERIC_YT2BP_FAILURE_MESSAGE);
+
+      const flattened = flattenDraftText(draft);
+      const deterministicSafety = runSafetyChecks(flattened);
+      if (!deterministicSafety.ok) {
+        makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${deterministicSafety.blockedTopics.join(', ')}`);
+      }
+      const pii = runPiiChecks(flattened);
+      if (!pii.ok) {
+        makePipelineError('PII_BLOCKED', `PII detected: ${pii.matches.join(', ')}`);
+      }
+
+      if (!qualityConfig.enabled) {
+        passingCandidates.push({ draft, overall: 0 });
+        break;
+      }
+      try {
+        const graded = await scoreYt2bpQualityWithOpenAI(draft, qualityConfig);
+        const failIds = graded.failures.join(',') || 'none';
+        console.log(
+          `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} global_run=${globalRunIndex} pass=${graded.ok} overall=${graded.overall.toFixed(2)} failures=${failIds}`
+        );
+        if (!graded.ok) {
+          if (!bestFailingQuality || graded.overall > bestFailingQuality.overall) {
+            bestFailingQuality = { draft, overall: graded.overall, failures: graded.failures };
+          }
+          break;
+        }
+
+        let safetyPassed = !contentSafetyConfig.enabled;
+        if (contentSafetyConfig.enabled) {
+          const safetyScore = await scoreYt2bpContentSafetyWithOpenAI(draft, contentSafetyConfig);
+          const flagged = safetyScore.failedCriteria.join(',') || 'none';
+          console.log(
+            `[yt2bp-content-safety] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} global_run=${globalRunIndex} pass=${safetyScore.ok} flagged=${flagged}`
+          );
+          if (safetyScore.ok) {
+            safetyPassed = true;
+          } else if (safetyRetriesUsed < safetyRetryBudget && attemptRunCount < maxRunsForAttempt) {
+            safetyRetriesUsed += 1;
+            safetyRetryHint =
+              'Avoid these forbidden topics: self_harm, sexual_minors, hate_harassment. Keep output safe and compliant.';
+            continue;
+          } else {
+            makePipelineError('SAFETY_BLOCKED', 'This video content could not be converted safely. Please try another video.');
+          }
+        }
+
+        if (safetyPassed) {
+          passingCandidates.push({ draft, overall: graded.overall });
+          break;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const phase = message.toLowerCase().includes('safety') ? 'yt2bp-content-safety' : 'yt2bp-quality';
+        console.log(
+          `[${phase}] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} pass=false judge_error=${message.slice(0, 180)}`
+        );
+        makePipelineError('GENERATION_FAIL', GENERIC_YT2BP_FAILURE_MESSAGE);
+      }
     }
   }
 

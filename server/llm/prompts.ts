@@ -157,12 +157,15 @@ Response format:
   "tags": ["string"]
 }`;
 
-export function buildYouTubeBlueprintUserPrompt(input: { videoUrl: string; transcript: string }) {
+export function buildYouTubeBlueprintUserPrompt(input: { videoUrl: string; transcript: string; additionalInstructions?: string }) {
   const trimmedTranscript = input.transcript.trim().slice(0, 18_000);
+  const extra = String(input.additionalInstructions || '').trim();
   return `Video URL: ${input.videoUrl}
 
 Transcript:
 ${trimmedTranscript}
+
+${extra ? `Additional instructions:\n${extra}\n` : ''}
 
 Generate a usable blueprint now.`;
 }

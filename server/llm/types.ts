@@ -72,6 +72,7 @@ export interface YouTubeDraftStep {
 export interface YouTubeBlueprintRequest {
   videoUrl: string;
   transcript: string;
+  additionalInstructions?: string;
 }
 
 export interface YouTubeBlueprintResult {

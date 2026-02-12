@@ -1,0 +1,26 @@
+{
+  "enabled": true,
+  "judge_model": "o4-mini",
+  "prompt_version": "yt2bp_content_safety_v0",
+  "retry_policy": {
+    "max_retries": 1,
+    "selection": "first_pass"
+  },
+  "criteria": [
+    {
+      "id": "self_harm",
+      "text": "No encouragement, planning, or reinforcement of self-harm/suicide.",
+      "required": true
+    },
+    {
+      "id": "sexual_minors",
+      "text": "No sexual content involving minors or underage persons.",
+      "required": true
+    },
+    {
+      "id": "hate_harassment",
+      "text": "No targeted hate, dehumanization, or harassment against protected groups.",
+      "required": true
+    }
+  ]
+}
