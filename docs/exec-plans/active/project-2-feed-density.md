@@ -1,71 +1,160 @@
-# Project 2 - Feed Density
+# Project 2 - Feed Density (Step Plan)
 
-Status: `draft`
+Status: `active`
 
-## Goal
-Deliver a tighter, Reddit-like feed rhythm that improves scan speed without harming readability.
+## Summary
+Project 2 implements a near-clone Reddit feed rhythm for core blueprint feed surfaces while preserving current runtime contracts.
+
+Locked direction for this project:
+- compact but elegant density
+- flatter list-row structure (reduced card chrome)
+- channel-first hierarchy over author-first hierarchy
+- visible actions row in list view
+- keep app color identity; copy Reddit interaction/layout patterns
+
+## Goals
+- improve scan speed for cold users
+- reduce vertical waste and nested card feeling
+- make channels the primary contextual signal in feed rows
+- preserve readability despite higher density
 
 ## In Scope
-- reduce card chrome and stacked containers
-- establish row-like feed rhythm
-- define spacing and separator rules
-- mobile + desktop constraints for dense layout
+- feed/list visual density for blueprint surfaces (Wall and primary blueprint lists)
+- markdown cleanup in summaries for list previews
+- metadata hierarchy redesign for channel-first layout
+- mobile-first implementation with desktop parity
+- fallback switch for chip noise (`3-4` visible -> `0` visible)
 
 ## Out Of Scope
-- channel ranking logic
-- backend/content model changes
-- comments/thread UX redesign
+- runtime channel model migration
+- ranking algorithm changes
+- comments/thread UX implementation
+- full library feed rebrand (deferred)
+- backend/API/schema changes
 
 ## Dependencies
-- P1 IA/lingo complete for consistent labels
+- Project 1 complete (Step 1-3)
+- channels taxonomy doc present for naming consistency
 
-## Visual Rules (v0)
-1. avoid nested cards in feed surfaces.
-2. minimize heavy borders; use separators and typography hierarchy.
-3. keep metadata compact and secondary.
-4. prioritize title + value summary + channel context.
+## Step Breakdown (4 Steps)
 
-## Layout Constraints
-- Mobile:
-  - tighter vertical spacing, predictable row rhythm
-  - avoid oversized cards with excessive top/bottom padding
-- Desktop:
-  - preserve same hierarchy with wider columns
-  - maintain scan-first structure
+### Step 1 - Content Hygiene and Text Compaction
+Objective: remove noisy summary artifacts and lock text behavior before layout compression.
 
-## Card-to-Row Transform Plan
-1. identify all feed card variants.
-2. define common row shell with consistent sections.
-3. normalize metadata row (channel/tag/author/date priority).
-4. normalize action row spacing and icon weight.
+Tasks:
+1. strip markdown symbols from summary previews (e.g., `###`, list markers, stray formatting tokens)
+2. normalize summary fallback text and empty handling
+3. enforce summary clamp for compact feed (`3` lines on mobile; desktop may show one extra line if clean)
+4. lock channel label format in feed rows as `r/channel-slug`
+5. implement chip visibility config (default `3-4`, quick fallback to `0`)
 
-## Step-by-Step Implementation Plan (for later execution)
-1. baseline screenshot inventory and spacing audit.
-2. define token changes (spacing, radius, borders, shadows).
-3. apply to primary feed components.
-4. validate on mobile and desktop breakpoints.
-5. run scan/readability QA on top 20 feed items.
+Acceptance:
+- no visible markdown artifacts in top feed previews
+- compact summaries are readable and stable across top feed items
+- chip fallback can be switched without component rewrites
 
-## Edge Cases / Failure Modes
-- dense layout makes long titles unreadable
-- banner/image blocks dominate row height
-- low-contrast metadata after density reduction
+Step 1 implementation lock (completed decisions):
+- Surface scope: `Wall + Explore cards` only.
+- Summary source priority: cleaned `llm_review` first, then secondary text, then compact fallback.
+- Line clamp target: `3` lines on mobile-focused feed previews.
+- Chip visibility: constant-based toggle (`VISIBLE_CHIPS_COUNT`, default `4`, fast fallback to `0`).
 
-## ST Checklist
-- mobile feed: top 10 items render without clipping/overlap
-- desktop feed: same hierarchy preserved
-- no nested container visual regression in target feed views
+### Step 2 - Feed Row Shell (Flatter Near-Clone)
+Objective: convert current stacked card rhythm into flatter, tighter row rhythm.
 
-## Acceptance Criteria
-- measurable reduction in container depth and empty vertical space
-- feed feels continuous (border-to-border style) without readability loss
-- no critical tap-target regressions on mobile
+Tasks:
+1. reduce heavy border/shadow layering in list rows
+2. tighten vertical spacing and row padding
+3. make hierarchy explicit in order:
+   - channel label (`r/channel` medium)
+   - title (large)
+   - value summary (small)
+   - lightweight meta + actions
+4. keep actions visible by default
+5. preserve tap targets and row click behavior
 
-## Done Definition
-- exact feed states covered: regular row, with banner, without banner, long title
-- exact visual tokens documented
-- exact regression checks defined and repeatable
+Acceptance:
+- feed feels continuous (not nested-card heavy)
+- row hierarchy matches locked order on mobile and desktop
+- no interaction regressions on row/action taps
+
+### Step 3 - Channel-First Metadata and Author De-Emphasis
+Objective: reduce user/author prominence in list view and reinforce channel/content focus.
+
+Tasks:
+1. de-emphasize or remove author block in list rows where possible
+2. retain author context in detail page as smaller secondary metadata
+3. keep channel context visible above title in list view
+4. maintain action row visibility and clarity
+
+Acceptance:
+- list rows are channel/content-first
+- author metadata remains available where needed (detail)
+- no confusion about where content comes from
+
+### Step 4 - Polish, Regression Pass, and Docs Closure
+Objective: stabilize visual behavior and document final standards.
+
+Tasks:
+1. mobile/desktop spacing polish pass
+2. verify no clipping/overlap across long titles, long summaries, and banner variants
+3. compare against pre-P2 baseline captures for density/readability improvement
+4. update docs with final visual rules and known deferred items
+5. run focused smoke checks and capture outcomes
+
+Acceptance:
+- compact layout is stable across target feed states
+- readability remains acceptable with higher density
+- docs reflect final P2 decisions and deferments
+
+## Test Matrix (P2)
+
+### Functional UI Scenarios
+1. Wall feed row with short title + short summary
+2. Wall feed row with long title + long summary
+3. row with banner/image preview
+4. row without banner/image
+5. logged-out and logged-in feed behavior
+6. chip mode at default (`3-4`) and fallback (`0`)
+
+### Device/Viewport Scenarios
+1. mobile narrow viewport (primary target)
+2. desktop standard viewport
+3. no clipped action icons/buttons at both breakpoints
+
+### Content Integrity Scenarios
+1. markdown cleanup removes heading/list tokens from preview
+2. no broken unicode/formatting artifacts in summaries
+3. line clamps preserve readable sentence fragments
+
+## Rollout Gates
+- Gate P2-A: Step 1 passes summary hygiene checks
+- Gate P2-B: Step 2 row shell passes interaction checks
+- Gate P2-C: Step 3 metadata hierarchy validated (channel-first)
+- Gate P2-D: Step 4 regression and docs closure complete
+
+Progression rule:
+- do not advance to next step until current step meets acceptance and smoke checks.
+
+## Smoke Tests (ST)
+- `npm run build`
+- manual feed QA on mobile + desktop for target scenarios
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+## Acceptance Criteria (Project-Level)
+- feed list appears materially tighter without becoming messy
+- channel context is primary in list rows
+- markdown preview noise is eliminated
+- actions remain visible and tappable
+- no runtime/API/schema changes introduced
 
 ## Rollback Notes
-- keep previous style tokens branch-able for quick rollback
-- revert only feed shell if specific density variant fails QA
+- rollback by step, not full-project if possible
+- keep Step 1 markdown cleanup if later visual step regresses
+- preserve documented token/spacing baseline for quick revert
+
+## Explicit Assumptions
+- `tags` runtime model remains active under channel UI language
+- library feed can stay on current style until dedicated rebrand
+- join behavior can apply on refresh (no instant rerank requirement in P2)

@@ -9,6 +9,7 @@ a5) [have] Focused YT2BP pilot completed and reviewed.
 a6) [have] YT2BP quality gate (LLM grading, min-score, retry) is wired server-side.
 a7) [have] YT2BP content safety gate (LLM grading + one retry) is wired server-side.
 a8) [todo] `instruction_security` gate is documented but not runtime-wired.
+a9) [have] 2026-02-12 UI note: feed text hygiene updates in Project 2 Step 1 are frontend-only and do not change YT2BP API/runtime contract.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract

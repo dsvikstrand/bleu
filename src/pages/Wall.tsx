@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useTagFollows } from '@/hooks/useTagFollows';
 import type { Json } from '@/integrations/supabase/types';
+import { buildFeedSummary, VISIBLE_CHIPS_COUNT } from '@/lib/feedPreview';
 
 interface BlueprintPost {
   id: string;
@@ -293,7 +294,13 @@ export default function Wall() {
                   const displayName = post.profile.display_name || 'Anonymous';
                   const initials = displayName.slice(0, 2).toUpperCase();
                   const itemCount = countSelectedItems(post.selected_items);
-                  const preview = post.llm_review ? post.llm_review.slice(0, 160) : '';
+                  const preview = buildFeedSummary({
+                    primary: post.llm_review,
+                    fallback: 'Open to view the full step-by-step guide.',
+                    maxChars: 220,
+                  });
+                  const displayTags = post.tags.slice(0, VISIBLE_CHIPS_COUNT);
+                  const extraTagCount = post.tags.length - displayTags.length;
 
                   return (
                     <Link key={post.id} to={`/blueprint/${post.id}`} className="block">
@@ -330,15 +337,13 @@ export default function Wall() {
                             <p className="text-sm text-muted-foreground">
                               {itemCount} item{itemCount !== 1 ? 's' : ''}
                             </p>
-                            {preview && (
-                              <p className="text-sm pt-2 border-t border-border/50 text-muted-foreground">
-                                {preview}...
-                              </p>
-                            )}
+                            <p className="text-sm pt-2 border-t border-border/50 text-muted-foreground line-clamp-3">
+                              {preview}
+                            </p>
                           </div>
                           {post.tags.length > 0 && (
                             <div className="flex flex-wrap gap-2">
-                          {post.tags.map((tag) => (
+                          {displayTags.map((tag) => (
                             <Badge
                               key={tag.id}
                               variant="outline"
@@ -356,6 +361,11 @@ export default function Wall() {
                               #{tag.slug}
                             </Badge>
                           ))}
+                          {extraTagCount > 0 && (
+                            <Badge variant="outline" className="text-xs text-muted-foreground">
+                              +{extraTagCount} more
+                            </Badge>
+                          )}
                             </div>
                           )}
                         </CardContent>
