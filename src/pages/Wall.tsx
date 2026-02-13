@@ -100,7 +100,6 @@ export default function Wall() {
         .from('blueprints')
         .select('id, creator_user_id, title, selected_items, llm_review, likes_count, created_at')
         .eq('is_public', true)
-        .order('created_at', { ascending: false })
         .limit(limit);
 
       if (activeTab === 'trending') {
@@ -110,6 +109,8 @@ export default function Wall() {
           .gte('created_at', cutoff.toISOString())
           .order('likes_count', { ascending: false })
           .order('created_at', { ascending: false });
+      } else {
+        query = query.order('created_at', { ascending: false });
       }
 
       const { data: blueprints, error } = await query;

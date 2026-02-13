@@ -14,6 +14,7 @@ import { getChannelIcon } from '@/lib/channelIcons';
 
 interface ChannelViewModel {
   slug: string;
+  tagSlug: string;
   name: string;
   description: string;
   icon: string;
@@ -35,6 +36,7 @@ export default function Channels() {
       const tagId = bySlug.get(channel.tagSlug) || null;
       return {
         slug: channel.slug,
+        tagSlug: channel.tagSlug,
         name: channel.name,
         description: channel.description,
         icon: channel.icon,
@@ -45,8 +47,8 @@ export default function Channels() {
     });
   }, [tags]);
 
-  const yourChannels = channelModels.filter((channel) => followedSlugs.has(channel.slug));
-  const otherChannels = channelModels.filter((channel) => !followedSlugs.has(channel.slug));
+  const yourChannels = channelModels.filter((channel) => followedSlugs.has(channel.tagSlug));
+  const otherChannels = channelModels.filter((channel) => !yourChannels.some((joined) => joined.slug === channel.slug));
 
   const handleJoinLeave = async (channel: ChannelViewModel) => {
     if (!user) {
