@@ -150,7 +150,7 @@ export default function Channels() {
         if (!suggestedSlugSet.has(channelSlug)) return;
 
         const current = output[channelSlug] || [];
-        if (current.length >= 2) return;
+        if (current.length >= 3) return;
 
         current.push({ id: row.id, title: row.title });
         output[channelSlug] = current;
@@ -241,30 +241,28 @@ export default function Channels() {
     const ChannelIcon = getChannelIcon(channel.icon);
 
     return (
-      <Card key={channel.slug}>
-        <Link to={`/b/${channel.slug}`} className="block">
-          <CardContent className="py-4 flex items-center justify-between gap-4">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                <ChannelIcon className="h-4 w-4" />
-              </div>
-              <div className="space-y-1 min-w-0">
-                <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>
-                <p className="text-sm font-medium">{channel.name}</p>
-                <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
-              </div>
+      <Link key={channel.slug} to={`/b/${channel.slug}`} className="block">
+        <div className="py-3.5 px-1 flex items-center justify-between gap-4 hover:bg-muted/20 transition-colors">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+              <ChannelIcon className="h-4 w-4" />
             </div>
-            <div
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-            >
-              {renderJoinButton(channel)}
+            <div className="space-y-1 min-w-0">
+              <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>
+              <p className="text-sm font-medium">{channel.name}</p>
+              <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
             </div>
-          </CardContent>
-        </Link>
-      </Card>
+          </div>
+          <div
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            {renderJoinButton(channel)}
+          </div>
+        </div>
+      </Link>
     );
   };
 
@@ -303,10 +301,10 @@ export default function Channels() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y divide-border/40 border-y border-border/40">
               {visibleJoinedChannels.map((channel) => renderChannelRow(channel))}
               {joinedChannels.length > MAX_JOINED_CHANNELS_DISPLAY && (
-                <div className="flex items-center justify-between px-1 pt-1">
+                <div className="flex items-center justify-between px-1 py-2">
                   <p className="text-xs text-muted-foreground">
                     Showing {visibleJoinedChannels.length} of {joinedChannels.length}
                   </p>
@@ -337,59 +335,57 @@ export default function Channels() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y divide-border/40 border-y border-border/40">
               {suggestedChannels.map((channel) => {
                 const previews = suggestedPreviewsByChannel[channel.slug] || [];
                 const ChannelIcon = getChannelIcon(channel.icon);
 
                 return (
-                  <Card key={channel.slug}>
-                    <Link to={`/b/${channel.slug}`} className="block">
-                      <CardContent className="py-4 space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex items-start gap-3 min-w-0">
-                            <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                              <ChannelIcon className="h-4 w-4" />
-                            </div>
-                            <div className="space-y-1 min-w-0">
-                              <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>
-                              <p className="text-sm font-medium">{channel.name}</p>
-                              <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
-                            </div>
+                  <Link key={channel.slug} to={`/b/${channel.slug}`} className="block">
+                    <div className="py-3.5 px-1 space-y-3 hover:bg-muted/20 transition-colors">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                            <ChannelIcon className="h-4 w-4" />
                           </div>
-                          <div
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                            }}
-                          >
-                            {renderJoinButton(channel)}
+                          <div className="space-y-1 min-w-0">
+                            <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>
+                            <p className="text-sm font-medium">{channel.name}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
                           </div>
                         </div>
+                        <div
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                        >
+                          {renderJoinButton(channel)}
+                        </div>
+                      </div>
 
-                        <div className="pl-11 space-y-1">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Example blueprints</p>
-                          {previews.length > 0 ? (
-                            <ul className="space-y-1">
-                              {previews.map((preview) => (
-                                <li key={preview.id}>
-                                  <Link
-                                    to={`/blueprint/${preview.id}`}
-                                    className="text-xs text-foreground/85 hover:text-primary line-clamp-1"
-                                    onClick={(event) => event.stopPropagation()}
-                                  >
-                                    {preview.title}
-                                  </Link>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">No previews yet.</p>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Link>
-                  </Card>
+                      <div className="pl-11 space-y-1">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Explore Blueprints</p>
+                        {previews.length > 0 ? (
+                          <ul className="space-y-1">
+                            {previews.slice(0, 3).map((preview) => (
+                              <li key={preview.id}>
+                                <Link
+                                  to={`/blueprint/${preview.id}`}
+                                  className="text-xs text-foreground/85 hover:text-primary line-clamp-1"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  {preview.title}
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">No previews yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
                 );
               })}
             </div>
@@ -407,7 +403,7 @@ export default function Channels() {
               <CardContent className="py-6 text-sm text-muted-foreground">No more channels to show.</CardContent>
             </Card>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y divide-border/40 border-y border-border/40">
               {moreChannels.map((channel) => renderChannelRow(channel))}
             </div>
           )}
