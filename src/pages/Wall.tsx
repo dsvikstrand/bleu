@@ -161,8 +161,20 @@ export default function Wall() {
       })) as BlueprintPost[];
 
       if (isForYou) {
-        if (followTagIds.size === 0) return [] as BlueprintPost[];
-        return hydrated.filter((post) => post.tags.some((tag) => followTagIds.has(tag.id)));
+        if (followTagIds.size === 0) return hydrated;
+
+        const joinedChannelPosts: BlueprintPost[] = [];
+        const globalFillPosts: BlueprintPost[] = [];
+
+        hydrated.forEach((post) => {
+          if (post.tags.some((tag) => followTagIds.has(tag.id))) {
+            joinedChannelPosts.push(post);
+          } else {
+            globalFillPosts.push(post);
+          }
+        });
+
+        return [...joinedChannelPosts, ...globalFillPosts];
       }
 
       return hydrated;
@@ -239,6 +251,8 @@ export default function Wall() {
     likeMutation.mutate({ blueprintId, liked: currentlyLiked });
   };
 
+  const showZeroJoinForYouCta = !!user && activeTab === 'for-you' && followedIds.size === 0;
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -294,6 +308,21 @@ export default function Wall() {
           </TabsList>
 
           <TabsContent value={activeTab} className="mt-0">
+            {showZeroJoinForYouCta && (
+              <Card className="mb-3 mx-3 sm:mx-4 border-border/50 bg-card/60 backdrop-blur-sm">
+                <CardContent className="py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">Join channels to shape your feed</p>
+                    <p className="text-xs text-muted-foreground">
+                      Start with a few channels and your For You feed will prioritize those lanes.
+                    </p>
+                  </div>
+                  <Button asChild size="sm">
+                    <Link to="/channels">Explore Channels</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <Card key={i}>

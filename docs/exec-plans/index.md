@@ -26,3 +26,4 @@
 - P3 Step 1/3: implemented on core surfaces (Explore + Channels page + Wall) with explicit join-state model and filter-only chip cleanup.
 - P3 Phase 1 IA/routing: completed (`/channels` + `/b/:channelSlug` + `/tags` deprecation redirect).
 - P3 Phase 2: completed (real channel feeds on `/b/:channelSlug`, deterministic `b/<channel-slug>` resolver labels on Wall/Explore, and `b/general` fallback lane).
+- P3 Step 2/3: completed for ranking/cold-start policy on Wall (`For You` joined-first + global fill; `Latest`/`Trending` unchanged; zero-join CTA inline).

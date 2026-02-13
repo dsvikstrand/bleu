@@ -105,6 +105,12 @@ Acceptance:
 - duplicates do not appear
 - zero-join users always get actionable onboarding
 
+Step 2 ranking/cold-start lock (2026-02-13):
+- `For You` now uses joined-first ranking with deterministic global fill.
+- `Latest` remains pure recency (no channel boost).
+- `Trending` remains likes-first global (no channel personalization).
+- Zero-join users still get a usable `For You` feed plus a clear inline CTA to `/channels`.
+
 Step 2 Phase 2 implementation lock (2026-02-13):
 - Channel pages are now real feed surfaces on `/b/:channelSlug` with `Top` and `Recent` tabs.
 - `Top` uses likes-first ordering with deterministic recency tie-break.
