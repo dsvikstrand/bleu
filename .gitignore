@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 vite.config.ts.timestamp-*.mjs
+supabase/.temp/
 
 # Editor directories and files
 .vscode/*
@@ -33,6 +34,9 @@ seed/auth/*.bak.*
 seed/secrets.local.json
 seed/secrets.local.json.*
 personas/auth_local/
+
+# Backend runtime state (should never be committed)
+server/data/
 
 # Env files (local secrets)
 .env
