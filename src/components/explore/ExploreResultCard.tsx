@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 
 interface ExploreResultCardProps {
   result: ExploreResult;
-  onTagClick?: (tag: string) => void;
+  onTagClick?: (tag: string, options?: { toggleJoin?: boolean }) => void;
   followedTagSlugs?: Set<string>;
   commentCountByBlueprintId?: Record<string, number>;
 }
@@ -22,7 +22,7 @@ function BlueprintCard({
   commentCountByBlueprintId,
 }: {
   result: BlueprintResult;
-  onTagClick?: (tag: string) => void;
+  onTagClick?: (tag: string, options?: { toggleJoin?: boolean }) => void;
   followedTagSlugs?: Set<string>;
   commentCountByBlueprintId?: Record<string, number>;
 }) {
@@ -76,7 +76,7 @@ function BlueprintCard({
               onClick: (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onTagClick?.(`#${tag}`);
+                onTagClick?.(tag, { toggleJoin: false });
               },
             }))}
           />
@@ -92,7 +92,7 @@ function InventoryCard({
   followedTagSlugs,
 }: {
   result: InventoryResult;
-  onTagClick?: (tag: string) => void;
+  onTagClick?: (tag: string, options?: { toggleJoin?: boolean }) => void;
   followedTagSlugs?: Set<string>;
 }) {
   const summary = buildFeedSummary({
@@ -143,7 +143,7 @@ function InventoryCard({
               onClick: (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onTagClick?.(`#${tag}`);
+                onTagClick?.(tag, { toggleJoin: false });
               },
             }))}
           />

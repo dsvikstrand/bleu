@@ -46,8 +46,12 @@ export default function Explore() {
     return trendingTags.filter((tag) => followedSlugs.has(tag.slug));
   }, [trendingTags, followedSlugs, user]);
 
-  const handleTagClick = async (tag: string) => {
-    setSearchInput(tag);
+  const handleTagClick = async (tag: string, options?: { toggleJoin?: boolean }) => {
+    const normalizedTag = tag.replace(/^#/, '');
+    setSearchInput(`#${normalizedTag}`);
+    setFilter('all');
+
+    if (options?.toggleJoin === false) return;
     if (!user) {
       toast({
         title: 'Sign in required',
@@ -56,7 +60,7 @@ export default function Explore() {
       return;
     }
     try {
-      await toggleFollow({ slug: tag });
+      await toggleFollow({ slug: normalizedTag });
     } catch (error) {
       toast({
         title: 'Channel update failed',
@@ -248,7 +252,7 @@ export default function Explore() {
                     key={cat}
                     variant="outline"
                     size="sm"
-                    onClick={() => handleTagClick(cat)}
+                    onClick={() => handleTagClick(cat, { toggleJoin: false })}
                     className="capitalize"
                   >
                     {cat}
