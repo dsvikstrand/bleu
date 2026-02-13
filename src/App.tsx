@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Home from "./pages/Home";
 import Wall from "./pages/Wall";
@@ -11,7 +11,8 @@ import Blueprints from "./pages/Blueprints";
 import Auth from "./pages/Auth";
 import Settings from "./pages/Settings";
 import UserProfile from "./pages/UserProfile";
-import Tags from "./pages/Tags";
+import Channels from "./pages/Channels";
+import ChannelPage from "./pages/ChannelPage";
 import PostDetail from "./pages/PostDetail";
 import Inventory from "./pages/Inventory";
 import InventoryCreate from "./pages/InventoryCreate";
@@ -39,6 +40,8 @@ const App = () => (
             <Route path="/explore" element={<Explore />} />
             <Route path="/blueprints" element={<Blueprints />} />
             <Route path="/youtube" element={<YouTubeToBlueprint />} />
+            <Route path="/channels" element={<Channels />} />
+            <Route path="/b/:channelSlug" element={<ChannelPage />} />
             <Route path="/wall" element={<Wall />} />
             <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
             <Route path="/auth" element={<Auth />} />
@@ -51,7 +54,7 @@ const App = () => (
             <Route path="/blueprint/:blueprintId/remix" element={<RequireAuth><BlueprintRemix /></RequireAuth>} />
             <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
             <Route path="/u/:userId" element={<UserProfile />} />
-            <Route path="/tags" element={<Tags />} />
+            <Route path="/tags" element={<Navigate to="/channels" replace />} />
             <Route path="/about" element={<About />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

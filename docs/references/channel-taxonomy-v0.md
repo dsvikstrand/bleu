@@ -11,6 +11,10 @@ This document defines the curated v0 `Channels` layer used by product UX while r
 - Channels are a controlled, followable discovery surface.
 - Tags remain the internal source of truth in MVP runtime.
 - This document is a planning and governance contract only.
+- Channel pages use route shape: `b/<channel-slug>`.
+- In MVP, `<channel-slug>` must be one of the curated admin-owned channels in this document.
+- Unknown slugs should resolve to channel 404 behavior (not auto-create, not user-created).
+- Legacy/no-channel blueprint label fallback is `b/general` until explicit channel assignment exists.
 
 Not implemented in Step 3:
 - new channel tables/APIs
@@ -81,6 +85,8 @@ Workflow:
 MVP constraints:
 - No auto-approval.
 - No community/user-owner governance.
+- No user-created channels in runtime.
+- Channel create/edit/delete remains `admin-owner` only.
 
 ## 6) LLM Review Placeholders (Future)
 

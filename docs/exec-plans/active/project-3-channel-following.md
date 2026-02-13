@@ -33,6 +33,10 @@ Introduce `Join/Leave Channel` behavior and channel-prioritized feed ranking tha
 - Each blueprint can later map to up to `3` curated channels.
 - Tags remain freeform for discovery/search.
 - List rows later show primary channel + overflow indicator (`+N`) when multi-channel assignment is runtime-wired.
+- Channel route pattern for MVP is `b/<channel-slug>`.
+- `<channel-slug>` must resolve only to curated admin-owned channels.
+- Unknown channel slugs should return channel 404 behavior.
+- Legacy/no-channel blueprints use fallback lane label `b/general`.
 
 ## Runtime Contract (v0)
 ### Follow state machine
@@ -79,6 +83,13 @@ Step 1 implementation lock (2026-02-13):
 - `TagFilterChips` is strict filter-only (no follow side effects).
 - Logged-out join attempts show toast + inline sign-in CTA.
 - `useTagFollows` exposes explicit `joinChannel`, `leaveChannel`, `getFollowState`, while `toggleFollow` is kept for compatibility in non-core surfaces.
+- Phase 1 IA/routing lock:
+  - `Channels` is a first-class nav destination.
+  - route `/channels` is the channels index page.
+  - route `/b/:channelSlug` is the canonical channel page shape.
+  - legacy `/tags` route is deprecated and redirects to `/channels`.
+  - unknown channel slugs render channel-specific 404 behavior.
+  - join button is disabled with hint (`Channel activation pending`) when curated channel backing tag is missing.
 
 ### Step 2 - Feed Ranking + Cold-Start Behavior
 Objective: make joins materially affect feed order while preserving stability.

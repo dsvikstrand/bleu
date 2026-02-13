@@ -120,3 +120,5 @@ Rule: each project requires ST pass + acceptance criteria pass before next proje
 - D-014: Project 2 Step 4 closed with polish + regression pass; Explore tag-search regressions were fixed (`shake` and `#shake`), and YT2BP + ASS focused smoke checks passed.
 - D-015: Project 3 spec is now decision-locked with a 3-step execution sequence (state/UI -> ranking/cold-start -> telemetry/validation) and numeric SUCC thresholds.
 - D-016: Project 3 Step 1 lock: explicit state-machine join controls on core surfaces, search/follow interaction split in Explore, and `TagFilterChips` converted to filter-only.
+- D-017: Channel page URL shape is locked to `b/<channel-slug>` for MVP; slugs resolve only to curated admin-owned channels, unknown slugs 404, and legacy unlabeled items use `b/general`.
+- D-018: Phase 1 IA/routing is active with `Channels` nav entry, `/channels` index, `/b/:channelSlug` skeleton page, and `/tags` deprecation redirect to `/channels`.
