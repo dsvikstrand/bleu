@@ -147,16 +147,23 @@ export default function Channels() {
             <div className="space-y-2">
               {yourChannels.map((channel) => (
                 <Card key={channel.slug}>
-                  <CardContent className="py-4 flex items-center justify-between gap-4">
-                    <div className="space-y-1 min-w-0">
-                      <Link to={`/b/${channel.slug}`} className="text-sm font-semibold text-primary hover:underline">
-                        b/{channel.slug}
-                      </Link>
-                      <p className="text-sm font-medium">{channel.name}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
-                    </div>
-                    {renderJoinButton(channel)}
-                  </CardContent>
+                  <Link to={`/b/${channel.slug}`} className="block">
+                    <CardContent className="py-4 flex items-center justify-between gap-4">
+                      <div className="space-y-1 min-w-0">
+                        <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>
+                        <p className="text-sm font-medium">{channel.name}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
+                      </div>
+                      <div
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                      >
+                        {renderJoinButton(channel)}
+                      </div>
+                    </CardContent>
+                  </Link>
                 </Card>
               ))}
             </div>
@@ -173,16 +180,23 @@ export default function Channels() {
             <div className="space-y-2">
               {otherChannels.map((channel) => (
                 <Card key={channel.slug}>
-                  <CardContent className="py-4 flex items-center justify-between gap-4">
-                    <div className="space-y-1 min-w-0">
-                      <Link to={`/b/${channel.slug}`} className="text-sm font-semibold text-primary hover:underline">
-                        b/{channel.slug}
-                      </Link>
-                      <p className="text-sm font-medium">{channel.name}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
-                    </div>
-                    {renderJoinButton(channel)}
-                  </CardContent>
+                  <Link to={`/b/${channel.slug}`} className="block">
+                    <CardContent className="py-4 flex items-center justify-between gap-4">
+                      <div className="space-y-1 min-w-0">
+                        <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>
+                        <p className="text-sm font-medium">{channel.name}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
+                      </div>
+                      <div
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                      >
+                        {renderJoinButton(channel)}
+                      </div>
+                    </CardContent>
+                  </Link>
                 </Card>
               ))}
             </div>

@@ -59,7 +59,7 @@ export default function Wall() {
   
   // Popular channels (tag-backed) for empty state
   const { data: popularTags = [] } = usePopularInventoryTags(6);
-  const { getFollowState, joinChannel, leaveChannel } = useTagFollows();
+  const { followedIds, getFollowState, joinChannel, leaveChannel } = useTagFollows();
   
   const handleTagToggle = async (tag: { id: string; slug: string }) => {
     if (!user) {
