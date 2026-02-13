@@ -197,6 +197,32 @@ Decision gate (pilot v0):
 - PIVOT:
   - `join_channel_rate < 10%` after >= 100 signed-in sessions, or `median time_to_first_join_sec > 120`
 
+#### Pilot Runbook (Step 3)
+
+Prereqs:
+- Local env has:
+  - `SUPABASE_URL` (or `VITE_SUPABASE_URL`)
+  - `SUPABASE_SERVICE_ROLE_KEY` (required for metrics pulls)
+- Curated channels are joinable only when their backing `tags.slug` rows exist.
+  - Seed: `npm run seed:channels:tags`
+
+Weekly report command:
+- `npm run metrics:channels -- --days 7 --json`
+
+Notes:
+- `time_to_first_join_sec` uses `t0 = earliest Step 3 event in session_id`.
+  - This can be inflated if a tab sits idle before the join action.
+  - Interpret alongside `join_channel_rate` and consider filtering obvious idle outliers in analysis.
+
+Pilot kickoff (2026-02-13):
+- Initial script validation run (24h window) returned:
+  - `signed_in_sessions = 1`
+  - `join_channel_rate = 1.0`
+  - `channel_page_visit_rate = 1.0`
+  - `zero_join_cta_click_rate = 1.0`
+  - `suggested_click_through_rate = 0.0`
+  - `time_to_first_join_sec.median = 1558` (likely idle-tab inflation; see note above)
+
 ## SUCC Criteria (Numeric)
 - `join_channel_rate >= 25%` (first-session signed-in users)
 - `time_to_first_join <= 45s` median
