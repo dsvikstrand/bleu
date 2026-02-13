@@ -16,11 +16,11 @@ import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { useToast } from '@/hooks/use-toast';
 import { getFriendlyErrorMessage } from '@/lib/errors';
 import { buildReviewSections } from '@/lib/reviewSections';
+import { apiFetch } from '@/lib/api';
 import type { InventoryListItem } from '@/hooks/useInventories';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { config } from '@/config/runtime';
-import { apiFetch } from '@/lib/api';
 
 interface InventoryCategory {
   name: string;

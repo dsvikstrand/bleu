@@ -64,14 +64,10 @@ import { ArrowLeft, ChevronDown, RefreshCcw, Settings2, Sparkles, X } from 'luci
 import type { Json } from '@/integrations/supabase/types';
 
 import { config, getFunctionUrl } from '@/config/runtime';
+import { apiFetch } from '@/lib/api';
 
-const ANALYZE_BLUEPRINT_URL = getFunctionUrl('analyze-blueprint');
-const AGENTIC_BANNER_URL = config.agenticBackendUrl
-  ? `${config.agenticBackendUrl.replace(/\/$/, '')}/api/generate-banner`
-  : '';
-const AGENTIC_GENERATE_BLUEPRINT_URL = config.agenticBackendUrl
-  ? `${config.agenticBackendUrl.replace(/\/$/, '')}/api/generate-blueprint`
-  : '';
+const BANNER_URL = config.agenticBackendUrl ? getFunctionUrl('generate-banner') : '';
+const GENERATE_BLUEPRINT_URL = config.agenticBackendUrl ? getFunctionUrl('generate-blueprint') : '';
 
 const HOME_DRAFT_KEY = 'blueprints_home_draft_v1';
 
@@ -656,15 +652,9 @@ export default function InventoryBuild() {
     setReview('');
 
     try {
-      const response = await fetch(ANALYZE_BLUEPRINT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: config.useAgenticBackend && session?.access_token
-            ? `Bearer ${session.access_token}`
-            : `Bearer ${config.supabaseAnonKey}`,
-        },
-        body: JSON.stringify({
+      const response = await apiFetch<Response>('analyze-blueprint', {
+        stream: true,
+        body: {
           title: title.trim() || inventory.title,
           inventoryTitle: inventory.title,
           selectedItems: payload,
@@ -672,13 +662,8 @@ export default function InventoryBuild() {
           reviewPrompt: reviewPrompt.trim(),
           reviewSections,
           includeScore,
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to analyze blueprint');
-      }
 
       if (!response.body) {
         throw new Error('No response body');
@@ -817,7 +802,7 @@ export default function InventoryBuild() {
 
   const executeAutoGenerate = useCallback(async () => {
     if (!inventory) return;
-    if (!config.useAgenticBackend || !AGENTIC_GENERATE_BLUEPRINT_URL) {
+    if (!config.useAgenticBackend || !GENERATE_BLUEPRINT_URL) {
       toast({
         title: 'Auto-generation unavailable',
         description: 'The agentic backend is not configured.',
@@ -873,13 +858,8 @@ export default function InventoryBuild() {
       const inferredDescription = genControls.derived.description;
       const inferredNotes = genControls.derived.notes;
 
-      const response = await fetch(AGENTIC_GENERATE_BLUEPRINT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
+      const data = await apiFetch<GeneratedBlueprint>('generate-blueprint', {
+        body: {
           title: inferredTitle,
           description: inferredDescription,
           notes: inferredNotes,
@@ -888,15 +868,8 @@ export default function InventoryBuild() {
             name: category.name,
             items: category.items,
           })),
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to auto-generate blueprint');
-      }
-
-      const data = await response.json() as GeneratedBlueprint;
       if (!data?.steps || data.steps.length === 0) {
         throw new Error('No steps were generated');
       }
@@ -960,7 +933,7 @@ export default function InventoryBuild() {
 
   const handleGenerateBanner = useCallback(async () => {
     if (!inventory) return;
-    if (!config.useAgenticBackend || !AGENTIC_BANNER_URL) {
+    if (!config.useAgenticBackend || !BANNER_URL) {
       toast({
         title: 'Banner generation unavailable',
         description: 'The agentic backend is not configured.',
@@ -991,25 +964,13 @@ export default function InventoryBuild() {
     setIsGeneratingBanner(true);
 
     try {
-      const response = await fetch(AGENTIC_BANNER_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
+      const data = await apiFetch<{ bannerUrl?: string }>('generate-banner', {
+        body: {
           title: title.trim(),
           inventoryTitle: inventory.title,
           tags,
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to generate banner');
-      }
-
-      const data = await response.json();
       if (!data?.bannerUrl) {
         throw new Error('No banner URL returned');
       }
