@@ -42,7 +42,7 @@ import {
 	  makeLibraryGenerationControlsV0,
 	  type StrictnessLevel,
 	} from '@/lib/generationControls';
-import { config, getFunctionUrl } from '@/config/runtime';
+import { getFunctionUrl } from '@/config/runtime';
 
 const GENERATE_URL = getFunctionUrl('generate-inventory');
 
@@ -142,7 +142,7 @@ export default function InventoryCreate() {
 
 
   const handleGenerate = async () => {
-    if (config.useAgenticBackend && !session?.access_token) {
+    if (!session?.access_token) {
       toast({
         title: 'Sign in required',
         description: 'Please sign in to generate a library.',
@@ -181,9 +181,7 @@ export default function InventoryCreate() {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
-      if (!config.useAgenticBackend) {
-        headers.Authorization = `Bearer ${config.supabaseAnonKey}`;
-      } else if (session?.access_token) {
+      if (session?.access_token) {
         headers.Authorization = `Bearer ${session.access_token}`;
       }
 

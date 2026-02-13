@@ -21,9 +21,6 @@ export const config = {
   /** External agentic backend URL (may be undefined). */
   agenticBackendUrl: import.meta.env.VITE_AGENTIC_BACKEND_URL as string | undefined,
 
-  /** Whether the agentic backend is enabled. */
-  useAgenticBackend: import.meta.env.VITE_USE_AGENTIC_BACKEND === "true",
-
   /** Vite base path (for SPA routing on GitHub Pages etc.). */
   basePath: import.meta.env.BASE_URL as string,
 } as const;
@@ -41,12 +38,12 @@ export function getEdgeFunctionUrl(fnName: string): string {
 /**
  * Resolve the full URL for a backend function by name.
  *
- * When the agentic backend is enabled it routes to
+ * When the agentic backend URL is configured it routes to
  * `<agenticBackendUrl>/api/<fnName>`, otherwise it falls back to the
  * Supabase Edge Function URL.
  */
 export function getFunctionUrl(fnName: string): string {
-  if (config.useAgenticBackend && config.agenticBackendUrl) {
+  if (config.agenticBackendUrl) {
     return `${config.agenticBackendUrl.replace(/\/$/, "")}/api/${fnName}`;
   }
   return getEdgeFunctionUrl(fnName);

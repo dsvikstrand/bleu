@@ -173,17 +173,13 @@ export default function InventoryBuild() {
 
   const isOwner = !!(isEditing && blueprint && user && blueprint.creator_user_id === user.id);
   const isLoading = inventoryLoading || (isEditing && blueprintLoading);
-  const canGenerateBanner = config.useAgenticBackend && (!!user || !!session?.access_token);
-  const bannerHelpText = !config.useAgenticBackend
-    ? 'Banner generation requires the agentic backend.'
-    : !user && !session?.access_token
-      ? 'Sign in to generate a banner.'
-      : null;
-  const autoGenerateHelpText = !config.useAgenticBackend
-    ? 'Auto-generation requires the agentic backend.'
-    : !session?.access_token
-      ? 'Sign in to auto-generate a blueprint.'
-      : null;
+  const canGenerateBanner = !!user || !!session?.access_token;
+  const bannerHelpText = !user && !session?.access_token
+    ? 'Sign in to generate a banner.'
+    : null;
+  const autoGenerateHelpText = !session?.access_token
+    ? 'Sign in to auto-generate a blueprint.'
+    : null;
 
   const parseSelectedItemsWithContext = useCallback((selected: Json) => {
     const items: Record<string, string[]> = {};
@@ -802,10 +798,10 @@ export default function InventoryBuild() {
 
   const executeAutoGenerate = useCallback(async () => {
     if (!inventory) return;
-    if (!config.useAgenticBackend || !GENERATE_BLUEPRINT_URL) {
+    if (!GENERATE_BLUEPRINT_URL) {
       toast({
         title: 'Auto-generation unavailable',
-        description: 'The agentic backend is not configured.',
+        description: 'The generation endpoint is not configured.',
         variant: 'destructive',
       });
       return;
@@ -933,10 +929,10 @@ export default function InventoryBuild() {
 
   const handleGenerateBanner = useCallback(async () => {
     if (!inventory) return;
-    if (!config.useAgenticBackend || !BANNER_URL) {
+    if (!BANNER_URL) {
       toast({
         title: 'Banner generation unavailable',
-        description: 'The agentic backend is not configured.',
+        description: 'The banner endpoint is not configured.',
         variant: 'destructive',
       });
       return null;
@@ -1332,7 +1328,6 @@ export default function InventoryBuild() {
                         variant="outline"
                         className="gap-2"
                         onClick={() => setShowAutoGenerate((prev) => !prev)}
-                        disabled={!config.useAgenticBackend}
                       >
                         <Sparkles className="h-4 w-4" />
                         Auto-generate Blueprint

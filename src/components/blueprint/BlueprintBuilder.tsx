@@ -20,7 +20,6 @@ import { apiFetch } from '@/lib/api';
 import type { InventoryListItem } from '@/hooks/useInventories';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { config } from '@/config/runtime';
 
 interface InventoryCategory {
   name: string;
@@ -138,7 +137,7 @@ export function BlueprintBuilder({
       return;
     }
 
-    if (config.useAgenticBackend && !session?.access_token) {
+    if (!session?.access_token) {
       toast({
         title: 'Sign in required',
         description: 'Please sign in to generate a review.',
