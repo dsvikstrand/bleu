@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,6 +17,8 @@ import { BlueprintCard } from '@/components/blueprint/BlueprintCard';
 import { TagFilterChips } from '@/components/inventory/TagFilterChips';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Filter, Plus, Search } from 'lucide-react';
+import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
+import { WallToWallGrid } from '@/components/layout/WallToWallGrid';
 
 export default function Blueprints() {
   const location = useLocation();
@@ -100,17 +101,11 @@ export default function Blueprints() {
   }, [showSuggestions, suggestedBlueprints, suggestedLoading, mainBlueprints]);
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute top-1/3 -left-20 w-60 h-60 bg-accent/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-1/4 w-40 h-40 bg-primary/3 rounded-full blur-2xl" />
-      </div>
-
+    <PageRoot>
       <AppHeader />
 
-      <main className="relative max-w-4xl mx-auto px-4 py-8 space-y-6">
-        <section className="space-y-3">
+      <PageMain>
+        <PageSection className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-1">
               <p className="text-sm font-semibold text-primary uppercase tracking-wide">Blueprints</p>
@@ -142,7 +137,7 @@ export default function Blueprints() {
           </div>
 
           {showBlueprintInfo && (
-            <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 text-sm text-muted-foreground leading-relaxed">
+            <div className="border border-border/40 px-3 py-3 text-sm text-muted-foreground leading-relaxed">
               <p>
                 A Blueprint is a step-by-step routine built from a library.
                 It turns a list of items into an ordered plan.
@@ -157,70 +152,70 @@ export default function Blueprints() {
               </p>
             </div>
           )}
-        </section>
+        </PageSection>
 
-        <Card className="bg-card/60 backdrop-blur-sm border-border/50">
-          <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2 flex-1">
-              <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-              <Input
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  if (e.target.value) setSelectedTag(null);
-                }}
-                placeholder="Search blueprints by title or tag..."
-                className="border-none shadow-none focus-visible:ring-0 bg-transparent"
-              />
+        <div className="border border-border/40 px-3 py-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2 flex-1">
+            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (e.target.value) setSelectedTag(null);
+              }}
+              placeholder="Search blueprints by title or tag..."
+              className="border-none shadow-none focus-visible:ring-0 bg-transparent"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Filter className="h-4 w-4" />
+                  Filters
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-full sm:max-w-md">
+                <SheetHeader>
+                  <SheetTitle>Filters</SheetTitle>
+                  <SheetDescription>Filter by tag to narrow results.</SheetDescription>
+                </SheetHeader>
+                <div className="mt-6 space-y-4">
+                  {!tagsLoading && popularTags.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold">Popular tags</p>
+                      <TagFilterChips
+                        tags={popularTags}
+                        selectedTag={selectedTag}
+                        onSelectTag={handleTagSelect}
+                        variant="wrap"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Loading tags…</p>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+
+            <div className="w-full sm:w-56">
+              <Select value={sort} onValueChange={(value) => setSort(value as BlueprintSort)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="popular">Most liked</SelectItem>
+                  <SelectItem value="latest">Newest</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+          </div>
+        </div>
 
-            <div className="flex items-center gap-2">
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Filter className="h-4 w-4" />
-                    Filters
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-full sm:max-w-md">
-                  <SheetHeader>
-                    <SheetTitle>Filters</SheetTitle>
-                    <SheetDescription>Filter by tag to narrow results.</SheetDescription>
-                  </SheetHeader>
-                  <div className="mt-6 space-y-4">
-                    {!tagsLoading && popularTags.length > 0 ? (
-                      <div className="space-y-2">
-                        <p className="text-sm font-semibold">Popular tags</p>
-                        <TagFilterChips
-                          tags={popularTags}
-                          selectedTag={selectedTag}
-                          onSelectTag={handleTagSelect}
-                          variant="wrap"
-                        />
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Loading tags…</p>
-                    )}
-                  </div>
-                </SheetContent>
-              </Sheet>
+        <PageDivider />
 
-              <div className="w-full sm:w-56">
-                <Select value={sort} onValueChange={(value) => setSort(value as BlueprintSort)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="popular">Most liked</SelectItem>
-                    <SelectItem value="latest">Newest</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <section className="space-y-4">
+        <PageSection className="space-y-4">
           {effectiveQuery ? (
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-muted-foreground">
@@ -243,59 +238,55 @@ export default function Blueprints() {
           )}
 
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Card key={i} className="bg-card/60 backdrop-blur-sm border-border/50">
-                  <CardContent className="p-5 space-y-3">
-                    <Skeleton className="h-5 w-3/4" />
-                    <Skeleton className="h-10 w-full" />
-                    <div className="flex gap-2">
-                      <Skeleton className="h-5 w-16" />
-                      <Skeleton className="h-5 w-20" />
-                    </div>
-                    <Skeleton className="h-4 w-full" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <WallToWallGrid
+              items={Array.from({ length: 6 })}
+              renderItem={(_, { index }) => (
+                <div className="space-y-3">
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-10 w-full" />
+                  <div className="flex gap-2">
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-5 w-20" />
+                  </div>
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              )}
+            />
           ) : displayBlueprints.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {displayBlueprints.map((blueprint) => (
+            <WallToWallGrid
+              items={displayBlueprints}
+              renderItem={(blueprint) => (
                 <BlueprintCard
-                  key={blueprint.id}
                   blueprint={blueprint}
                   onLike={handleLike}
                   followedTagIds={followedIds}
                   onToggleTag={handleTagToggle}
+                  variant="grid_flat"
                 />
-              ))}
-            </div>
+              )}
+            />
           ) : (
-            <Card className="bg-card/60 backdrop-blur-sm">
-              <CardContent className="py-12 text-center space-y-4">
-                <h3 className="text-lg font-semibold">No blueprints found</h3>
-                <p className="text-sm text-muted-foreground">
-                  {effectiveQuery
-                    ? 'Try a different search or clear filters.'
-                    : 'Be the first to publish a blueprint!'}
-                </p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {effectiveQuery ? (
-                    <Button variant="outline" onClick={() => { setQuery(''); setSelectedTag(null); }}>
-                      Clear search
-                    </Button>
-                  ) : (
-                    <Link to={`${location.pathname}?create=1`}>
-                      <Button>+ Create</Button>
-                    </Link>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <div className="border border-border/40 py-12 text-center space-y-4">
+              <h3 className="text-lg font-semibold">No blueprints found</h3>
+              <p className="text-sm text-muted-foreground">
+                {effectiveQuery ? 'Try a different search or clear filters.' : 'Be the first to publish a blueprint!'}
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {effectiveQuery ? (
+                  <Button variant="outline" onClick={() => { setQuery(''); setSelectedTag(null); }}>
+                    Clear search
+                  </Button>
+                ) : (
+                  <Link to={`${location.pathname}?create=1`}>
+                    <Button>+ Create</Button>
+                  </Link>
+                )}
+              </div>
+            </div>
           )}
-        </section>
+        </PageSection>
         <AppFooter />
-      </main>
-    </div>
+      </PageMain>
+    </PageRoot>
   );
 }

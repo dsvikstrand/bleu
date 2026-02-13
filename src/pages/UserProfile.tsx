@@ -27,14 +27,9 @@ export default function UserProfile() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
-      </div>
-
       <AppHeader />
 
-      <main className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 py-8 pb-24 space-y-8">
         {isLoading ? (
           <>
             <div className="flex items-center gap-6">
@@ -53,33 +48,27 @@ export default function UserProfile() {
             </div>
           </>
         ) : error ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">Failed to load profile. Please try again.</p>
-            </CardContent>
-          </Card>
+          <div className="border border-border/40 px-3 py-10 text-center">
+            <p className="text-muted-foreground">Failed to load profile. Please try again.</p>
+          </div>
         ) : !profile ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">Profile not found.</p>
-            </CardContent>
-          </Card>
+          <div className="border border-border/40 px-3 py-10 text-center">
+            <p className="text-muted-foreground">Profile not found.</p>
+          </div>
         ) : !canViewProfile ? (
-          <Card>
-            <CardContent className="py-16 text-center">
-              <div className="flex flex-col items-center gap-4">
-                <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-                  <Lock className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold">This profile is private</h2>
-                  <p className="text-muted-foreground mt-1">
-                    This user has chosen to keep their profile private.
-                  </p>
-                </div>
+          <div className="border border-border/40 px-3 py-12 text-center">
+            <div className="flex flex-col items-center gap-4">
+              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+                <Lock className="h-8 w-8 text-muted-foreground" />
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <h2 className="text-xl font-semibold">This profile is private</h2>
+                <p className="text-muted-foreground mt-1">
+                  This user has chosen to keep their profile private.
+                </p>
+              </div>
+            </div>
+          </div>
         ) : (
           <>
             <ProfileHeader

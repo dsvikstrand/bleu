@@ -5,7 +5,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,6 +19,7 @@ import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { bucketJoinError, logP3Event } from '@/lib/telemetry';
 import { CreateBlueprintFlowModal } from '@/components/create/CreateBlueprintFlowModal';
 import { isPostableChannelSlug } from '@/lib/channelPostContext';
+import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
 export default function ChannelPage() {
   const { channelSlug } = useParams<{ channelSlug: string }>();
@@ -37,29 +37,27 @@ export default function ChannelPage() {
 
   if (!channel) {
     return (
-      <div className="min-h-screen bg-background">
+      <PageRoot>
         <AppHeader />
-        <main className="max-w-3xl mx-auto px-4 py-10 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Channel not found</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+        <PageMain className="py-10 space-y-6">
+          <div className="border border-border/40 px-3 py-4 space-y-4">
+            <div className="space-y-1">
+              <h1 className="text-lg font-semibold">Channel not found</h1>
               <p className="text-sm text-muted-foreground">
                 This channel slug is not part of the curated MVP channel list.
               </p>
-              <div className="flex gap-2">
-                <Button asChild>
-                  <Link to="/channels">Back to Channels</Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link to="/wall">Go to Feed</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
+            </div>
+            <div className="flex gap-2">
+              <Button asChild>
+                <Link to="/channels">Back to Channels</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/wall">Go to Feed</Link>
+              </Button>
+            </div>
+          </div>
+        </PageMain>
+      </PageRoot>
     );
   }
 
@@ -196,10 +194,10 @@ export default function ChannelPage() {
   } = useChannelFeed({ channelSlug: channel.slug, tab, pageSize: 20 });
 
   return (
-    <div className="min-h-screen bg-background">
+    <PageRoot>
       <AppHeader />
-      <main className="max-w-4xl mx-auto px-3 sm:px-4 py-6 space-y-6 pb-24">
-        <section className="space-y-3">
+      <PageMain className="space-y-6">
+        <PageSection className="space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
               <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
@@ -245,21 +243,21 @@ export default function ChannelPage() {
           {isPostableChannelSlug(channel.slug) && user && !isJoined && (
             <p className="text-xs text-muted-foreground">Join this channel to post here.</p>
           )}
-        </section>
+        </PageSection>
 
         {!user && showSigninPrompt && (
-          <Card className="border-border/60 bg-card/60">
-            <CardContent className="pt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold">Sign in to join channels</p>
-                <p className="text-xs text-muted-foreground">Join channels to personalize your feed experience.</p>
-              </div>
-              <Button asChild size="sm">
-                <Link to="/auth">Sign in</Link>
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="border border-border/40 px-3 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold">Sign in to join channels</p>
+              <p className="text-xs text-muted-foreground">Join channels to personalize your feed experience.</p>
+            </div>
+            <Button asChild size="sm">
+              <Link to="/auth">Sign in</Link>
+            </Button>
+          </div>
         )}
+
+        <PageDivider />
 
         <section className="space-y-3">
           <Tabs value={tab} onValueChange={(value) => setTab(value as ChannelFeedTab)}>
@@ -272,25 +270,21 @@ export default function ChannelPage() {
               {isLoading ? (
                 <div className="space-y-3">
                   {Array.from({ length: 3 }).map((_, index) => (
-                    <Card key={index} className="p-3 space-y-2">
+                    <div key={index} className="border border-border/40 px-3 py-3 space-y-2">
                       <Skeleton className="h-3 w-24" />
                       <Skeleton className="h-5 w-2/3" />
                       <Skeleton className="h-12 w-full" />
-                    </Card>
+                    </div>
                   ))}
                 </div>
               ) : isError ? (
-                <Card>
-                  <CardContent className="py-6 text-sm text-muted-foreground">
-                    Failed to load channel feed. Please refresh and try again.
-                  </CardContent>
-                </Card>
+                <div className="border border-border/40 px-3 py-3 text-sm text-muted-foreground">
+                  Failed to load channel feed. Please refresh and try again.
+                </div>
               ) : posts.length === 0 ? (
-                <Card>
-                  <CardContent className="py-6 text-sm text-muted-foreground">
-                    No blueprints found for this channel yet.
-                  </CardContent>
-                </Card>
+                <div className="border border-border/40 px-3 py-3 text-sm text-muted-foreground">
+                  No blueprints found for this channel yet.
+                </div>
               ) : (
                 <div className="divide-y divide-border/40 border-y border-border/40">
                   {posts.map((post) => {
@@ -371,12 +365,12 @@ export default function ChannelPage() {
           )}
         </section>
         <AppFooter />
-      </main>
+      </PageMain>
       <CreateBlueprintFlowModal
         open={showCreate}
         onOpenChange={setShowCreate}
         presetChannelSlug={channel.slug}
       />
-    </div>
+    </PageRoot>
   );
 }

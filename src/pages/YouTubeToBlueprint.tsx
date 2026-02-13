@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -17,6 +16,7 @@ import { logMvpEvent } from '@/lib/logEvent';
 import { useTagFollows } from '@/hooks/useTagFollows';
 import { useTagsBySlugs } from '@/hooks/useTags';
 import { getPostableChannel } from '@/lib/channelPostContext';
+import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
 const YOUTUBE_ENDPOINT = getFunctionUrl('youtube-to-blueprint');
 const GENERIC_FAILURE_TEXT = 'Could not complete the blueprint. Please test another video.';
@@ -344,12 +344,12 @@ export default function YouTubeToBlueprint() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <PageRoot>
       <AppHeader />
-      <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-        {postChannel ? (
-          <Card className="border-border/60 bg-card/60">
-            <CardContent className="py-3 flex items-start justify-between gap-3">
+      <PageMain className="space-y-6">
+        <PageSection>
+          {postChannel ? (
+            <div className="border border-border/40 px-3 py-3 flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold">Posting to b/{postChannel.slug}</p>
                 <p className="text-xs text-muted-foreground line-clamp-2">
@@ -361,11 +361,9 @@ export default function YouTubeToBlueprint() {
                   <Link to={`/b/${postChannel.slug}`}>{isPostChannelJoined ? 'View' : 'Join'}</Link>
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="border-border/60 bg-card/60">
-            <CardContent className="py-3 flex items-start justify-between gap-3">
+            </div>
+          ) : (
+            <div className="border border-border/40 px-3 py-3 flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold">Choose a channel to post</p>
                 <p className="text-xs text-muted-foreground line-clamp-2">
@@ -377,68 +375,72 @@ export default function YouTubeToBlueprint() {
                   <Link to="/channels?create=1">Pick channel</Link>
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>YouTube to Blueprint</CardTitle>
-            <CardDescription>Paste one YouTube video URL and generate a step-by-step blueprint.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="video-url">YouTube URL</Label>
-              <Input
-                id="video-url"
-                placeholder="https://www.youtube.com/watch?v=..."
-                value={videoUrl}
-                onChange={(event) => setVideoUrl(event.target.value)}
-              />
             </div>
+          )}
+        </PageSection>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex items-center justify-between rounded-lg border border-border/60 p-3">
-                <Label htmlFor="yt-review" className="text-sm">Generate AI review</Label>
-                <Switch id="yt-review" checked={generateReview} onCheckedChange={setGenerateReview} />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-border/60 p-3">
-                <Label htmlFor="yt-banner" className="text-sm">Generate banner</Label>
-                <Switch id="yt-banner" checked={generateBanner} onCheckedChange={setGenerateBanner} />
-              </div>
+        <PageDivider />
+
+        <PageSection className="space-y-4">
+          <div className="space-y-1">
+            <h1 className="text-xl font-semibold">YouTube to Blueprint</h1>
+            <p className="text-sm text-muted-foreground">
+              Paste one YouTube video URL and generate a step-by-step blueprint.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="video-url">YouTube URL</Label>
+            <Input
+              id="video-url"
+              placeholder="https://www.youtube.com/watch?v=..."
+              value={videoUrl}
+              onChange={(event) => setVideoUrl(event.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
+              <Label htmlFor="yt-review" className="text-sm">Generate AI review</Label>
+              <Switch id="yt-review" checked={generateReview} onCheckedChange={setGenerateReview} />
             </div>
+            <div className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
+              <Label htmlFor="yt-banner" className="text-sm">Generate banner</Label>
+              <Switch id="yt-banner" checked={generateBanner} onCheckedChange={setGenerateBanner} />
+            </div>
+          </div>
 
-            <Button onClick={submit} disabled={!canSubmit}>
-              {isGenerating ? 'Generating...' : 'Generate Blueprint'}
-            </Button>
+          <Button onClick={submit} disabled={!canSubmit}>
+            {isGenerating ? 'Generating...' : 'Generate Blueprint'}
+          </Button>
 
-            {progressValue > 0 && (
-              <div className="space-y-1">
-                <Progress value={progressValue} className="h-3 border border-border/60 bg-muted/50" />
-                <p className="text-xs text-muted-foreground">{Math.round(progressValue)}%</p>
-              </div>
-            )}
-            {stageText && <p className="text-sm text-muted-foreground">{stageText}</p>}
-            {errorText && <p className="text-sm text-destructive">{errorText}</p>}
-          </CardContent>
-        </Card>
+          {progressValue > 0 && (
+            <div className="space-y-1">
+              <Progress value={progressValue} className="h-3 border border-border/40 bg-muted/50" />
+              <p className="text-xs text-muted-foreground">{Math.round(progressValue)}%</p>
+            </div>
+          )}
+          {stageText && <p className="text-sm text-muted-foreground">{stageText}</p>}
+          {errorText && <p className="text-sm text-destructive">{errorText}</p>}
+        </PageSection>
 
         {result && (
-          <Card>
-            <CardHeader>
-              <CardTitle>{result.draft.title}</CardTitle>
-              <CardDescription>{result.draft.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <>
+            <PageDivider />
+            <PageSection className="space-y-4">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold">{result.draft.title}</h2>
+                <p className="text-sm text-muted-foreground">{result.draft.description}</p>
+              </div>
               {result.banner.url && (
-                <div className="overflow-hidden rounded-lg border border-border/60">
+                <div className="overflow-hidden rounded-md border border-border/40">
                   <img src={result.banner.url} alt="Generated banner" className="w-full object-cover" />
                 </div>
               )}
 
               <div className="space-y-3">
                 {result.draft.steps.map((step, index) => (
-                  <div key={`${step.name}-${index}`} className="rounded-lg border border-border/60 p-3">
+                  <div key={`${step.name}-${index}`} className="rounded-md border border-border/40 p-3">
                     <p className="font-medium">{index + 1}. {step.name}</p>
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">{step.notes}</p>
                     {step.timestamp && <p className="text-xs text-muted-foreground mt-1">{step.timestamp}</p>}
@@ -447,7 +449,7 @@ export default function YouTubeToBlueprint() {
               </div>
 
               {result.review.available && result.review.summary && (
-                <div className="rounded-lg border border-border/60 p-3">
+                <div className="rounded-md border border-border/40 p-3">
                   <p className="font-medium mb-1">AI Review</p>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{result.review.summary}</p>
                 </div>
@@ -462,21 +464,21 @@ export default function YouTubeToBlueprint() {
               )}
 
               {!user ? (
-                <div className="rounded-lg border border-border/60 p-3 flex items-center justify-between gap-3">
+                <div className="rounded-md border border-border/40 p-3 flex items-center justify-between gap-3">
                   <p className="text-sm text-muted-foreground">Log in to publish this blueprint.</p>
                   <Button asChild size="sm">
                     <Link to="/auth">Log in to publish</Link>
                   </Button>
                 </div>
               ) : !postChannel ? (
-                <div className="rounded-lg border border-border/60 p-3 flex items-center justify-between gap-3">
+                <div className="rounded-md border border-border/40 p-3 flex items-center justify-between gap-3">
                   <p className="text-sm text-muted-foreground">Choose a channel before publishing.</p>
                   <Button asChild size="sm" variant="outline">
                     <Link to="/channels?create=1">Pick channel</Link>
                   </Button>
                 </div>
               ) : !isPostChannelJoined ? (
-                <div className="rounded-lg border border-border/60 p-3 flex items-center justify-between gap-3">
+                <div className="rounded-md border border-border/40 p-3 flex items-center justify-between gap-3">
                   <p className="text-sm text-muted-foreground">Join b/{postChannel.slug} to publish publicly.</p>
                   <Button asChild size="sm" variant="outline">
                     <Link to={`/b/${postChannel.slug}`}>Join</Link>
@@ -489,11 +491,11 @@ export default function YouTubeToBlueprint() {
                   </Button>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </PageSection>
+          </>
         )}
-      </main>
-      <AppFooter />
-    </div>
+        <AppFooter />
+      </PageMain>
+    </PageRoot>
   );
 }

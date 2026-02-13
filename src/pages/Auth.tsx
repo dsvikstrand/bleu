@@ -108,14 +108,8 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      {/* Ambient background */}
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/10 rounded-full blur-3xl animate-pulse delay-1000" />
-      </div>
-
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-background p-3 sm:p-4">
+      <Card className="w-full max-w-md border-border/40 shadow-none">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <Beaker className="h-8 w-8 text-primary" />
@@ -166,7 +160,7 @@ export default function Auth() {
               <Separator className="w-full" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
+              <span className="bg-background px-2 text-muted-foreground">Or continue with email</span>
             </div>
           </div>
 

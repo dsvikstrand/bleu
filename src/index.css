@@ -266,7 +266,6 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    background: var(--gradient-sky);
     min-height: 100vh;
   }
 

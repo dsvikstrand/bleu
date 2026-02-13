@@ -325,17 +325,10 @@ export default function InventoryCreate() {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Ambient background blobs */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
-        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-primary/8 rounded-full blur-3xl animate-drift" />
-        <div className="absolute top-1/2 -left-32 w-96 h-96 bg-accent/15 rounded-full blur-3xl animate-float" />
-        <div className="absolute -bottom-20 right-1/4 w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-pulse-soft" />
-      </div>
-
+    <div className="min-h-screen bg-background">
       <AppHeader />
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 py-6 pb-24 space-y-6">
         {/* Sub-header row: Library + Help buttons */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Library</h2>

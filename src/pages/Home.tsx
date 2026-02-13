@@ -46,17 +46,11 @@ export default function Home() {
   }, [user?.id]);
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Ambient background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
-        <div className="absolute -top-40 -right-40 w-[520px] h-[520px] bg-primary/10 rounded-full blur-3xl animate-drift" />
-        <div className="absolute top-1/2 -left-32 w-96 h-96 bg-accent/20 rounded-full blur-3xl animate-float" />
-        <div className="absolute -bottom-20 right-1/4 w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-pulse-soft" />
-      </div>
+    <div className="min-h-screen bg-background">
 
       <AppHeader />
 
-      <main className="max-w-4xl mx-auto px-4 py-10 space-y-12">
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 py-10 pb-24 space-y-12">
         {/* Hero - simplified, community-first */}
         <section className="text-center space-y-5 animate-fade-in">
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight">

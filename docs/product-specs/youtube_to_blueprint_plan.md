@@ -18,6 +18,7 @@ a14) [have] 2026-02-13 UI hotfix: Explore card tag clicks now trigger tag search
 a15) [have] 2026-02-13 UI note: Project 3 Step 1 join-state wiring (Explore/Channels/Wall) and filter-only `TagFilterChips` are frontend-only and do not change YT2BP API/runtime contract.
 a16) [have] 2026-02-13 UI note: Channels IA routing foundation (`/channels`, `/b/:channelSlug`, `/tags` deprecation redirect, curated catalog guards) is frontend-only and does not change YT2BP API/runtime contract.
 a17) [have] 2026-02-13 UI note: Channel-scoped `+ Create` flow gates public publishing behind joined channels and routes to `/youtube?channel=<slug>&intent=post`; frontend-only and does not change YT2BP API/runtime contract.
+a18) [have] 2026-02-13 UI note: App-wide wall-to-wall layout migration (Run 1) updates the YouTube page framing to a minimal document-like layout (no ambient blobs/gradients, tighter gutters); frontend-only and does not change YT2BP API/runtime contract.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract

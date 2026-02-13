@@ -14,6 +14,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useTagFollows } from '@/hooks/useTagFollows';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
 const FILTER_OPTIONS: { value: ExploreFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -99,20 +100,20 @@ export default function Explore() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-soft">
+    <PageRoot>
       <AppHeader />
 
-      <main className="container max-w-4xl mx-auto px-4 py-8">
-        <section className="mb-6">
+      <PageMain>
+        <PageSection className="mb-6">
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Explore</p>
           <h1 className="text-2xl font-semibold mt-1">Search blueprints, inventories, and creators</h1>
           <p className="text-sm text-muted-foreground mt-2">
             Start with a keyword, then narrow by type or jump into trending channels below.
           </p>
-        </section>
+        </PageSection>
 
         {!user && (
-          <div className="mb-6 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-6 border border-border/40 px-3 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold">Sign in to personalize</p>
               <p className="text-xs text-muted-foreground">Join channels to shape your feed from the Channels page.</p>
@@ -124,13 +125,13 @@ export default function Explore() {
         )}
 
         <div className="relative mb-6">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
             type="text"
             placeholder="Search blueprints, inventories, users..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="pl-12 h-12 text-base bg-card/60 backdrop-blur-sm border-border/50"
+            className="pl-10 h-11 text-base border-border/50"
           />
         </div>
 
@@ -181,7 +182,7 @@ export default function Explore() {
             )}
 
             {showNoFollowOnboarding && (
-              <section className="rounded-xl border border-border/50 bg-card/60 p-4 space-y-3">
+              <section className="border border-border/40 px-3 py-3 space-y-3">
                 <div>
                   <p className="text-sm font-semibold">Join channels to shape your feed</p>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -225,6 +226,8 @@ export default function Explore() {
                 </div>
               </section>
             )}
+
+            <PageDivider />
 
             <section>
               <p className="text-sm font-medium text-muted-foreground mb-3">Topic Search</p>
@@ -336,7 +339,7 @@ export default function Explore() {
           </div>
         )}
         <AppFooter />
-      </main>
-    </div>
+      </PageMain>
+    </PageRoot>
   );
 }

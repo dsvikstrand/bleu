@@ -11,7 +11,7 @@ export function CommunityStats() {
   ];
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10 py-6 px-4 rounded-xl border border-border/40 bg-card/40 backdrop-blur-sm">
+    <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10 py-5 px-3 border border-border/40">
       {items.map((item) => (
         <div key={item.label} className="flex items-center gap-2 text-muted-foreground">
           <item.icon className="h-4 w-4" />

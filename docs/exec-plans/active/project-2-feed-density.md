@@ -194,3 +194,20 @@ Progression rule:
 - `tags` runtime model remains active under channel UI language
 - library feed can stay on current style until dedicated rebrand
 - join behavior can apply on refresh (no instant rerank requirement in P2)
+
+## Wall-to-Wall Default Layout (Follow-On, 2026-02-13)
+Note: after P2 was closed, we began applying the same wall-to-wall (Reddit-style) layout defaults across the entire app so the feed rhythm becomes the default UI language (not just Wall/Explore).
+
+Layout primitives (frontend-only):
+- `src/components/layout/Page.tsx` (`PageRoot`, `PageMain`, `PageSection`, `PageDivider`)
+- `src/components/layout/FeedList.tsx` (`FeedList`, `FeedRowLink`)
+- `src/components/layout/WallToWallGrid.tsx` (table-like grid separators for Inventory/Blueprints)
+
+Rules:
+- Remove ambient background blobs/gradients globally.
+- Default page width: `max-w-3xl` with tight gutters (`px-3 sm:px-4`).
+- List surfaces use dividers and hover highlights (no nested cards).
+- Grid surfaces keep grid, but use separator borders (no elevation/shadow/backdrop-blur).
+
+Migration checklist (Run 1 targets):
+- Explore, Blueprints, Inventory, YouTube, Home, Settings, Auth, UserProfile (and keep Wall/Channels consistent).

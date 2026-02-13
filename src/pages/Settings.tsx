@@ -92,14 +92,9 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
-      </div>
-
       <AppHeader />
 
-      <main className="max-w-2xl mx-auto px-4 py-10 space-y-6">
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 py-10 pb-24 space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Settings</h1>
           <p className="text-muted-foreground mt-1">Manage your profile and account preferences</p>

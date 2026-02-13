@@ -1240,38 +1240,27 @@ export default function InventoryBuild() {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader />
-        <main className="max-w-3xl mx-auto px-4 py-12">
-          <Card className="bg-card/60 backdrop-blur-glass border-border/50">
-            <CardContent className="py-12 text-center space-y-3">
-              <h2 className="text-lg font-semibold">You cannot edit this blueprint</h2>
-              <p className="text-sm text-muted-foreground">
-                Only the original creator can make changes.
-              </p>
-              <Link to={`/blueprint/${blueprint.id}`}>
-                <Button>Back to blueprint</Button>
-              </Link>
-            </CardContent>
-          </Card>
+        <main className="max-w-3xl mx-auto px-3 sm:px-4 py-10 pb-24">
+          <div className="border border-border/40 px-3 py-10 text-center space-y-3">
+            <h2 className="text-lg font-semibold">You cannot edit this blueprint</h2>
+            <p className="text-sm text-muted-foreground">
+              Only the original creator can make changes.
+            </p>
+            <Link to={`/blueprint/${blueprint.id}`}>
+              <Button>Back to blueprint</Button>
+            </Link>
+          </div>
         </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Ambient background blobs */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
-        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-primary/8 rounded-full blur-3xl animate-drift" />
-        <div className="absolute top-1/2 -left-32 w-96 h-96 bg-accent/15 rounded-full blur-3xl animate-float" />
-        <div className="absolute -bottom-20 right-1/4 w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-pulse-soft" />
-        <div className="absolute top-20 right-20 w-4 h-4 bg-primary/20 rounded-full blur-sm animate-float-delayed" />
-        <div className="absolute top-40 right-40 w-2 h-2 bg-accent/30 rounded-full blur-sm animate-float-slow" />
-        <div className="absolute bottom-40 left-20 w-3 h-3 bg-primary/15 rounded-full blur-sm animate-drift" />
-      </div>
+    <div className="min-h-screen bg-background">
 
       <AppHeader />
 
-      <main className="container mx-auto px-4 py-8 max-w-3xl">
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 py-6 pb-24">
         {/* Sub-header row: Back link + Help buttons */}
         <div className="flex items-center justify-between mb-6">
           <Link

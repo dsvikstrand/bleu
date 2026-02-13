@@ -1,39 +1,41 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Filter, Plus, Search } from 'lucide-react';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
+import { InventoryCard } from '@/components/inventory/InventoryCard';
+import { TagFilterChips } from '@/components/inventory/TagFilterChips';
+import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
+import { WallToWallGrid } from '@/components/layout/WallToWallGrid';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import { useInventorySearch, useToggleInventoryLike, type InventorySort } from '@/hooks/useInventories';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useSuggestedInventories } from '@/hooks/useSuggestedInventories';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { InventoryCard } from '@/components/inventory/InventoryCard';
-import { TagFilterChips } from '@/components/inventory/TagFilterChips';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Filter, Search, Plus } from 'lucide-react';
+import { buildUrlWithChannel, getPostableChannel } from '@/lib/channelPostContext';
 import { logMvpEvent } from '@/lib/logEvent';
-import { getPostableChannel, buildUrlWithChannel } from '@/lib/channelPostContext';
 
 export default function Inventory() {
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const postChannelSlug = (searchParams.get('channel') || '').trim();
+  const postChannel = postChannelSlug ? getPostableChannel(postChannelSlug) : null;
+
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [sort, setSort] = useState<InventorySort>('popular');
   const [showLibraryInfo, setShowLibraryInfo] = useState(false);
-  const location = useLocation();
-  const [searchParams] = useSearchParams();
+
   const { user } = useAuth();
   const { toast } = useToast();
   const hasLoggedView = useRef(false);
 
-  const postChannelSlug = searchParams.get('channel') || '';
-  const postChannel = postChannelSlug ? getPostableChannel(postChannelSlug) : null;
-
-  // Combine search query with selected tag
   const effectiveQuery = selectedTag || query;
 
   useEffect(() => {
@@ -51,14 +53,20 @@ export default function Inventory() {
   const { data: suggestedInventories = [], isLoading: suggestedLoading } = useSuggestedInventories(6);
   const toggleLike = useToggleInventoryLike();
 
-  // Filter out suggested inventories from the main list to avoid duplicates
   const suggestedIds = new Set(suggestedInventories.map((inv) => inv.id));
   const mainInventories = useMemo(() => {
     if (!inventories) return [];
-    // Only filter if showing suggestions (no search/filter active)
     if (effectiveQuery) return inventories;
     return inventories.filter((inv) => !suggestedIds.has(inv.id));
-  }, [inventories, suggestedIds, effectiveQuery]);
+  }, [effectiveQuery, inventories, suggestedIds]);
+
+  const showSuggestions = !effectiveQuery && user && sort === 'popular';
+  const displayInventories = useMemo(() => {
+    if (!showSuggestions) return mainInventories;
+    if (!suggestedInventories || suggestedInventories.length === 0) return mainInventories;
+    if (suggestedLoading) return mainInventories;
+    return [...suggestedInventories, ...mainInventories];
+  }, [mainInventories, showSuggestions, suggestedInventories, suggestedLoading]);
 
   const handleLike = async (inventoryId: string, liked: boolean) => {
     if (!user) {
@@ -82,32 +90,15 @@ export default function Inventory() {
 
   const handleTagSelect = (slug: string | null) => {
     setSelectedTag(slug);
-    if (slug) setQuery(''); // Clear text search when tag selected
+    if (slug) setQuery('');
   };
 
-  // Keep newest sorting strict: suggestions should not preempt latest ordering.
-  const showSuggestions = !effectiveQuery && user && sort === 'popular';
-
-  const displayInventories = useMemo(() => {
-    if (!showSuggestions) return mainInventories;
-    if (!suggestedInventories || suggestedInventories.length === 0) return mainInventories;
-    if (suggestedLoading) return mainInventories;
-    return [...suggestedInventories, ...mainInventories];
-  }, [showSuggestions, suggestedInventories, suggestedLoading, mainInventories]);
-
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Ambient background effects */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute top-1/3 -left-20 w-60 h-60 bg-accent/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-1/4 w-40 h-40 bg-primary/3 rounded-full blur-2xl" />
-      </div>
-
+    <PageRoot>
       <AppHeader />
 
-      <main className="relative max-w-4xl mx-auto px-4 py-8 space-y-6">
-        <section className="space-y-3">
+      <PageMain className="space-y-6">
+        <PageSection>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-1">
               <p className="text-sm font-semibold text-primary uppercase tracking-wide">Library</p>
@@ -117,14 +108,12 @@ export default function Inventory() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowLibraryInfo((prev) => !prev)}
-              >
+              <Button variant="ghost" size="sm" onClick={() => setShowLibraryInfo((prev) => !prev)}>
                 What is a Library?
               </Button>
-              <Link to={postChannel ? buildUrlWithChannel('/inventory/create', postChannel.slug, { intent: 'post' }) : '/inventory/create'}>
+              <Link
+                to={postChannel ? buildUrlWithChannel('/inventory/create', postChannel.slug, { intent: 'post' }) : '/inventory/create'}
+              >
                 <Button size="sm" className="gap-2">
                   <Plus className="h-4 w-4" />
                   Create
@@ -134,97 +123,83 @@ export default function Inventory() {
           </div>
 
           {postChannel && (
-            <Card className="border-border/60 bg-card/60">
-              <CardContent className="py-3 text-sm flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-semibold">Posting to b/{postChannel.slug}</p>
-                  <p className="text-xs text-muted-foreground line-clamp-1">
-                    Choose a library, then publish your blueprint into this channel.
-                  </p>
-                </div>
-                <Button asChild size="sm" variant="outline">
-                  <Link to={`/b/${postChannel.slug}`}>View channel</Link>
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="border border-border/40 p-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Posting to b/{postChannel.slug}</p>
+                <p className="text-xs text-muted-foreground line-clamp-2">
+                  Choose a library, then publish your blueprint into this channel.
+                </p>
+              </div>
+              <Button asChild size="sm" variant="outline">
+                <Link to={`/b/${postChannel.slug}`}>View</Link>
+              </Button>
+            </div>
           )}
 
           {showLibraryInfo && (
-            <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 text-sm text-muted-foreground leading-relaxed">
+            <div className="border border-border/40 p-4 text-sm text-muted-foreground leading-relaxed">
               <p>
-                Think of a Library as a curated list of items you can use to build a routine.
-                It is the ingredient shelf for a blueprint.
-                Each library is organized into categories so you can scan quickly.
-                You do not have to use everything; it is a toolbox, not a checklist.
-                Good libraries save time by gathering the best options in one place.
-                When you open a library, you can pick items that fit your goal.
-                As you select items, you start shaping a blueprint.
-                Libraries can be public so others can learn from them.
-                You can also create your own library if something is missing.
-                Start simple, then refine as you learn what works for you.
+                Think of a Library as a curated list of items you can use to build a routine. It is the ingredient shelf
+                for a blueprint. Each library is organized into categories so you can scan quickly. You do not have to
+                use everything; it is a toolbox, not a checklist.
               </p>
             </div>
           )}
-        </section>
+        </PageSection>
 
-        <Card className="bg-card/60 backdrop-blur-sm border-border/50">
-          <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2 flex-1">
-              <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-              <Input
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  if (e.target.value) setSelectedTag(null);
-                }}
-                placeholder="Search libraries by title or tag..."
-                className="border-none shadow-none focus-visible:ring-0 bg-transparent"
-              />
-            </div>
+        <PageDivider />
 
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Filter className="h-4 w-4" />
-                  Filters
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-full sm:max-w-md">
-                <SheetHeader>
-                  <SheetTitle>Filters</SheetTitle>
-                  <SheetDescription>Filter by tag to narrow down libraries.</SheetDescription>
-                </SheetHeader>
-                <div className="mt-6 space-y-4">
-                  {!tagsLoading && popularTags.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-sm font-semibold">Popular tags</p>
-                      <TagFilterChips
-                        tags={popularTags}
-                        selectedTag={selectedTag}
-                        onSelectTag={handleTagSelect}
-                        variant="wrap"
-                      />
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Loading tags…</p>
-                  )}
-                </div>
-              </SheetContent>
-            </Sheet>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2 flex-1">
+            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (e.target.value) setSelectedTag(null);
+              }}
+              placeholder="Search libraries by title or tag..."
+              className="border border-border/40 bg-transparent"
+            />
+          </div>
 
-            <div className="w-full sm:w-56">
-              <Select value={sort} onValueChange={(value) => setSort(value as InventorySort)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="popular">Most liked</SelectItem>
-                  <SelectItem value="latest">Newest</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Filter className="h-4 w-4" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-md">
+              <SheetHeader>
+                <SheetTitle>Filters</SheetTitle>
+                <SheetDescription>Filter by tag to narrow down libraries.</SheetDescription>
+              </SheetHeader>
+              <div className="mt-6 space-y-4">
+                {!tagsLoading && popularTags.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold">Popular tags</p>
+                    <TagFilterChips tags={popularTags} selectedTag={selectedTag} onSelectTag={handleTagSelect} variant="wrap" />
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Loading tags…</p>
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          <div className="w-full sm:w-56">
+            <Select value={sort} onValueChange={(value) => setSort(value as InventorySort)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="popular">Most liked</SelectItem>
+                <SelectItem value="latest">Newest</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
         <section className="space-y-4">
           {effectiveQuery ? (
@@ -251,40 +226,43 @@ export default function Inventory() {
           )}
 
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Card key={i} className="bg-card/60 backdrop-blur-sm border-border/50">
-                  <CardContent className="p-5 space-y-3">
-                    <Skeleton className="h-5 w-3/4" />
-                    <Skeleton className="h-10 w-full" />
-                    <div className="flex gap-2">
-                      <Skeleton className="h-5 w-16" />
-                      <Skeleton className="h-5 w-20" />
-                    </div>
-                    <Skeleton className="h-4 w-full" />
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="border border-border/40">
+              <div className="grid grid-cols-1 md:grid-cols-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="px-3 py-3 border-b border-border/40 md:border-b-0 md:border-r md:border-border/40">
+                    <Card className="bg-transparent border-0 shadow-none">
+                      <CardContent className="p-1 space-y-3">
+                        <Skeleton className="h-5 w-3/4" />
+                        <Skeleton className="h-10 w-full" />
+                        <div className="flex gap-2">
+                          <Skeleton className="h-5 w-16" />
+                          <Skeleton className="h-5 w-20" />
+                        </div>
+                        <Skeleton className="h-4 w-full" />
+                      </CardContent>
+                    </Card>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : displayInventories.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {displayInventories.map((inventory) => (
+            <WallToWallGrid
+              items={displayInventories}
+              renderItem={(inventory) => (
                 <InventoryCard
-                  key={inventory.id}
                   inventory={inventory}
                   onLike={handleLike}
                   linkSearch={postChannel ? location.search : ''}
+                  variant="grid_flat"
                 />
-              ))}
-            </div>
+              )}
+            />
           ) : (
-            <Card className="bg-card/60 backdrop-blur-sm">
+            <Card className="bg-transparent border border-border/40">
               <CardContent className="py-12 text-center space-y-4">
                 <h3 className="text-lg font-semibold">No libraries found</h3>
                 <p className="text-sm text-muted-foreground">
-                  {effectiveQuery
-                    ? 'Try a different search or clear filters.'
-                    : 'Be the first to create a library!'}
+                  {effectiveQuery ? 'Try a different search or clear filters.' : 'Be the first to create a library!'}
                 </p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {effectiveQuery ? (
@@ -307,8 +285,9 @@ export default function Inventory() {
             </Card>
           )}
         </section>
+
         <AppFooter />
-      </main>
-    </div>
+      </PageMain>
+    </PageRoot>
   );
 }

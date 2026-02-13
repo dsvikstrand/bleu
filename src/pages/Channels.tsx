@@ -5,7 +5,6 @@ import { useQuery } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTagFollows } from '@/hooks/useTagFollows';
@@ -15,6 +14,7 @@ import { getChannelIcon } from '@/lib/channelIcons';
 import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
 import { supabase } from '@/integrations/supabase/client';
 import { bucketJoinError, logOncePerSession, logP3Event } from '@/lib/telemetry';
+import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
 const MAX_JOINED_CHANNELS_DISPLAY = 6;
 const SUGGESTED_CHANNELS_COUNT = 4;
@@ -380,39 +380,37 @@ export default function Channels() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <PageRoot>
       <AppHeader />
-      <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-        <section className="space-y-2">
+      <PageMain className="space-y-6">
+        <PageSection className="space-y-2">
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Channels</p>
           <h1 className="text-2xl font-semibold tracking-tight">Browse curated channels</h1>
           <p className="text-sm text-muted-foreground">
             Channels are curated lanes for blueprint discovery. Join channels to shape your feed.
           </p>
-        </section>
+        </PageSection>
 
         {!user && showSigninPrompt && (
-          <Card className="border-border/60 bg-card/60">
-            <CardContent className="pt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold">Sign in to join channels</p>
-                <p className="text-xs text-muted-foreground">Join channels to personalize your feed experience.</p>
-              </div>
-              <Button asChild size="sm">
-                <Link to="/auth">Sign in</Link>
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="border border-border/40 px-3 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold">Sign in to join channels</p>
+              <p className="text-xs text-muted-foreground">Join channels to personalize your feed experience.</p>
+            </div>
+            <Button asChild size="sm">
+              <Link to="/auth">Sign in</Link>
+            </Button>
+          </div>
         )}
+
+        <PageDivider />
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Channels</h2>
           {joinedChannels.length === 0 ? (
-            <Card>
-              <CardContent className="py-6 text-sm text-muted-foreground">
-                You have not joined any channels yet.
-              </CardContent>
-            </Card>
+            <div className="border border-border/40 px-3 py-3 text-sm text-muted-foreground">
+              You have not joined any channels yet.
+            </div>
           ) : (
             <div className="divide-y divide-border/40 border-y border-border/40">
               {visibleJoinedChannels.map((channel) => renderChannelRow(channel, { showSlug: true }))}
@@ -438,15 +436,11 @@ export default function Channels() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Suggested Channels</h2>
           {tagsLoading || followsLoading ? (
-            <Card>
-              <CardContent className="py-6 text-sm text-muted-foreground">Loading suggestions...</CardContent>
-            </Card>
+            <div className="border border-border/40 px-3 py-3 text-sm text-muted-foreground">Loading suggestions...</div>
           ) : suggestedChannels.length === 0 ? (
-            <Card>
-              <CardContent className="py-6 text-sm text-muted-foreground">
-                No suggested channels right now.
-              </CardContent>
-            </Card>
+            <div className="border border-border/40 px-3 py-3 text-sm text-muted-foreground">
+              No suggested channels right now.
+            </div>
           ) : (
             <div className="divide-y divide-border/40 border-y border-border/40">
               {suggestedChannels.map((channel) => {
@@ -517,13 +511,11 @@ export default function Channels() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">More Channels</h2>
           {tagsLoading || followsLoading ? (
-            <Card>
-              <CardContent className="py-6 text-sm text-muted-foreground">Loading channels...</CardContent>
-            </Card>
+            <div className="border border-border/40 px-3 py-3 text-sm text-muted-foreground">Loading channels...</div>
           ) : moreChannels.length === 0 ? (
-            <Card>
-              <CardContent className="py-6 text-sm text-muted-foreground">No more channels to show.</CardContent>
-            </Card>
+            <div className="border border-border/40 px-3 py-3 text-sm text-muted-foreground">
+              No more channels to show.
+            </div>
           ) : (
             <div className="divide-y divide-border/40 border-y border-border/40">
               {moreChannels.map((channel) => renderChannelRow(channel, { showSlug: false }))}
@@ -531,7 +523,7 @@ export default function Channels() {
           )}
         </section>
         <AppFooter />
-      </main>
-    </div>
+      </PageMain>
+    </PageRoot>
   );
 }

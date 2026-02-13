@@ -293,10 +293,6 @@ export default function Wall() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
-      </div>
 
       <AppHeader />
 
@@ -312,21 +308,19 @@ export default function Wall() {
         </section>
 
         {!user && (
-          <Card className="mb-6 mx-3 sm:mx-4 border-border/50 bg-card/60 backdrop-blur-sm">
-            <CardContent className="py-5">
-              <div className="flex flex-col gap-2 text-center">
-                <p className="text-sm font-semibold">Sign in to personalize</p>
-                <p className="text-sm text-muted-foreground">
-                  Join channels to shape your feed, then follow creators you trust.
-                </p>
-                <div className="flex justify-center">
-                  <Link to="/auth">
-                    <Button size="sm">Sign in</Button>
-                  </Link>
-                </div>
+          <div className="mb-6 mx-3 sm:mx-4 border border-border/40 px-3 py-4">
+            <div className="flex flex-col gap-2 text-center">
+              <p className="text-sm font-semibold">Sign in to personalize</p>
+              <p className="text-sm text-muted-foreground">
+                Join channels to shape your feed, then follow creators you trust.
+              </p>
+              <div className="flex justify-center">
+                <Link to="/auth">
+                  <Button size="sm">Sign in</Button>
+                </Link>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FeedTab)}>
           <TabsList className="mb-3 ml-3 sm:ml-4 h-9 rounded-md bg-muted/40 p-0.5">
@@ -339,7 +333,7 @@ export default function Wall() {
 
           <TabsContent value={activeTab} className="mt-0">
             {selectedTagSlug && (
-              <div className="mb-3 mx-3 sm:mx-4 rounded-md border border-border/50 bg-card/60 px-3 py-2 flex items-center justify-between gap-2">
+              <div className="mb-3 mx-3 sm:mx-4 border border-border/40 px-3 py-2 flex items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
                   Filtered by <span className="font-semibold text-foreground">#{selectedTagSlug}</span>
                 </p>
@@ -349,48 +343,44 @@ export default function Wall() {
               </div>
             )}
             {showZeroJoinForYouCta && (
-              <Card className="mb-3 mx-3 sm:mx-4 border-border/50 bg-card/60 backdrop-blur-sm">
-                <CardContent className="py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold">Join channels to shape your feed</p>
-                    <p className="text-xs text-muted-foreground">
-                      Start with a few channels and your For You feed will prioritize those lanes.
-                    </p>
-                  </div>
-                  <Button asChild size="sm">
-                    <Link
-                      to="/channels"
-                      onClick={() => {
-                        logP3Event({
-                          eventName: 'wall_zero_join_cta_click',
-                          surface: 'wall',
-                          user,
-                          metadata: {
-                            tab: activeTab,
-                          },
-                        });
-                      }}
-                    >
-                      Explore Channels
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
+              <div className="mb-3 mx-3 sm:mx-4 border border-border/40 px-3 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Join channels to shape your feed</p>
+                  <p className="text-xs text-muted-foreground">
+                    Start with a few channels and your For You feed will prioritize those lanes.
+                  </p>
+                </div>
+                <Button asChild size="sm">
+                  <Link
+                    to="/channels"
+                    onClick={() => {
+                      logP3Event({
+                        eventName: 'wall_zero_join_cta_click',
+                        surface: 'wall',
+                        user,
+                        metadata: {
+                          tab: activeTab,
+                        },
+                      });
+                    }}
+                  >
+                    Explore Channels
+                  </Link>
+                </Button>
+              </div>
             )}
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <Card key={i}>
-                  <CardHeader className="flex flex-row items-center gap-3">
+                <div key={i} className="px-3 sm:px-4 py-4 border-t border-border/40 first:border-t-0">
+                  <div className="flex flex-row items-center gap-3 mb-3">
                     <Skeleton className="h-10 w-10 rounded-full" />
                     <div className="space-y-2">
                       <Skeleton className="h-4 w-24" />
                       <Skeleton className="h-3 w-16" />
                     </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Skeleton className="h-20 w-full" />
-                  </CardContent>
-                </Card>
+                  </div>
+                  <Skeleton className="h-20 w-full" />
+                </div>
               ))
             ) : visiblePosts.length > 0 ? (
               <div className="divide-y divide-border/40">
