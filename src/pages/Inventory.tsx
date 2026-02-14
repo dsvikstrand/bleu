@@ -243,31 +243,28 @@ export default function Inventory() {
               )}
             />
           ) : (
-            <Card className="bg-transparent border border-border/40">
-              <CardContent className="py-12 text-center space-y-4">
-                <h3 className="text-lg font-semibold">No libraries found</h3>
-                <p className="text-sm text-muted-foreground">
-                  {effectiveQuery ? 'Try a different search or clear filters.' : 'Be the first to create a library!'}
-                </p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {effectiveQuery ? (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setQuery('');
-                        setSelectedTag(null);
-                      }}
-                    >
-                      Clear search
-                    </Button>
-                  ) : (
-                    <Link to="/inventory/create">
-                      <Button>Create Library</Button>
-                    </Link>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <div className="border border-border/40 py-12 text-center space-y-4">
+              <h3 className="text-lg font-semibold">No libraries found</h3>
+              <p className="text-sm text-muted-foreground">
+                {effectiveQuery ? 'Try a different search or clear filters.' : 'Be the first to create a library!'}
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {effectiveQuery ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setQuery('');
+                    }}
+                  >
+                    Clear search
+                  </Button>
+                ) : (
+                  <Link to="/inventory/create">
+                    <Button>Create Library</Button>
+                  </Link>
+                )}
+              </div>
+            </div>
           )}
         </section>
 
