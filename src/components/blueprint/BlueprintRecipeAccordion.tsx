@@ -43,7 +43,7 @@ export function BlueprintRecipeAccordion({
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <CollapsibleTrigger asChild>
-        <div className="flex items-center justify-between px-3 py-2.5 rounded-md border border-border/40 cursor-pointer hover:bg-muted/20 transition-colors">
+        <div className="flex items-center justify-between px-3 py-2.5 rounded-none border border-border/40 cursor-pointer hover:bg-muted/20 transition-colors">
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-foreground">{title || 'Your Selection'}</span>
             <Badge variant="secondary" className="text-xs">
@@ -60,7 +60,7 @@ export function BlueprintRecipeAccordion({
       </CollapsibleTrigger>
 
       <CollapsibleContent className="mt-2">
-        <div className="rounded-md border border-border/40 overflow-hidden">
+        <div className="rounded-none border border-border/40 overflow-hidden">
           <div className="divide-y divide-border/40">
             {flatItems.map(({ category, item }) => {
               const contextKey = `${category}::${item}`;
@@ -92,7 +92,7 @@ export function BlueprintRecipeAccordion({
                     value={contextValue}
                     onChange={(e) => onUpdateContext(category, item, e.target.value)}
                     placeholder="Add context (e.g. 0.5mg, morning, with food...)"
-                    className="h-8 text-xs"
+                    className="h-7 text-xs rounded-none border-x-0 px-3"
                   />
                 </div>
               );

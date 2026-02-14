@@ -1310,9 +1310,9 @@ export default function InventoryBuild() {
 
             {/* Combined Name + Items Section */}
             <section className="animate-fade-in" style={{ animationDelay: '0.05s' }}>
-              <div className="rounded-md border border-border/40 overflow-hidden divide-y divide-border/40">
+              <div className="border border-border/40 rounded-none overflow-hidden divide-y divide-border/40">
                 {/* Blueprint Name Input */}
-                <div className="p-3 space-y-3">
+                <div className="px-3 py-2 space-y-2">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold truncate">{inventory.title}</p>
@@ -1332,7 +1332,7 @@ export default function InventoryBuild() {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Name your blueprint..."
-                    className="text-xl font-bold bg-transparent border-none focus-visible:ring-2 focus-visible:ring-primary/50 h-12 px-0"
+                    className="text-xl font-bold bg-transparent border-none focus-visible:ring-2 focus-visible:ring-primary/50 h-10 px-0"
                   />
                   {autoGenerateHelpText && (
                     <p className="text-xs text-muted-foreground">{autoGenerateHelpText}</p>
@@ -1453,7 +1453,7 @@ export default function InventoryBuild() {
                   )}
                 </div>
                 {/* Item Picker */}
-                <div className="p-3" data-help-id="picker">
+                <div className="px-3 py-2" data-help-id="picker">
                   <BlueprintItemPicker
                     categories={categories}
                     selectedItems={selectedItems}
@@ -1487,7 +1487,7 @@ export default function InventoryBuild() {
 
             {/* Steps Section - New Accordion */}
             <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-              <div className="border border-border/40 rounded-md overflow-hidden">
+              <div className="border border-border/40 rounded-none overflow-hidden">
                 <div className="flex items-center justify-between gap-3 px-3 py-3 border-b border-border/40">
                   <div className="space-y-1">
                     <h2 className="text-sm font-semibold">{builderMode === 'simple' ? 'Selected items' : 'Steps'}</h2>
@@ -1550,7 +1550,7 @@ export default function InventoryBuild() {
                     </span>
                   </div>
                 </div>
-                <div className="p-3 space-y-3">
+                <div className="px-0 py-0 space-y-2">
                   {builderMode === 'simple' ? (
                     totalSelected > 0 ? (
                       <BlueprintRecipeAccordion
@@ -1583,7 +1583,7 @@ export default function InventoryBuild() {
                       />
 
                       {totalSelected > 0 && (
-                        <div className="flex items-center justify-start gap-2 pt-2">
+                        <div className="flex items-center justify-start gap-2 px-3 py-2 border-t border-border/40">
                           <Button
                             type="button"
                             variant="outline"
@@ -1773,7 +1773,7 @@ export default function InventoryBuild() {
             {/* Publish Section - always visible when items selected */}
             {totalSelected > 0 && !isAnalyzing && (
               <section className="animate-fade-in" style={{ animationDelay: '0.25s' }}>
-                <div className="border border-border/40 rounded-md overflow-hidden">
+                <div className="border border-border/40 rounded-none overflow-hidden">
                   <div className="px-3 py-3 border-b border-border/40">
                     <div className="flex items-center gap-2 text-sm font-semibold">
                       <Sparkles className="h-5 w-5 text-primary" />
@@ -1795,8 +1795,8 @@ export default function InventoryBuild() {
                           <div
                             className={
                               isBannerExpanded
-                                ? 'w-full overflow-hidden rounded-md border border-border/50 bg-muted/20'
-                                : 'aspect-[4/1] w-full overflow-hidden rounded-md border border-border/50 bg-muted/40'
+                                ? 'w-full overflow-hidden rounded-none border border-border/50 bg-muted/20'
+                                : 'aspect-[4/1] w-full overflow-hidden rounded-none border border-border/50 bg-muted/40'
                             }
                           >
                             {bannerUrl ? (

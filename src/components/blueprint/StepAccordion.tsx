@@ -98,7 +98,7 @@ export function StepAccordion({
   }, []);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       {/* Quick Add Step Button */}
       {showQuickAdd && (
         <Button
@@ -125,7 +125,7 @@ export function StepAccordion({
           collapsible
           value={activeStepId || undefined}
           onValueChange={(value) => value && onSetActive(value)}
-          className="space-y-1"
+          className="space-y-0"
           data-help-id="steps"
         >
           {steps.map((step, index) => {
@@ -141,7 +141,7 @@ export function StepAccordion({
                 key={step.id}
                 value={step.id}
                 className={cn(
-                  'rounded-md border overflow-hidden transition-colors',
+                  'border border-border/40 rounded-none overflow-hidden transition-colors',
                   isActive
                     ? 'border-primary/30 bg-muted/15'
                     : 'border-border/40 bg-background hover:bg-muted/10'
@@ -250,20 +250,20 @@ export function StepAccordion({
                   </div>
                 </AccordionTrigger>
 
-                <AccordionContent className="px-3 pb-3">
-                  <div className="space-y-3">
+                <AccordionContent className="px-0 pb-0">
+                  <div className="space-y-0">
                     {/* Description */}
                     <Textarea
                       value={step.description}
                       onChange={(e) => onUpdateStep(step.id, { description: e.target.value })}
                       placeholder="Add step notes or instructions..."
                       rows={2}
-                      className="resize-none text-sm min-h-[56px]"
+                      className="resize-none text-sm min-h-[56px] rounded-none border-x-0 border-t border-b-0 px-3"
                     />
 
                     {/* Active step hint */}
                     {isActive && itemEntries.length === 0 && (
-                      <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-center" data-help-id="active-step">
+                      <div className="border-t border-border/40 px-3 py-2 text-center" data-help-id="active-step">
                         <p className="text-sm text-muted-foreground">
                           Items you select will be added here automatically
                         </p>
@@ -272,11 +272,11 @@ export function StepAccordion({
 
                     {/* Items list */}
                     {itemEntries.length > 0 && (
-                      <div className="border border-border/40 rounded-md overflow-hidden divide-y divide-border/40">
+                      <div className="border-t border-border/40 divide-y divide-border/40">
                         {itemEntries.map((entry) => (
                           <div
                             key={entry.key}
-                            className="px-3 py-2.5 space-y-1.5"
+                            className="px-3 py-2 space-y-1"
                           >
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
@@ -297,7 +297,7 @@ export function StepAccordion({
                               value={itemContexts[entry.key] || ''}
                               onChange={(e) => onUpdateItemContext(entry.category, entry.item, e.target.value)}
                               placeholder="Add context (e.g., 0.5 mg, morning, with food...)"
-                              className="h-7 text-xs"
+                              className="h-7 text-xs rounded-none border-x-0 px-3"
                               data-help-id="context"
                             />
                           </div>
