@@ -25,7 +25,6 @@ import { TagInput } from '@/components/shared/TagInput';
 import { MixButton } from '@/components/blend/MixButton';
 import { BlueprintItemPicker } from '@/components/blueprint/BlueprintItemPicker';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
-import { BlueprintLoadingAnimation } from '@/components/blueprint/BlueprintLoadingAnimation';
 import { BuildPageGuide } from '@/components/blueprint/BuildPageGuide';
 import { StepAccordion, type BlueprintStep } from '@/components/blueprint/StepAccordion';
 import { BlueprintRecipeAccordion } from '@/components/blueprint/BlueprintRecipeAccordion';
@@ -156,6 +155,7 @@ export default function InventoryBuild() {
   const [generateBanner, setGenerateBanner] = useState(true);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [isGeneratingBanner, setIsGeneratingBanner] = useState(false);
+  const [isBannerExpanded, setIsBannerExpanded] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -1068,14 +1068,7 @@ export default function InventoryBuild() {
       return;
     }
 
-    if (tags.length === 0) {
-      toast({
-        title: 'Tags required',
-        description: 'Add at least one tag so the wall can surface your blueprint.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    // Tags are optional; channel assignment is handled separately when posting to a channel.
 
     try {
       const payload: Record<string, Array<{ name: string; context?: string }>> = {};
@@ -1298,84 +1291,35 @@ export default function InventoryBuild() {
           </div>
         </div>
 
-        {/* Hero Header */}
-        <div className="text-center mb-12 pt-8 animate-fade-in">
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight mb-4 relative inline-block">
-            <span
-              className="relative inline-block"
-              style={{
-                fontFamily: "'Impact', 'Haettenschweiler', 'Franklin Gothic Bold', 'Charcoal', 'Helvetica Inserat', sans-serif",
-                letterSpacing: '0.06em',
-              }}
-            >
-              <span
-                className="absolute inset-0 text-border/40"
-                style={{ transform: 'translate(4px, 4px)' }}
-                aria-hidden="true"
-              >
-                {heroTitle.toUpperCase()}
+        {/* Header (tight, inline) */}
+        <div className="mb-6 space-y-2 animate-fade-in">
+          {postChannel && (
+            <div className="text-[11px] text-muted-foreground flex items-center justify-between gap-3">
+              <span className="truncate">
+                Posting to b/{postChannel.slug}. {isPostChannelJoined ? 'Ready to publish.' : 'Join required to publish.'}
               </span>
-              <span
-                className="absolute inset-0 text-border/60"
-                style={{ transform: 'translate(2px, 2px)' }}
-                aria-hidden="true"
-              >
-                {heroTitle.toUpperCase()}
-              </span>
-              <span className="text-gradient-themed animate-shimmer bg-[length:200%_auto] relative">
-                {heroTitle.toUpperCase()}
-              </span>
-            </span>
-            <span className="absolute -inset-4 bg-primary/10 blur-2xl rounded-full animate-pulse-soft -z-10" />
-          </h1>
-          <p className="text-lg text-muted-foreground max-w-md mx-auto">
-            {isEditing
-              ? 'Update your blueprint, regenerate the review, and save the changes.'
-              : 'Build your blueprint from this library'}
-          </p>
-        </div>
-
-        {postChannel ? (
-          <Card className="bg-card/60 backdrop-blur-glass border-border/50 mb-6">
-            <CardContent className="p-4 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">Posting to b/{postChannel.slug}</p>
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  {isPostChannelJoined
-                    ? 'Publish will post into this channel.'
-                    : 'Join this channel to publish publicly.'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {!isPostChannelJoined ? (
-                  <Button asChild size="sm" variant="outline">
-                    <Link to={`/b/${postChannel.slug}`}>Join</Link>
-                  </Button>
-                ) : (
-                  <Button asChild size="sm" variant="outline">
-                    <Link to={`/b/${postChannel.slug}`}>View</Link>
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="bg-card/60 backdrop-blur-glass border-border/50 mb-6">
-            <CardContent className="p-4 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">Choose a channel to post</p>
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  Public blueprints must be posted to a channel. Use + Create to pick where to post first.
-                </p>
-              </div>
               <div className="shrink-0">
-                <Button asChild size="sm" variant="outline">
-                  <Link to="/channels?create=1">Pick channel</Link>
+                <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
+                  <Link to={`/b/${postChannel.slug}`}>{isPostChannelJoined ? 'View' : 'Join'}</Link>
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          )}
+
+          <div className="space-y-1">
+            {inventory?.title && (
+              <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                Starter library: {inventory.title}
+              </p>
+            )}
+            <h1 className="text-2xl font-semibold leading-tight">{isEditing ? 'Edit blueprint' : 'Create blueprint'}</h1>
+            <p className="text-sm text-muted-foreground">
+              {isEditing
+                ? 'Update your blueprint, regenerate the review, and save the changes.'
+                : 'Build your blueprint from this library.'}
+            </p>
+          </div>
+        </div>
 
         {isLoading ? (
           <Card className="bg-card/60 backdrop-blur-glass border-border/50">
@@ -1420,7 +1364,7 @@ export default function InventoryBuild() {
                         onClick={() => setShowAutoGenerate((prev) => !prev)}
                       >
                         <Sparkles className="h-4 w-4" />
-                        Auto-generate Blueprint
+                        AI-generate
                       </Button>
                     </div>
                   </div>
@@ -1669,11 +1613,21 @@ export default function InventoryBuild() {
                         onRemoveItem={removeItem}
                         onUpdateItemContext={updateItemContext}
                         itemContexts={itemContexts}
+                        showQuickAdd={false}
                       />
 
                       {totalSelected > 0 && (
-                        <div className="flex justify-end pt-2">
-                          <Button type="button" variant="ghost" onClick={clearSelection}>
+                        <div className="flex items-center justify-start gap-2 pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-3"
+                            onClick={handleAddStep}
+                          >
+                            Add Step
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={clearSelection}>
                             Clear all selections
                           </Button>
                         </div>
@@ -1837,16 +1791,7 @@ export default function InventoryBuild() {
               </Collapsible>
             </section>
 
-            {/* Loading Animation */}
-            {isAnalyzing && (
-              <section className="animate-fade-in-scale">
-                <Card className="overflow-hidden bg-card/60 backdrop-blur-glass border-primary/20">
-                  <CardContent className="p-0">
-                    <BlueprintLoadingAnimation />
-                  </CardContent>
-                </Card>
-              </section>
-            )}
+            {/* No separate "mixing" animation block; keep the Review button state only. */}
 
             {/* Analysis Results */}
             {review && !isAnalyzing && (
@@ -1877,25 +1822,46 @@ export default function InventoryBuild() {
                       <div className="flex items-center justify-between gap-4">
                         <div>
                           <p className="font-medium">Generate banner</p>
-                          <p className="text-sm text-muted-foreground">Create a 4:1 banner for this blueprint.</p>
+                          <p className="text-sm text-muted-foreground">Create a banner for this blueprint.</p>
                         </div>
                         <Switch checked={generateBanner} onCheckedChange={handleToggleGenerateBanner} />
                       </div>
 
                       {generateBanner && (
                         <div className="space-y-3">
-                          <div className="aspect-[4/1] w-full overflow-hidden rounded-lg border border-border/60 bg-muted/40">
-                            {bannerUrl ? (
-                              <img
-                                src={bannerUrl}
-                                alt="Blueprint banner"
-                                className="h-full w-full object-cover"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">
-                                No banner yet
-                              </div>
+                          <div className="space-y-2">
+                            <div className="aspect-[4/1] w-full overflow-hidden rounded-lg border border-border/60 bg-muted/40">
+                              {bannerUrl ? (
+                                <img
+                                  src={bannerUrl}
+                                  alt="Blueprint banner"
+                                  className="h-full w-full object-cover"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">
+                                  No banner yet
+                                </div>
+                              )}
+                            </div>
+                            {bannerUrl && (
+                              <Collapsible open={isBannerExpanded} onOpenChange={setIsBannerExpanded}>
+                                <CollapsibleTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground">
+                                    {isBannerExpanded ? 'Collapse preview' : 'Expand preview'}
+                                  </Button>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                  <div className="mt-2 w-full overflow-hidden rounded-lg border border-border/60 bg-muted/20">
+                                    <img
+                                      src={bannerUrl}
+                                      alt="Blueprint banner (expanded)"
+                                      className="w-full max-h-[60vh] object-contain"
+                                      loading="lazy"
+                                    />
+                                  </div>
+                                </CollapsibleContent>
+                              </Collapsible>
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
@@ -1945,15 +1911,15 @@ export default function InventoryBuild() {
                       </div>
                     )}
                     <div className="space-y-2">
-                      <Label>Tags</Label>
+                      <Label>Tags (optional)</Label>
                       <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions || []} maxTags={12} />
                     </div>
-                    <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
+                    <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
                       <div>
-                        <p className="font-medium">Public blueprint</p>
-                        <p className="text-sm text-muted-foreground">Public blueprints appear on the wall.</p>
+                        <p className="text-xs font-semibold">Public blueprint</p>
+                        <p className="text-[11px] text-muted-foreground">Appears on the feed.</p>
                       </div>
-                      <Switch checked={isPublic} onCheckedChange={setIsPublic} />
+                      <Switch checked={isPublic} onCheckedChange={setIsPublic} className="scale-90" />
                     </div>
                     <Button
                       onClick={() => handlePublish()}

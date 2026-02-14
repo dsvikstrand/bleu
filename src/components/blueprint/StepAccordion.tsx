@@ -36,6 +36,7 @@ interface StepAccordionProps {
   onRemoveItem: (category: string, item: string) => void;
   onUpdateItemContext: (category: string, item: string, context: string) => void;
   itemContexts: Record<string, string>;
+  showQuickAdd?: boolean;
 }
 
 export function StepAccordion({
@@ -49,6 +50,7 @@ export function StepAccordion({
   onRemoveItem,
   onUpdateItemContext,
   itemContexts,
+  showQuickAdd = true,
 }: StepAccordionProps) {
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState('');
@@ -98,16 +100,18 @@ export function StepAccordion({
   return (
     <div className="space-y-3">
       {/* Quick Add Step Button */}
-      <Button
-        type="button"
-        variant="outline"
-        onClick={onAddStep}
-        className="w-full gap-2 border-dashed"
-        data-help-id="add-step"
-      >
-        <Plus className="h-4 w-4" />
-        Add Step
-      </Button>
+      {showQuickAdd && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onAddStep}
+          className="w-full gap-2 border-dashed"
+          data-help-id="add-step"
+        >
+          <Plus className="h-4 w-4" />
+          Add Step
+        </Button>
+      )}
 
       {steps.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 p-6 text-center">
@@ -219,9 +223,11 @@ export function StepAccordion({
 
                     {/* Badges & Actions */}
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="secondary" className="text-xs">
-                        {itemEntries.length} {itemEntries.length === 1 ? 'item' : 'items'}
-                      </Badge>
+                      {itemEntries.length > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {itemEntries.length} {itemEntries.length === 1 ? 'item' : 'items'}
+                        </Badge>
+                      )}
                       {isActive && (
                         <Badge variant="outline" className="gap-1 text-xs border-primary/40 text-primary">
                           <Zap className="h-3 w-3" />
