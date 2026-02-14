@@ -1289,35 +1289,18 @@ export default function InventoryBuild() {
           </div>
         </div>
 
-        {/* Header (tight, inline) */}
-        <div className="mb-6 space-y-2 animate-fade-in">
-          {postChannel && (
-            <div className="text-[11px] text-muted-foreground flex items-center justify-between gap-3">
-              <span className="truncate">
-                Posting to b/{postChannel.slug}. {isPostChannelJoined ? 'Ready to publish.' : 'Join required to publish.'}
-              </span>
-              <div className="shrink-0">
-                <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
-                  <Link to={`/b/${postChannel.slug}`}>{isPostChannelJoined ? 'View' : 'Join'}</Link>
-                </Button>
-              </div>
+        {postChannel && (
+          <div className="mb-4 text-[11px] text-muted-foreground flex items-center justify-between gap-3 animate-fade-in">
+            <span className="truncate">
+              Posting to b/{postChannel.slug}. {isPostChannelJoined ? 'Ready to publish.' : 'Join required to publish.'}
+            </span>
+            <div className="shrink-0">
+              <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
+                <Link to={`/b/${postChannel.slug}`}>{isPostChannelJoined ? 'View' : 'Join'}</Link>
+              </Button>
             </div>
-          )}
-
-          <div className="space-y-1">
-            {inventory?.title && (
-              <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                Starter library: {inventory.title}
-              </p>
-            )}
-            <h1 className="text-2xl font-semibold leading-tight">{isEditing ? 'Edit blueprint' : 'Create blueprint'}</h1>
-            <p className="text-sm text-muted-foreground">
-              {isEditing
-                ? 'Update your blueprint, regenerate the review, and save the changes.'
-                : 'Build your blueprint from this library.'}
-            </p>
           </div>
-        </div>
+        )}
 
         {isLoading ? (
           <div className="border border-border/40 px-3 py-3 space-y-3">
@@ -1342,25 +1325,27 @@ export default function InventoryBuild() {
               <div className="rounded-md border border-border/40 overflow-hidden divide-y divide-border/40">
                 {/* Blueprint Name Input */}
                 <div className="p-3 space-y-3">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <Input
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="Name your blueprint..."
-                      className="text-xl font-bold bg-transparent border-none focus-visible:ring-2 focus-visible:ring-primary/50 h-14 flex-1"
-                    />
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="gap-2"
-                        onClick={() => setShowAutoGenerate((prev) => !prev)}
-                      >
-                        <Sparkles className="h-4 w-4" />
-                        AI-generate
-                      </Button>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{inventory.title}</p>
+                      <p className="text-xs text-muted-foreground">Build your blueprint from this library.</p>
                     </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2 shrink-0"
+                      onClick={() => setShowAutoGenerate((prev) => !prev)}
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      AI-generate
+                    </Button>
                   </div>
+                  <Input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Name your blueprint..."
+                    className="text-xl font-bold bg-transparent border-none focus-visible:ring-2 focus-visible:ring-primary/50 h-12 px-0"
+                  />
                   {autoGenerateHelpText && (
                     <p className="text-xs text-muted-foreground">{autoGenerateHelpText}</p>
                   )}
@@ -1619,9 +1604,6 @@ export default function InventoryBuild() {
                             onClick={handleAddStep}
                           >
                             Add Step
-                          </Button>
-                          <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={clearSelection}>
-                            Clear all selections
                           </Button>
                         </div>
                       )}
