@@ -1792,53 +1792,40 @@ export default function InventoryBuild() {
                       {isEditing ? 'Save changes' : 'Publish Blueprint'}
                     </div>
                   </div>
-                  <div className="p-3 space-y-3">
-                    <div className="rounded-md border border-border/40 px-3 py-2.5 space-y-3">
+                  <div className="divide-y divide-border/40">
+                    <div className="p-3 space-y-2">
                       <div className="flex items-center justify-between gap-4">
                         <div>
                           <p className="text-sm font-semibold">Generate banner</p>
-                          <p className="text-sm text-muted-foreground">Create a banner for this blueprint.</p>
+                          <p className="text-xs text-muted-foreground">Create a banner for this blueprint.</p>
                         </div>
-                        <Switch checked={generateBanner} onCheckedChange={handleToggleGenerateBanner} />
+                        <Switch checked={generateBanner} onCheckedChange={handleToggleGenerateBanner} className="scale-90" />
                       </div>
 
                       {generateBanner && (
-                        <div className="space-y-3">
-                          <div className="space-y-2">
-                            <div
-                              className={
-                                isBannerExpanded
-                                  ? 'w-full overflow-hidden rounded-lg border border-border/60 bg-muted/20'
-                                  : 'aspect-[4/1] w-full overflow-hidden rounded-lg border border-border/60 bg-muted/40'
-                              }
-                            >
-                              {bannerUrl ? (
-                                <img
-                                  src={bannerUrl}
-                                  alt="Blueprint banner"
-                                  className={
-                                    isBannerExpanded
-                                      ? 'w-full max-h-[60vh] object-contain'
-                                      : 'h-full w-full object-cover'
-                                  }
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">
-                                  No banner yet
-                                </div>
-                              )}
-                            </div>
-                            {bannerUrl && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs text-muted-foreground"
-                                onClick={() => setIsBannerExpanded((v) => !v)}
-                              >
-                                {isBannerExpanded ? 'Collapse preview' : 'Expand preview'}
-                              </Button>
+                        <div className="space-y-2">
+                          <div
+                            className={
+                              isBannerExpanded
+                                ? 'w-full overflow-hidden rounded-md border border-border/50 bg-muted/20'
+                                : 'aspect-[4/1] w-full overflow-hidden rounded-md border border-border/50 bg-muted/40'
+                            }
+                          >
+                            {bannerUrl ? (
+                              <img
+                                src={bannerUrl}
+                                alt="Blueprint banner"
+                                className={
+                                  isBannerExpanded
+                                    ? 'w-full max-h-[60vh] object-contain'
+                                    : 'h-full w-full object-cover'
+                                }
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">
+                                No banner yet
+                              </div>
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
@@ -1846,18 +1833,30 @@ export default function InventoryBuild() {
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="gap-2"
+                              className="gap-2 h-8 px-3"
                               onClick={() => handleGenerateBanner()}
                               disabled={isGeneratingBanner || !canGenerateBanner}
                             >
                               <RefreshCcw className={`h-3.5 w-3.5 ${isGeneratingBanner ? 'animate-spin' : ''}`} />
-                              {bannerUrl ? 'Regenerate banner' : 'Generate banner'}
+                              {bannerUrl ? 'Regenerate' : 'Generate'}
                             </Button>
                             {bannerUrl && (
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
+                                className="h-8 px-2 text-xs text-muted-foreground"
+                                onClick={() => setIsBannerExpanded((v) => !v)}
+                              >
+                                {isBannerExpanded ? 'Collapse' : 'Expand'}
+                              </Button>
+                            )}
+                            {bannerUrl && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-xs text-muted-foreground"
                                 onClick={() => setBannerUrl(null)}
                                 disabled={isGeneratingBanner}
                               >
@@ -1872,41 +1871,47 @@ export default function InventoryBuild() {
                       )}
                     </div>
 
-                    {recentTags.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {recentTags.map((tag) => (
-                          <Button
-                            key={tag}
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]))}
-                          >
-                            #{tag}
-                          </Button>
-                        ))}
+                    <div className="p-3 space-y-2">
+                      {recentTags.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {recentTags.map((tag) => (
+                            <Button
+                              key={tag}
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8 px-3"
+                              onClick={() => setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]))}
+                            >
+                              #{tag}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <Label>Tags (optional)</Label>
+                        <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions || []} maxTags={12} />
                       </div>
-                    )}
-                    <div className="space-y-2">
-                      <Label>Tags (optional)</Label>
-                      <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions || []} maxTags={12} />
-                    </div>
-                    <div className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
-                      <div>
-                        <p className="text-xs font-semibold">Public blueprint</p>
-                        <p className="text-[11px] text-muted-foreground">Appears on the feed.</p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-semibold">Public blueprint</p>
+                          <p className="text-[11px] text-muted-foreground">Appears on the feed.</p>
+                        </div>
+                        <Switch checked={isPublic} onCheckedChange={setIsPublic} className="scale-90" />
                       </div>
-                      <Switch checked={isPublic} onCheckedChange={setIsPublic} className="scale-90" />
                     </div>
-                    <Button
-                      onClick={() => handlePublish()}
-                      disabled={isEditing ? updateBlueprint.isPending : createBlueprint.isPending}
-                      className="w-full gap-2"
-                      size="lg"
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      {isEditing ? 'Save Changes' : 'Publish Blueprint'}
-                    </Button>
+
+                    <div className="p-3">
+                      <Button
+                        onClick={() => handlePublish()}
+                        disabled={isEditing ? updateBlueprint.isPending : createBlueprint.isPending}
+                        className="w-full gap-2"
+                        size="lg"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        {isEditing ? 'Save Changes' : 'Publish Blueprint'}
+                      </Button>
+                    </div>
 
                     {postChannel && (
                       <AlertDialog open={showJoinToPublishDialog} onOpenChange={setShowJoinToPublishDialog}>

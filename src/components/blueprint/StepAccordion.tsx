@@ -98,7 +98,7 @@ export function StepAccordion({
   }, []);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {/* Quick Add Step Button */}
       {showQuickAdd && (
         <Button
@@ -114,8 +114,8 @@ export function StepAccordion({
       )}
 
       {steps.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/60 p-6 text-center">
-          <p className="text-sm text-muted-foreground">
+        <div className="rounded-md border border-dashed border-border/60 p-4 text-center">
+          <p className="text-sm text-muted-foreground leading-snug">
             No steps yet. Select items from the library above — they'll appear in your first step automatically.
           </p>
         </div>
@@ -125,7 +125,7 @@ export function StepAccordion({
           collapsible
           value={activeStepId || undefined}
           onValueChange={(value) => value && onSetActive(value)}
-          className="space-y-2"
+          className="space-y-1"
           data-help-id="steps"
         >
           {steps.map((step, index) => {
@@ -141,10 +141,10 @@ export function StepAccordion({
                 key={step.id}
                 value={step.id}
                 className={cn(
-                  'rounded-xl border transition-all duration-200',
+                  'rounded-md border overflow-hidden transition-colors',
                   isActive
-                    ? 'border-primary/40 bg-card shadow-sm'
-                    : 'border-border/40 bg-muted/30 hover:bg-muted/50'
+                    ? 'border-primary/30 bg-muted/15'
+                    : 'border-border/40 bg-background hover:bg-muted/10'
                 )}
                 draggable
                 onDragStart={() => handleDragStart(index)}
@@ -152,10 +152,10 @@ export function StepAccordion({
                 onDrop={() => handleDrop(index)}
                 onDragEnd={handleDragEnd}
               >
-                <AccordionTrigger className="px-4 py-3 hover:no-underline [&>svg]:hidden">
+                <AccordionTrigger className="px-3 py-2 hover:no-underline [&>svg]:hidden">
                   <div className="flex w-full items-center gap-3">
                     {/* Drag Handle */}
-                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
+                    <GripVertical className="h-4 w-4 text-muted-foreground/70 cursor-grab shrink-0" />
 
                     {/* Title (editable) */}
                     {isEditing ? (
@@ -205,7 +205,7 @@ export function StepAccordion({
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className="font-medium truncate">{displayTitle}</span>
+                        <span className="font-semibold text-sm truncate">{displayTitle}</span>
                         <Button
                           type="button"
                           variant="ghost"
@@ -224,12 +224,12 @@ export function StepAccordion({
                     {/* Badges & Actions */}
                     <div className="flex items-center gap-2 shrink-0">
                       {itemEntries.length > 0 && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-[11px] px-2 py-0.5">
                           {itemEntries.length} {itemEntries.length === 1 ? 'item' : 'items'}
                         </Badge>
                       )}
                       {isActive && (
-                        <Badge variant="outline" className="gap-1 text-xs border-primary/40 text-primary">
+                        <Badge variant="outline" className="gap-1 text-[11px] px-2 py-0.5 border-primary/30 text-primary">
                           <Zap className="h-3 w-3" />
                           Active
                         </Badge>
@@ -250,18 +250,16 @@ export function StepAccordion({
                   </div>
                 </AccordionTrigger>
 
-                <AccordionContent className="px-4 pb-4">
-                  <div className="space-y-4">
+                <AccordionContent className="px-3 pb-3">
+                  <div className="space-y-3">
                     {/* Description */}
-                    <div className="space-y-1.5">
-                      <Textarea
-                        value={step.description}
-                        onChange={(e) => onUpdateStep(step.id, { description: e.target.value })}
-                        placeholder="Add step notes or instructions..."
-                        rows={2}
-                        className="resize-none"
-                      />
-                    </div>
+                    <Textarea
+                      value={step.description}
+                      onChange={(e) => onUpdateStep(step.id, { description: e.target.value })}
+                      placeholder="Add step notes or instructions..."
+                      rows={2}
+                      className="resize-none text-sm min-h-[56px]"
+                    />
 
                     {/* Active step hint */}
                     {isActive && itemEntries.length === 0 && (
@@ -274,16 +272,16 @@ export function StepAccordion({
 
                     {/* Items list */}
                     {itemEntries.length > 0 && (
-                      <div className="space-y-2">
+                      <div className="border border-border/40 rounded-md overflow-hidden divide-y divide-border/40">
                         {itemEntries.map((entry) => (
                           <div
                             key={entry.key}
-                            className="rounded-lg border border-border/40 bg-background/50 p-3 space-y-2"
+                            className="px-3 py-2.5 space-y-1.5"
                           >
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="text-sm font-medium truncate">{entry.item}</p>
-                                <p className="text-xs text-muted-foreground">{entry.category}</p>
+                                <p className="text-sm font-semibold truncate leading-tight">{entry.item}</p>
+                                <p className="text-[11px] text-muted-foreground leading-tight">{entry.category}</p>
                               </div>
                               <Button
                                 type="button"
@@ -299,7 +297,7 @@ export function StepAccordion({
                               value={itemContexts[entry.key] || ''}
                               onChange={(e) => onUpdateItemContext(entry.category, entry.item, e.target.value)}
                               placeholder="Add context (e.g., 0.5 mg, morning, with food...)"
-                              className="h-8 text-sm"
+                              className="h-7 text-xs"
                               data-help-id="context"
                             />
                           </div>
