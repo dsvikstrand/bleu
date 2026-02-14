@@ -13,8 +13,6 @@ import { getChannelIcon } from '@/lib/channelIcons';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { buildUrlWithChannel, getCatalogChannelTagSlugs, isPostableChannelSlug } from '@/lib/channelPostContext';
 
-type CreateFlowStep = 'pick_channel' | 'pick_source';
-
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -27,10 +25,9 @@ export function CreateBlueprintFlowModal({ open, onOpenChange, presetChannelSlug
   const { user } = useAuth();
   const { getFollowState } = useTagFollows();
 
-  const [step, setStep] = useState<CreateFlowStep>('pick_channel');
   const [search, setSearch] = useState('');
   const [selectedChannelSlug, setSelectedChannelSlug] = useState<string | null>(null);
-  const [pendingSlug, setPendingSlug] = useState<string | null>(null);
+  const [isPickingChannel, setIsPickingChannel] = useState(true);
 
   const catalogTagSlugs = useMemo(() => getCatalogChannelTagSlugs(), []);
   const { data: tagsBySlugs = [], isLoading: tagsLoading } = useTagsBySlugs(open ? catalogTagSlugs : []);
@@ -58,16 +55,15 @@ export function CreateBlueprintFlowModal({ open, onOpenChange, presetChannelSlug
   useEffect(() => {
     if (!open) return;
     setSearch('');
-    setPendingSlug(null);
 
     if (presetChannelSlug && isPostableChannelSlug(presetChannelSlug)) {
       setSelectedChannelSlug(presetChannelSlug);
-      setStep('pick_source');
+      setIsPickingChannel(false);
       return;
     }
 
     setSelectedChannelSlug(null);
-    setStep('pick_channel');
+    setIsPickingChannel(true);
   }, [open, presetChannelSlug]);
 
   async function handleSelectChannel(channelSlug: string, channelTagSlug: string) {
@@ -96,7 +92,7 @@ export function CreateBlueprintFlowModal({ open, onOpenChange, presetChannelSlug
     if (state === 'joining' || state === 'leaving') return;
 
     setSelectedChannelSlug(channelSlug);
-    setStep('pick_source');
+    setIsPickingChannel(false);
   }
 
   function goToSource(source: 'library' | 'youtube') {
@@ -109,121 +105,127 @@ export function CreateBlueprintFlowModal({ open, onOpenChange, presetChannelSlug
     navigate(target);
   }
 
-  const title = step === 'pick_channel' ? 'Where do you want to post?' : 'How do you want to create?';
-  const description = step === 'pick_channel'
-    ? 'Pick a curated channel. You will join automatically when you select it.'
-    : selectedChannelSlug
-      ? `Posting to b/${selectedChannelSlug}`
-      : 'Pick a source.';
-  const channelPickerDescription = 'Pick a curated channel. You will be asked to join when you publish.';
+  const title = 'Create blueprint';
+  const description = selectedChannelSlug
+    ? `Posting to b/${selectedChannelSlug}`
+    : 'Pick a curated channel, then choose a source. You will be asked to join when you publish.';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{step === 'pick_channel' ? channelPickerDescription : description}</DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        {step === 'pick_channel' ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Search className="h-4 w-4 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search channels..."
-              />
+        <div className="space-y-3">
+          {selectedChannelSlug && !isPickingChannel ? (
+            <div className="border border-border/40 px-3 py-2 flex items-center justify-between gap-2">
+              <div className="text-sm font-semibold truncate">Posting to b/{selectedChannelSlug}</div>
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setIsPickingChannel(true)}>
+                Change
+              </Button>
             </div>
+          ) : null}
 
-            <div className="max-h-[52vh] overflow-auto rounded-md border border-border/50">
-              {postableChannels.length === 0 ? (
-                <div className="p-4 text-sm text-muted-foreground">No channels match your search.</div>
-              ) : (
-                <div className="divide-y divide-border/40">
-                  {postableChannels.map((channel) => {
-                    const ChannelIcon = getChannelIcon(channel.icon);
-                    const tagId = tagIdBySlug.get(channel.tagSlug) || null;
-                    const state = tagId ? getFollowState({ id: tagId }) : 'not_joined';
-                    const isJoined = state === 'joined' || state === 'leaving';
-                    const isPending = pendingSlug === channel.slug || state === 'joining' || state === 'leaving';
-                    const isDisabled = tagsLoading || !tagId || !!pendingSlug;
+          {(!selectedChannelSlug || isPickingChannel) && (
+            <>
+              <div className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search channels..."
+                />
+              </div>
 
-                    return (
-                      <button
-                        key={channel.slug}
-                        type="button"
-                        className="w-full text-left p-3 hover:bg-muted/20 transition-colors disabled:opacity-60 disabled:hover:bg-transparent"
-                        disabled={isDisabled}
-                        onClick={() => handleSelectChannel(channel.slug, channel.tagSlug)}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3 min-w-0">
-                            <div className="h-9 w-9 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                              <ChannelIcon className="h-4 w-4" />
+              <div className="max-h-[44vh] overflow-auto rounded-md border border-border/50">
+                {postableChannels.length === 0 ? (
+                  <div className="p-4 text-sm text-muted-foreground">No channels match your search.</div>
+                ) : (
+                  <div className="divide-y divide-border/40">
+                    {postableChannels.map((channel) => {
+                      const ChannelIcon = getChannelIcon(channel.icon);
+                      const tagId = tagIdBySlug.get(channel.tagSlug) || null;
+                      const state = tagId ? getFollowState({ id: tagId }) : 'not_joined';
+                      const isPending = state === 'joining' || state === 'leaving';
+                      const isDisabled = tagsLoading || !tagId;
+
+                      return (
+                        <button
+                          key={channel.slug}
+                          type="button"
+                          className="w-full text-left p-3 hover:bg-muted/20 transition-colors disabled:opacity-60 disabled:hover:bg-transparent"
+                          disabled={isDisabled}
+                          onClick={() => handleSelectChannel(channel.slug, channel.tagSlug)}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className="h-9 w-9 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                                <ChannelIcon className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0 space-y-0.5">
+                                <div className="text-sm font-semibold">{channel.name}</div>
+                                <div className="text-xs text-muted-foreground line-clamp-2">{channel.description}</div>
+                                {!tagId && !tagsLoading && (
+                                  <div className="text-[11px] text-muted-foreground">Channel activation pending</div>
+                                )}
+                              </div>
                             </div>
-                            <div className="min-w-0 space-y-0.5">
-                              <div className="text-sm font-semibold">{channel.name}</div>
-                              <div className="text-xs text-muted-foreground line-clamp-2">{channel.description}</div>
-                              {!tagId && !tagsLoading && (
-                                <div className="text-[11px] text-muted-foreground">Channel activation pending</div>
-                              )}
-                            </div>
-                          </div>
 
-                          <div className="shrink-0 flex items-center gap-2">
-                            {isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                            {isJoined ? (
-                              <span className="text-xs text-muted-foreground">Joined</span>
-                            ) : (
+                            <div className="shrink-0 flex items-center gap-2">
+                              {isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                               <span className="text-xs text-muted-foreground">Select</span>
-                            )}
+                            </div>
                           </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Card className="p-4 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-muted-foreground" />
-                  <div className="text-sm font-semibold">Library</div>
-                </div>
-                <div className="text-xs text-muted-foreground">Build from scratch or use a library.</div>
-                <Button onClick={() => goToSource('library')} className="mt-2">
-                  Continue
-                </Button>
-              </Card>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
-              <Card className="p-4 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <Youtube className="h-4 w-4 text-muted-foreground" />
-                  <div className="text-sm font-semibold">YouTube</div>
-                </div>
-                <div className="text-xs text-muted-foreground">Generate a blueprint from a YouTube video.</div>
-                <Button onClick={() => goToSource('youtube')} className="mt-2">
-                  Continue
-                </Button>
-              </Card>
-            </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Card className="p-4 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Layers className="h-4 w-4 text-muted-foreground" />
+                <div className="text-sm font-semibold">Library</div>
+              </div>
+              <div className="text-xs text-muted-foreground">Build from scratch or use a library.</div>
+              <Button
+                onClick={() => goToSource('library')}
+                className="mt-2"
+                disabled={!selectedChannelSlug}
+              >
+                Continue
+              </Button>
+            </Card>
 
-            <div className="flex items-center justify-between">
-              <Button variant="ghost" onClick={() => setStep('pick_channel')}>
-                Back
+            <Card className="p-4 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Youtube className="h-4 w-4 text-muted-foreground" />
+                <div className="text-sm font-semibold">YouTube</div>
+              </div>
+              <div className="text-xs text-muted-foreground">Generate a blueprint from a YouTube video.</div>
+              <Button
+                onClick={() => goToSource('youtube')}
+                className="mt-2"
+                disabled={!selectedChannelSlug}
+              >
+                Continue
               </Button>
-              <Button variant="outline" onClick={() => { onOpenChange(false); }} className="gap-2">
-                <Plus className="h-4 w-4" />
-                Close
-              </Button>
-            </div>
+            </Card>
           </div>
-        )}
+
+          <div className="flex items-center justify-end">
+            <Button variant="outline" onClick={() => { onOpenChange(false); }} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Close
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

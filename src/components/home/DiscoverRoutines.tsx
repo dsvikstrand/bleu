@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,9 +7,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useBlueprintSearch } from '@/hooks/useBlueprintSearch';
 import { useBlueprint, useToggleBlueprintLike } from '@/hooks/useBlueprints';
-import { useTagFollows } from '@/hooks/useTagFollows';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
+import { normalizeTag } from '@/lib/tagging';
 
 const TAGS = ['morning', 'skincare', 'workout', 'productivity'] as const;
 const CAROUSEL_LIMIT = 5;
@@ -51,10 +52,11 @@ function reviewPreview(text: string) {
 }
 
 export function DiscoverRoutines() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { followedIds, toggleFollow } = useTagFollows();
   const toggleLike = useToggleBlueprintLike();
+  const curatedChannelTagSlugs = useMemo(() => new Set(getCatalogChannelTagSlugs().map(normalizeTag)), []);
 
   const { data: blueprints, isLoading } = useBlueprintSearch('', 'popular');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -112,23 +114,8 @@ export function DiscoverRoutines() {
     }
   };
 
-  const handleTagToggle = async (tag: { id: string; slug: string }) => {
-    if (!user) {
-      toast({
-        title: 'Sign in required',
-        description: 'Please sign in to follow tags.',
-      });
-      return;
-    }
-    try {
-      await toggleFollow(tag);
-    } catch (error) {
-      toast({
-        title: 'Tag update failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
-        variant: 'destructive',
-      });
-    }
+  const handleTagClick = (slug: string) => {
+    navigate(`/explore?q=${encodeURIComponent(slug)}`);
   };
 
   return (
@@ -246,19 +233,18 @@ export function DiscoverRoutines() {
 
                     {featuredBlueprint.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
-                        {featuredBlueprint.tags.slice(0, 4).map((tag) => (
+                        {featuredBlueprint.tags
+                          .filter((tag) => !curatedChannelTagSlugs.has(normalizeTag(tag.slug)))
+                          .slice(0, 4)
+                          .map((tag) => (
                           <Badge
                             key={tag.id}
                             variant="secondary"
-                            className={`text-xs cursor-pointer transition-colors border ${
-                              followedIds?.has(tag.id)
-                                ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                                : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-                            }`}
+                            className="text-xs cursor-pointer transition-colors border bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60"
                             onClick={(event) => {
                               event.preventDefault();
                               event.stopPropagation();
-                              void handleTagToggle({ id: tag.id, slug: tag.slug });
+                              handleTagClick(tag.slug);
                             }}
                           >
                             #{tag.slug}

@@ -17,7 +17,7 @@ export function WallToWallGrid<T>({
         {items.map((item, index) => (
           <div
             key={index}
-            className="border border-border/40 rounded-md p-3 hover:bg-muted/10 transition-colors"
+            className="border border-border/40 rounded-md p-3 overflow-hidden hover:bg-muted/10 transition-colors"
           >
             {renderItem(item, { index })}
           </div>

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Heart, MessageCircle } from 'lucide-react';
@@ -5,6 +6,8 @@ import type { BlueprintListItem } from '@/hooks/useBlueprintSearch';
 import { cn } from '@/lib/utils';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { buildFeedSummary } from '@/lib/feedPreview';
+import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
+import { normalizeTag } from '@/lib/tagging';
 
 interface BlueprintCardProps {
   blueprint: BlueprintListItem;
@@ -22,6 +25,11 @@ export function BlueprintCard({
   variant = 'grid_flat',
 }: BlueprintCardProps) {
   const hasBanner = !!blueprint.banner_url;
+  const curatedChannelTagSlugs = useMemo(() => new Set(getCatalogChannelTagSlugs().map(normalizeTag)), []);
+  const displayTags = useMemo(
+    () => blueprint.tags.filter((tag) => !curatedChannelTagSlugs.has(normalizeTag(tag.slug))),
+    [blueprint.tags, curatedChannelTagSlugs],
+  );
   const summary = buildFeedSummary({
     primary: blueprint.mix_notes,
     secondary: blueprint.inventory_title ? `From ${blueprint.inventory_title}` : null,
@@ -43,7 +51,7 @@ export function BlueprintCard({
         <div
           className={cn(
             'relative flex flex-col h-full',
-            hasBanner && 'overflow-hidden rounded-md',
+            variant === 'grid_flat' && hasBanner && '-m-3 p-3',
           )}
         >
           {hasBanner && (
@@ -67,12 +75,12 @@ export function BlueprintCard({
               {summary}
             </p>
 
-            {blueprint.tags.length > 0 && (
+            {displayTags.length > 0 && (
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <OneRowTagChips
                     className="flex flex-nowrap gap-1.5 overflow-hidden min-w-0"
-                    items={blueprint.tags.map((tag) => ({
+                    items={displayTags.map((tag) => ({
                       key: tag.id,
                       label: `#${tag.slug}`,
                       variant: 'secondary',

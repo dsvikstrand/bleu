@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { AppHeader } from '@/components/shared/AppHeader';
@@ -11,13 +11,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 import { useBlueprint, useBlueprintComments, useCreateBlueprintComment, useToggleBlueprintLike } from '@/hooks/useBlueprints';
 import { useToast } from '@/hooks/use-toast';
-import { useTagFollows } from '@/hooks/useTagFollows';
 import { ArrowLeft, Heart, Maximize2, Minimize2 } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
+import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
+import { normalizeTag } from '@/lib/tagging';
 
 type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
@@ -59,13 +60,18 @@ export default function BlueprintDetail() {
   const toggleLike = useToggleBlueprintLike();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { followedIds, toggleFollow } = useTagFollows();
   const [comment, setComment] = useState('');
   const [isBannerExpanded, setIsBannerExpanded] = useState(true);
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
   const isOwner = !!(user && blueprint && user.id === blueprint.creator_user_id);
+  const curatedChannelTagSlugs = useMemo(() => new Set(getCatalogChannelTagSlugs().map(normalizeTag)), []);
+  const displayTags = useMemo(() => {
+    if (!blueprint?.tags?.length) return [];
+    // Keep channel tags out of the hashtag row to preserve the "channel != hashtag" mental model.
+    return blueprint.tags.filter((tag) => !curatedChannelTagSlugs.has(normalizeTag(tag.slug)));
+  }, [blueprint?.tags, curatedChannelTagSlugs]);
 
   useEffect(() => {
     if (!blueprint?.id) return;
@@ -107,23 +113,8 @@ export default function BlueprintDetail() {
     }
   };
 
-  const handleTagToggle = async (tag: { id: string; slug: string }) => {
-    if (!user) {
-      toast({
-        title: 'Sign in required',
-        description: 'Please sign in to follow tags.',
-      });
-      return;
-    }
-    try {
-      await toggleFollow(tag);
-    } catch (error) {
-      toast({
-        title: 'Tag update failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
-        variant: 'destructive',
-      });
-    }
+  const handleTagClick = (slug: string) => {
+    navigate(`/explore?q=${encodeURIComponent(slug)}`);
   };
 
   return (
@@ -185,16 +176,12 @@ export default function BlueprintDetail() {
 
               <div className="flex items-start justify-between gap-3">
                 <div className="flex flex-wrap gap-2 flex-1 min-w-0">
-                  {blueprint.tags.map((tag) => (
+                  {displayTags.map((tag) => (
                     <Badge
                       key={tag.id}
                       variant="outline"
-                      className={`text-xs cursor-pointer transition-colors border ${
-                        followedIds.has(tag.id)
-                          ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                          : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-                      }`}
-                      onClick={() => handleTagToggle(tag)}
+                      className="text-xs cursor-pointer transition-colors border bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60"
+                      onClick={() => handleTagClick(tag.slug)}
                     >
                       #{tag.slug}
                     </Badge>
