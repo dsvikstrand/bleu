@@ -1,21 +1,22 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, Users, Search, FileText, Radio } from 'lucide-react';
+import { Home, Users, Search, FileText, Leaf } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AppNavigationProps {
   variant?: 'header' | 'floating';
   mode?: 'all' | 'public';
+  className?: string;
 }
 
-export function AppNavigation({ variant = 'header', mode = 'all' }: AppNavigationProps) {
+export function AppNavigation({ variant = 'header', mode = 'all', className }: AppNavigationProps) {
   const location = useLocation();
   const currentPath = location.pathname;
 
   const allNavItems = [
     { path: '/', label: 'Home', icon: Home, showWhen: 'public-only' as const },
     { path: '/wall', label: 'Feed', icon: Users, showWhen: 'auth-only' as const },
-    { path: '/channels', label: 'Channels', icon: Radio, showWhen: 'always' as const },
+    { path: '/channels', label: 'Channels', icon: Leaf, showWhen: 'always' as const },
     { path: '/blueprints', label: 'Blueprints', icon: FileText, showWhen: 'always' as const },
     { path: '/explore', label: 'Explore', icon: Search, showWhen: 'always' as const },
   ];
@@ -28,7 +29,12 @@ export function AppNavigation({ variant = 'header', mode = 'all' }: AppNavigatio
 
   if (variant === 'floating') {
     return (
-      <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 p-1 bg-background rounded-full border border-border/40 shadow-soft-lg">
+      <nav
+        className={cn(
+          'fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 p-1 bg-background rounded-full border border-border/40 shadow-soft-lg transition-transform duration-200 ease-out',
+          className,
+        )}
+      >
         {visibleItems.map((item) => {
           const isActive = currentPath === item.path;
           const Icon = item.icon;
@@ -53,7 +59,7 @@ export function AppNavigation({ variant = 'header', mode = 'all' }: AppNavigatio
   }
 
   return (
-    <nav className="flex items-center gap-1 p-1 bg-background rounded-xl border border-border/40">
+    <nav className={cn('flex items-center gap-1 p-1 bg-background rounded-xl border border-border/40', className)}>
       {visibleItems.map((item) => {
         const isActive = currentPath === item.path;
         const Icon = item.icon;
@@ -63,12 +69,12 @@ export function AppNavigation({ variant = 'header', mode = 'all' }: AppNavigatio
               variant={isActive ? 'glass' : 'ghost'}
               size="sm"
               className={cn(
-                'gap-2',
+                'gap-2 h-8 px-2 text-xs',
                 isActive && 'bg-accent/50 pointer-events-none'
               )}
             >
               <Icon className="h-4 w-4" />
-              {item.label}
+              <span className="hidden md:inline">{item.label}</span>
             </Button>
           </Link>
         );

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { FileText, Heart, MessageCircle } from 'lucide-react';
+import { Heart, MessageCircle } from 'lucide-react';
 import type { BlueprintListItem } from '@/hooks/useBlueprintSearch';
 import { cn } from '@/lib/utils';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
@@ -23,8 +23,8 @@ export function BlueprintCard({
 }: BlueprintCardProps) {
   const hasBanner = !!blueprint.banner_url;
   const summary = buildFeedSummary({
-    primary: blueprint.llm_review,
-    secondary: blueprint.mix_notes,
+    primary: blueprint.mix_notes,
+    secondary: blueprint.inventory_title ? `From ${blueprint.inventory_title}` : null,
     fallback: blueprint.inventory_title ? `From ${blueprint.inventory_title}` : 'Community blueprint',
     maxChars: 170,
   });
@@ -51,17 +51,16 @@ export function BlueprintCard({
               <img
                 src={blueprint.banner_url!}
                 alt=""
-                className="absolute inset-0 h-full w-full object-cover opacity-30"
+                className="absolute inset-0 h-full w-full object-cover opacity-40"
                 loading="lazy"
               />
-              <div className="absolute inset-0 bg-gradient-to-b from-background/55 via-background/80 to-background/95" />
+              <div className="absolute inset-0 bg-gradient-to-b from-background/45 via-background/70 to-background/90" />
             </>
           )}
 
           <div className="relative flex flex-col h-full">
             <div className="flex items-start justify-between gap-2 mb-2">
-              <h3 className="font-semibold text-lg line-clamp-1">{blueprint.title}</h3>
-              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+              <h3 className="font-semibold text-base leading-tight line-clamp-2">{blueprint.title}</h3>
             </div>
 
             <p className="text-sm text-muted-foreground line-clamp-2 mb-3 flex-grow">

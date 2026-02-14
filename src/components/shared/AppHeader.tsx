@@ -20,6 +20,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const navigate = useNavigate();
   const [showHelp, setShowHelp] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [hideFloatingNav, setHideFloatingNav] = useState(false);
 
   const createParam = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -45,6 +46,30 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const navMode = user ? 'all' : 'public';
   const hideCreate = location.pathname.startsWith('/auth');
 
+  useEffect(() => {
+    if (!showFloatingNav) return;
+    let lastY = window.scrollY;
+    let ticking = false;
+
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        const delta = y - lastY;
+        const shouldHide = y > 48 && delta > 6;
+        const shouldShow = delta < -6 || y < 32;
+        if (shouldHide) setHideFloatingNav(true);
+        else if (shouldShow) setHideFloatingNav(false);
+        lastY = y;
+        ticking = false;
+      });
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [showFloatingNav]);
+
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background">
@@ -67,11 +92,12 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="gap-2 shrink-0"
+                className="gap-2 shrink-0 h-8 px-2 text-xs"
                 onClick={() => setShowCreate(true)}
+                aria-label="Create"
               >
                 <Plus className="h-4 w-4" />
-                Create
+                <span className="hidden lg:inline">Create</span>
               </Button>
             )}
             <Button
@@ -91,7 +117,11 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
       </header>
       {showFloatingNav && (
         <div className="sm:hidden">
-          <AppNavigation variant="floating" mode={navMode} />
+          <AppNavigation
+            variant="floating"
+            mode={navMode}
+            className={hideFloatingNav ? 'translate-y-24 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}
+          />
         </div>
       )}
       <HelpOverlay open={showHelp} onOpenChange={setShowHelp} />
