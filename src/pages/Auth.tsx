@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -31,8 +31,7 @@ export default function Auth() {
 
   // Redirect if already logged in
   if (user) {
-    navigate('/');
-    return null;
+    return <Navigate to="/wall" replace />;
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -52,7 +51,7 @@ export default function Auth() {
         title: 'Welcome back!',
         description: 'You have successfully logged in.',
       });
-      navigate('/');
+      navigate('/wall', { replace: true });
     }
     
     setIsLoading(false);
@@ -75,7 +74,7 @@ export default function Auth() {
         title: 'Account created!',
         description: 'Welcome to Blueprints. Your account is ready.',
       });
-      navigate('/');
+      navigate('/wall', { replace: true });
     }
     
     setIsLoading(false);
