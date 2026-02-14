@@ -3,12 +3,29 @@ import { cn } from '@/lib/utils';
 export function WallToWallGrid<T>({
   items,
   className,
+  variant = 'table',
   renderItem,
 }: {
   items: T[];
   className?: string;
+  variant?: 'table' | 'tiles';
   renderItem: (item: T, info: { index: number }) => React.ReactNode;
 }) {
+  if (variant === 'tiles') {
+    return (
+      <div className={cn('grid grid-cols-1 md:grid-cols-2 gap-2', className)}>
+        {items.map((item, index) => (
+          <div
+            key={index}
+            className="border border-border/40 rounded-md p-3 hover:bg-muted/10 transition-colors"
+          >
+            {renderItem(item, { index })}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   const len = items.length;
   const lastRowStart = len <= 1 ? 0 : Math.floor((len - 1) / 2) * 2;
 
@@ -38,4 +55,3 @@ export function WallToWallGrid<T>({
     </div>
   );
 }
-

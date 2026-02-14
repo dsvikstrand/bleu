@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Input } from '@/components/ui/input';
@@ -10,7 +11,6 @@ import { useBlueprintSearch, type BlueprintSort } from '@/hooks/useBlueprintSear
 import { usePopularBlueprintTags } from '@/hooks/usePopularBlueprintTags';
 import { useSuggestedBlueprints } from '@/hooks/useSuggestedBlueprints';
 import { useToggleBlueprintLike } from '@/hooks/useBlueprints';
-import { useTagFollows } from '@/hooks/useTagFollows';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { BlueprintCard } from '@/components/blueprint/BlueprintCard';
@@ -19,11 +19,15 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Filter, Plus, Search } from 'lucide-react';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { WallToWallGrid } from '@/components/layout/WallToWallGrid';
+import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
+import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Blueprints() {
   const location = useLocation();
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<string>('any');
   const [sort, setSort] = useState<BlueprintSort>('popular');
   const [showBlueprintInfo, setShowBlueprintInfo] = useState(false);
   const { user } = useAuth();
@@ -35,7 +39,6 @@ export default function Blueprints() {
   const { data: popularTags = [], isLoading: tagsLoading } = usePopularBlueprintTags(12);
   const { data: suggestedBlueprints = [], isLoading: suggestedLoading } = useSuggestedBlueprints(6);
   const toggleLike = useToggleBlueprintLike();
-  const { followedIds, toggleFollow } = useTagFollows();
 
   const suggestedIds = new Set(suggestedBlueprints.map((bp) => bp.id));
   const mainBlueprints = useMemo(() => {
@@ -71,25 +74,6 @@ export default function Blueprints() {
     if (slug) setQuery('');
   };
 
-  const handleTagToggle = async (tag: { id: string; slug: string }) => {
-    if (!user) {
-      toast({
-        title: 'Sign in required',
-        description: 'Please sign in to join channels.',
-      });
-      return;
-    }
-    try {
-      await toggleFollow(tag);
-    } catch (error) {
-      toast({
-        title: 'Channel update failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   // Keep newest sorting strict: suggestions should not preempt latest ordering.
   const showSuggestions = !effectiveQuery && user && sort === 'popular';
 
@@ -99,6 +83,39 @@ export default function Blueprints() {
     if (suggestedLoading) return mainBlueprints;
     return [...suggestedBlueprints, ...mainBlueprints];
   }, [showSuggestions, suggestedBlueprints, suggestedLoading, mainBlueprints]);
+
+  const filteredBlueprints = useMemo(() => {
+    if (selectedChannel === 'any') return displayBlueprints;
+    return displayBlueprints.filter((blueprint) => {
+      const channelSlug = resolvePrimaryChannelFromTags(blueprint.tags.map((tag) => tag.slug));
+      return channelSlug === selectedChannel;
+    });
+  }, [displayBlueprints, selectedChannel]);
+
+  const blueprintIds = useMemo(() => filteredBlueprints.map((bp) => bp.id), [filteredBlueprints]);
+  const { data: commentCountsByBlueprintId = {} } = useQuery({
+    queryKey: ['blueprints-comment-counts', blueprintIds],
+    enabled: blueprintIds.length > 0,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('blueprint_comments')
+        .select('blueprint_id')
+        .in('blueprint_id', blueprintIds);
+
+      if (error) throw error;
+
+      return (data || []).reduce<Record<string, number>>((acc, row) => {
+        acc[row.blueprint_id] = (acc[row.blueprint_id] || 0) + 1;
+        return acc;
+      }, {});
+    },
+  });
+
+  const channelOptions = useMemo(() => {
+    const sorted = [...CHANNELS_CATALOG].sort((a, b) => a.priority - b.priority);
+    return [{ slug: 'any', name: 'Any channel' }, ...sorted.map((channel) => ({ slug: channel.slug, name: channel.name }))];
+  }, []);
 
   return (
     <PageRoot>
@@ -130,7 +147,7 @@ export default function Blueprints() {
               <Link to={`${location.pathname}?create=1`}>
                 <Button size="sm" className="gap-2">
                   <Plus className="h-4 w-4" />
-                  + Create
+                  Create
                 </Button>
               </Link>
             </div>
@@ -179,9 +196,24 @@ export default function Blueprints() {
               <SheetContent side="right" className="w-full sm:max-w-md">
                 <SheetHeader>
                   <SheetTitle>Filters</SheetTitle>
-                  <SheetDescription>Filter by tag to narrow results.</SheetDescription>
+                  <SheetDescription>Filter by channel or tag to narrow results.</SheetDescription>
                 </SheetHeader>
                 <div className="mt-6 space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold">Channel</p>
+                    <Select value={selectedChannel} onValueChange={(value) => setSelectedChannel(value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Any channel" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {channelOptions.map((option) => (
+                          <SelectItem key={option.slug} value={option.slug}>
+                            {option.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   {!tagsLoading && popularTags.length > 0 ? (
                     <div className="space-y-2">
                       <p className="text-sm font-semibold">Popular tags</p>
@@ -239,6 +271,7 @@ export default function Blueprints() {
 
           {isLoading ? (
             <WallToWallGrid
+              variant="tiles"
               items={Array.from({ length: 6 })}
               renderItem={(_, { index }) => (
                 <div className="space-y-3">
@@ -252,15 +285,16 @@ export default function Blueprints() {
                 </div>
               )}
             />
-          ) : displayBlueprints.length > 0 ? (
+          ) : filteredBlueprints.length > 0 ? (
             <WallToWallGrid
-              items={displayBlueprints}
+              variant="tiles"
+              items={filteredBlueprints}
               renderItem={(blueprint) => (
                 <BlueprintCard
                   blueprint={blueprint}
                   onLike={handleLike}
-                  followedTagIds={followedIds}
-                  onToggleTag={handleTagToggle}
+                  onTagClick={(tagSlug) => handleTagSelect(tagSlug)}
+                  commentCount={commentCountsByBlueprintId[blueprint.id] || 0}
                   variant="grid_flat"
                 />
               )}
@@ -278,7 +312,7 @@ export default function Blueprints() {
                   </Button>
                 ) : (
                   <Link to={`${location.pathname}?create=1`}>
-                    <Button>+ Create</Button>
+                    <Button>Create</Button>
                   </Link>
                 )}
               </div>

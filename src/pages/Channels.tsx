@@ -349,9 +349,8 @@ export default function Channels() {
     );
   };
 
-  const renderChannelRow = (channel: ChannelViewModel, options?: { showSlug?: boolean }) => {
+  const renderChannelRow = (channel: ChannelViewModel) => {
     const ChannelIcon = getChannelIcon(channel.icon);
-    const showSlug = options?.showSlug ?? false;
 
     return (
       <Link key={channel.slug} to={`/b/${channel.slug}`} className="block">
@@ -361,7 +360,6 @@ export default function Channels() {
               <ChannelIcon className="h-4 w-4" />
             </div>
             <div className="space-y-1 min-w-0">
-              {showSlug && <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>}
               <p className="text-sm font-medium">{channel.name}</p>
               <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
             </div>
@@ -406,14 +404,14 @@ export default function Channels() {
         <PageDivider />
 
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Channels</h2>
+          <h2 className="text-lg font-semibold">Your Channels</h2>
           {joinedChannels.length === 0 ? (
             <div className="border border-border/40 px-3 py-3 text-sm text-muted-foreground">
               You have not joined any channels yet.
             </div>
           ) : (
             <div className="divide-y divide-border/40 border-y border-border/40">
-              {visibleJoinedChannels.map((channel) => renderChannelRow(channel, { showSlug: true }))}
+              {visibleJoinedChannels.map((channel) => renderChannelRow(channel))}
               {joinedChannels.length > MAX_JOINED_CHANNELS_DISPLAY && (
                 <div className="flex items-center justify-between px-1 py-2">
                   <p className="text-xs text-muted-foreground">
@@ -518,7 +516,7 @@ export default function Channels() {
             </div>
           ) : (
             <div className="divide-y divide-border/40 border-y border-border/40">
-              {moreChannels.map((channel) => renderChannelRow(channel, { showSlug: false }))}
+              {moreChannels.map((channel) => renderChannelRow(channel))}
             </div>
           )}
         </section>
