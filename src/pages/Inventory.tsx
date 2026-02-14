@@ -1,24 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { Filter, Plus, Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { InventoryCard } from '@/components/inventory/InventoryCard';
-import { TagFilterChips } from '@/components/inventory/TagFilterChips';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { WallToWallGrid } from '@/components/layout/WallToWallGrid';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useInventorySearch, useToggleInventoryLike, type InventorySort } from '@/hooks/useInventories';
-import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useSuggestedInventories } from '@/hooks/useSuggestedInventories';
 import { buildUrlWithChannel, getPostableChannel } from '@/lib/channelPostContext';
 import { logMvpEvent } from '@/lib/logEvent';
+import { getCatalogChannelTagSlugs, isPostableChannelSlug } from '@/lib/channelPostContext';
 
 export default function Inventory() {
   const location = useLocation();
@@ -27,7 +25,6 @@ export default function Inventory() {
   const postChannel = postChannelSlug ? getPostableChannel(postChannelSlug) : null;
 
   const [query, setQuery] = useState('');
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [sort, setSort] = useState<InventorySort>('popular');
   const [showLibraryInfo, setShowLibraryInfo] = useState(false);
 
@@ -35,7 +32,7 @@ export default function Inventory() {
   const { toast } = useToast();
   const hasLoggedView = useRef(false);
 
-  const effectiveQuery = selectedTag || query;
+  const effectiveQuery = query;
 
   useEffect(() => {
     if (hasLoggedView.current) return;
@@ -48,7 +45,6 @@ export default function Inventory() {
   }, [user?.id]);
 
   const { data: inventories, isLoading } = useInventorySearch(effectiveQuery, sort);
-  const { data: popularTags = [], isLoading: tagsLoading } = usePopularInventoryTags(12);
   const { data: suggestedInventories = [], isLoading: suggestedLoading } = useSuggestedInventories(6);
   const toggleLike = useToggleInventoryLike();
 
@@ -87,10 +83,29 @@ export default function Inventory() {
     }
   };
 
-  const handleTagSelect = (slug: string | null) => {
-    setSelectedTag(slug);
-    if (slug) setQuery('');
-  };
+  const curatedChannelTagSlugs = useMemo(() => {
+    const all = new Set(getCatalogChannelTagSlugs());
+    // Only postable channels count as "channel tags" for inventories in MVP.
+    Array.from(all).forEach((slug) => {
+      if (!isPostableChannelSlug(slug)) all.delete(slug);
+    });
+    return all;
+  }, []);
+
+  const filteredInventories = useMemo(() => {
+    const list = displayInventories.filter((inv) => {
+      const tagSlugs = inv.tags.map((t) => t.slug);
+      const hasChannelTag = tagSlugs.some((slug) => curatedChannelTagSlugs.has(slug));
+      if (!hasChannelTag) return false; // hide legacy inventories with non-channel tags
+
+      if (postChannel) {
+        return tagSlugs.includes(postChannel.tagSlug);
+      }
+      return true;
+    });
+
+    return list;
+  }, [displayInventories, curatedChannelTagSlugs, postChannel]);
 
   return (
     <PageRoot>
@@ -155,37 +170,11 @@ export default function Inventory() {
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
-                if (e.target.value) setSelectedTag(null);
               }}
-              placeholder="Search libraries by title or tag..."
+              placeholder="Search libraries by title..."
               className="border-none shadow-none focus-visible:ring-0 bg-transparent"
             />
           </div>
-
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Filter className="h-4 w-4" />
-                Filters
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-full sm:max-w-md">
-              <SheetHeader>
-                <SheetTitle>Filters</SheetTitle>
-                <SheetDescription>Filter by tag to narrow down libraries.</SheetDescription>
-              </SheetHeader>
-              <div className="mt-6 space-y-4">
-                {!tagsLoading && popularTags.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold">Popular tags</p>
-                    <TagFilterChips tags={popularTags} selectedTag={selectedTag} onSelectTag={handleTagSelect} variant="wrap" />
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Loading tags…</p>
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
 
           <div className="w-full sm:w-56">
             <Select value={sort} onValueChange={(value) => setSort(value as InventorySort)}>
@@ -240,10 +229,10 @@ export default function Inventory() {
                 </div>
               )}
             />
-          ) : displayInventories.length > 0 ? (
+          ) : filteredInventories.length > 0 ? (
             <WallToWallGrid
               variant="tiles"
-              items={displayInventories}
+              items={filteredInventories}
               renderItem={(inventory) => (
                 <InventoryCard
                   inventory={inventory}

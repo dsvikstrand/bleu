@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { TagInput } from '@/components/shared/TagInput';
+
 import { 
   InventoryCreateTour, 
   InventoryTourBanner, 
@@ -23,8 +23,8 @@ import {
 import { useCreateInventory } from '@/hooks/useInventories';
 import { useToast } from '@/hooks/use-toast';
 import { getFriendlyErrorMessage } from '@/lib/errors';
-import { useTagSuggestions } from '@/hooks/useTags';
-import { useRecentTags } from '@/hooks/useRecentTags';
+import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
+import { isPostableChannelSlug } from '@/lib/channelPostContext';
 import { DEFAULT_ADDITIONAL_SECTIONS } from '@/lib/reviewSections';
 import { ChevronDown, Loader2, Settings2, Sparkles, Wand2, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
@@ -59,9 +59,7 @@ export default function InventoryCreate() {
   const { toast } = useToast();
   const { session, isLoading } = useAuth();
   const createInventory = useCreateInventory();
-  const { data: tagSuggestions } = useTagSuggestions();
-  const { recentTags, addRecentTags } = useRecentTags();
-  const postChannelSlug = searchParams.get('channel') || '';
+  const postChannelSlug = (searchParams.get('channel') || '').trim();
   const postChannel = postChannelSlug ? getPostableChannel(postChannelSlug) : null;
 
   // Step 1: Promptless controls (click/press) + optional name/notes
@@ -83,9 +81,8 @@ export default function InventoryCreate() {
   const [title, setTitle] = useState('');
   const [promptInventory, setPromptInventory] = useState('');
   const [generatedSchema, setGeneratedSchema] = useState<GeneratedSchema | null>(null);
-  const [tags, setTags] = useState<string[]>([]);
+  const [channelSlug, setChannelSlug] = useState('');
   const [isPublic, setIsPublic] = useState(true);
-  const maxInventoryTags = 5;
   const maxPreferredCategories = 6;
 
   // Help & Tour state
@@ -221,11 +218,6 @@ export default function InventoryCreate() {
         setTitle(inferredTitle);
       }
 
-      // Use suggested tags if available
-      if (schema.suggestedTags && schema.suggestedTags.length > 0) {
-        setTags(schema.suggestedTags.slice(0, 4));
-      }
-
       toast({
         title: 'Library generated!',
         description: `Created ${schema.categories.length} categories with ${schema.categories.reduce((sum, c) => sum + c.items.length, 0)} items.`,
@@ -274,19 +266,11 @@ export default function InventoryCreate() {
       return;
     }
 
-    if (tags.length === 0) {
+    const selectedChannelSlug = postChannel?.slug || channelSlug;
+    if (!selectedChannelSlug || !isPostableChannelSlug(selectedChannelSlug)) {
       toast({
-        title: 'Tags required',
-        description: 'Add at least one tag to help discovery.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (tags.length > maxInventoryTags) {
-      toast({
-        title: 'Too many tags',
-        description: `Please use ${maxInventoryTags} tags or fewer.`,
+        title: 'Channel required',
+        description: 'Select a channel to connect this library to.',
         variant: 'destructive',
       });
       return;
@@ -294,6 +278,7 @@ export default function InventoryCreate() {
 
     try {
       const promptCategories = categoryNames.join(', ');
+      const finalChannelSlug = postChannel?.slug || selectedChannelSlug;
       const inventory = await createInventory.mutateAsync({
         title: title.trim(),
         promptInventory: promptInventory.trim(),
@@ -301,19 +286,17 @@ export default function InventoryCreate() {
         generatedSchema: generatedSchema as unknown as Json,
         reviewSections: DEFAULT_ADDITIONAL_SECTIONS,
         includeScore: true,
-        tags,
+        tags: [finalChannelSlug],
         isPublic,
         generationControls: makeLibraryGenerationControlsV0({
           controls: { domain, domainCustom: domain === 'custom' ? domainCustom : undefined, audience, style, strictness, lengthHint },
           optional: {
             name: title.trim() || undefined,
             notes: notes.trim() || undefined,
-            tags,
+            tags: [finalChannelSlug],
           },
         }) as unknown as Json,
       });
-
-      addRecentTags(tags);
       navigate(`/inventory/${inventory.id}/build`);
     } catch (error) {
       toast({
@@ -744,8 +727,28 @@ export default function InventoryCreate() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Tags</Label>
-                  <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions || []} maxTags={maxInventoryTags} />
+                  <Label>Channel</Label>
+                  {postChannel ? (
+                    <div className="rounded-md border border-border/40 px-3 py-2 text-sm">
+                      b/{postChannel.slug}
+                    </div>
+                  ) : (
+                    <Select value={channelSlug} onValueChange={setChannelSlug}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a channel" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CHANNELS_CATALOG
+                          .filter((c) => isPostableChannelSlug(c.slug))
+                          .sort((a, b) => a.priority - b.priority)
+                          .map((c) => (
+                            <SelectItem key={c.slug} value={c.slug}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
                   <div>

@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Heart, FileStack } from 'lucide-react';
 import type { InventoryListItem } from '@/hooks/useInventories';
 import { cn } from '@/lib/utils';
+import { isPostableChannelSlug } from '@/lib/channelPostContext';
 
 interface InventoryCardProps {
   inventory: InventoryListItem;
@@ -13,8 +13,8 @@ interface InventoryCardProps {
 }
 
 export function InventoryCard({ inventory, onLike, linkSearch, variant = 'grid_flat' }: InventoryCardProps) {
-  const displayTags = inventory.tags.slice(0, 3);
-  const extraTagCount = inventory.tags.length - 3;
+  const channelSlug =
+    inventory.tags.map((t) => t.slug).find((slug) => isPostableChannelSlug(slug)) || null;
 
   return (
     <Link
@@ -29,26 +29,14 @@ export function InventoryCard({ inventory, onLike, linkSearch, variant = 'grid_f
         )}
       >
         <div className={cn('p-1 flex flex-col h-full', variant === 'grid_flat' ? '' : 'p-0')}>
+          {channelSlug && (
+            <p className="text-[11px] font-semibold tracking-wide text-foreground/75 mb-1">b/{channelSlug}</p>
+          )}
           <h3 className="font-semibold text-lg line-clamp-1 mb-1">{inventory.title}</h3>
 
           <p className="text-sm text-muted-foreground line-clamp-2 mb-3 flex-grow">
             {inventory.prompt_inventory}
           </p>
-
-          {inventory.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {displayTags.map((tag) => (
-                <Badge key={tag.id} variant="secondary" className="text-xs">
-                  #{tag.slug}
-                </Badge>
-              ))}
-              {extraTagCount > 0 && (
-                <Badge variant="outline" className="text-xs text-muted-foreground">
-                  +{extraTagCount} more
-                </Badge>
-              )}
-            </div>
-          )}
 
           <div className="flex items-center justify-between pt-2 border-t border-border/40">
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -78,4 +66,3 @@ export function InventoryCard({ inventory, onLike, linkSearch, variant = 'grid_f
     </Link>
   );
 }
-

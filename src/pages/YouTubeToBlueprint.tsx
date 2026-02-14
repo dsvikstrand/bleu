@@ -11,6 +11,16 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCreateBlueprint } from '@/hooks/useBlueprints';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { getFunctionUrl } from '@/config/runtime';
 import { logMvpEvent } from '@/lib/logEvent';
 import { useTagFollows } from '@/hooks/useTagFollows';
@@ -138,7 +148,7 @@ export default function YouTubeToBlueprint() {
   const { session, user } = useAuth();
   const { toast } = useToast();
   const createBlueprint = useCreateBlueprint();
-  const { getFollowState } = useTagFollows();
+  const { getFollowState, joinChannel } = useTagFollows();
 
   const postChannelSlug = (searchParams.get('channel') || '').trim();
   const postChannel = postChannelSlug ? getPostableChannel(postChannelSlug) : null;
@@ -146,6 +156,8 @@ export default function YouTubeToBlueprint() {
   const postChannelTagId = postChannelTagRows.find((row) => row.slug === postChannel?.tagSlug)?.id || null;
   const postChannelFollowState = postChannelTagId ? getFollowState({ id: postChannelTagId }) : 'not_joined';
   const isPostChannelJoined = postChannelFollowState === 'joined' || postChannelFollowState === 'leaving';
+  const [showJoinToPublishDialog, setShowJoinToPublishDialog] = useState(false);
+  const [isJoiningToPublish, setIsJoiningToPublish] = useState(false);
 
   const [videoUrl, setVideoUrl] = useState('');
   const [generateReview, setGenerateReview] = useState(true);
@@ -293,22 +305,18 @@ export default function YouTubeToBlueprint() {
     }
   }
 
-  async function publishGeneratedBlueprint() {
+  async function publishGeneratedBlueprint(options?: { bypassJoinCheck?: boolean }) {
     if (!result || !user || isPublishing) return;
     if (!postChannel) {
       toast({
         title: 'Choose a channel to post',
-        description: 'Public blueprints must be posted to a channel. Start from a channel page or use + Create.',
+        description: 'Public blueprints must be posted to a channel. Start from a channel page or use Create.',
         variant: 'destructive',
       });
       return;
     }
-    if (!isPostChannelJoined) {
-      toast({
-        title: `Join b/${postChannel.slug} to post`,
-        description: 'Join the channel first, then publish your blueprint.',
-        variant: 'destructive',
-      });
+    if (!options?.bypassJoinCheck && !isPostChannelJoined) {
+      setShowJoinToPublishDialog(true);
       return;
     }
     setIsPublishing(true);
@@ -341,6 +349,24 @@ export default function YouTubeToBlueprint() {
       });
     } finally {
       setIsPublishing(false);
+    }
+  }
+
+  async function handleJoinAndPublish() {
+    if (!postChannel || !postChannelTagId) return;
+    setIsJoiningToPublish(true);
+    try {
+      await joinChannel({ id: postChannelTagId, slug: postChannel.tagSlug });
+      setShowJoinToPublishDialog(false);
+      await publishGeneratedBlueprint({ bypassJoinCheck: true });
+    } catch (error) {
+      toast({
+        title: 'Join failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsJoiningToPublish(false);
     }
   }
 
@@ -481,8 +507,8 @@ export default function YouTubeToBlueprint() {
               ) : !isPostChannelJoined ? (
                 <div className="rounded-md border border-border/40 p-3 flex items-center justify-between gap-3">
                   <p className="text-sm text-muted-foreground">Join b/{postChannel.slug} to publish publicly.</p>
-                  <Button asChild size="sm" variant="outline">
-                    <Link to={`/b/${postChannel.slug}`}>Join</Link>
+                  <Button size="sm" variant="outline" onClick={() => setShowJoinToPublishDialog(true)}>
+                    Join
                   </Button>
                 </div>
               ) : (
@@ -494,6 +520,31 @@ export default function YouTubeToBlueprint() {
               )}
             </PageSection>
           </>
+        )}
+
+        {postChannel && (
+          <AlertDialog open={showJoinToPublishDialog} onOpenChange={setShowJoinToPublishDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Join b/{postChannel.slug} to publish</AlertDialogTitle>
+                <AlertDialogDescription>
+                  You need to join this channel before you can publish publicly.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isJoiningToPublish}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void handleJoinAndPublish();
+                  }}
+                  disabled={isJoiningToPublish}
+                >
+                  {isJoiningToPublish ? 'Joining...' : 'Join'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         )}
         <AppFooter />
       </PageMain>

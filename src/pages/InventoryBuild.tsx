@@ -130,7 +130,7 @@ export default function InventoryBuild() {
   const { recentTags, addRecentTags } = useRecentTags();
   const createBlueprint = useCreateBlueprint();
   const updateBlueprint = useUpdateBlueprint();
-  const { getFollowState } = useTagFollows();
+  const { getFollowState, joinChannel } = useTagFollows();
 
   const postChannelSlug = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -142,6 +142,8 @@ export default function InventoryBuild() {
   const postChannelTagId = postChannelTagRows.find((row) => row.slug === postChannel?.tagSlug)?.id || null;
   const postChannelFollowState = postChannelTagId ? getFollowState({ id: postChannelTagId }) : 'not_joined';
   const isPostChannelJoined = postChannelFollowState === 'joined' || postChannelFollowState === 'leaving';
+  const [showJoinToPublishDialog, setShowJoinToPublishDialog] = useState(false);
+  const [isJoiningToPublish, setIsJoiningToPublish] = useState(false);
 
   // Blueprint state
   const [title, setTitle] = useState('');
@@ -999,7 +1001,7 @@ export default function InventoryBuild() {
     }
   }, [inventory, resolveAccessToken, title, tags, toast]);
 
-  const handlePublish = async () => {
+  const handlePublish = async (options?: { bypassJoinCheck?: boolean }) => {
     if (isEditing && blueprintId && !isOwner) {
       toast({
         title: 'Permission denied',
@@ -1024,17 +1026,13 @@ export default function InventoryBuild() {
       if (!postChannel) {
         toast({
           title: 'Choose a channel to post',
-          description: 'Public blueprints must be posted to a channel. Start from a channel page or use + Create.',
+          description: 'Public blueprints must be posted to a channel. Start from a channel page or use Create.',
           variant: 'destructive',
         });
         return;
       }
-      if (!isPostChannelJoined) {
-        toast({
-          title: `Join b/${postChannel.slug} to post`,
-          description: 'Join the channel first, then publish your blueprint.',
-          variant: 'destructive',
-        });
+      if (!options?.bypassJoinCheck && !isPostChannelJoined) {
+        setShowJoinToPublishDialog(true);
         return;
       }
     }
@@ -1233,6 +1231,24 @@ export default function InventoryBuild() {
         description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleJoinAndPublish = async () => {
+    if (!postChannel || !postChannelTagId) return;
+    setIsJoiningToPublish(true);
+    try {
+      await joinChannel({ id: postChannelTagId, slug: postChannel.tagSlug });
+      setShowJoinToPublishDialog(false);
+      await handlePublish({ bypassJoinCheck: true });
+    } catch (error) {
+      toast({
+        title: 'Join failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsJoiningToPublish(false);
     }
   };
 
@@ -1940,7 +1956,7 @@ export default function InventoryBuild() {
                       <Switch checked={isPublic} onCheckedChange={setIsPublic} />
                     </div>
                     <Button
-                      onClick={handlePublish}
+                      onClick={() => handlePublish()}
                       disabled={isEditing ? updateBlueprint.isPending : createBlueprint.isPending}
                       className="w-full gap-2"
                       size="lg"
@@ -1948,6 +1964,31 @@ export default function InventoryBuild() {
                       <Sparkles className="h-4 w-4" />
                       {isEditing ? 'Save Changes' : 'Publish Blueprint'}
                     </Button>
+
+                    {postChannel && (
+                      <AlertDialog open={showJoinToPublishDialog} onOpenChange={setShowJoinToPublishDialog}>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Join b/{postChannel.slug} to publish</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              You need to join this channel before you can publish publicly.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isJoiningToPublish}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={(e) => {
+                                e.preventDefault();
+                                void handleJoinAndPublish();
+                              }}
+                              disabled={isJoiningToPublish}
+                            >
+                              {isJoiningToPublish ? 'Joining...' : 'Join'}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </CardContent>
                 </Card>
               </section>

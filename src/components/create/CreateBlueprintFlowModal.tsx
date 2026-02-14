@@ -25,7 +25,7 @@ export function CreateBlueprintFlowModal({ open, onOpenChange, presetChannelSlug
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { getFollowState, joinChannel } = useTagFollows();
+  const { getFollowState } = useTagFollows();
 
   const [step, setStep] = useState<CreateFlowStep>('pick_channel');
   const [search, setSearch] = useState('');
@@ -95,26 +95,6 @@ export function CreateBlueprintFlowModal({ open, onOpenChange, presetChannelSlug
     const state = getFollowState({ id: tagId });
     if (state === 'joining' || state === 'leaving') return;
 
-    if (state !== 'joined') {
-      setPendingSlug(channelSlug);
-      try {
-        await joinChannel({ id: tagId, slug: channelTagSlug });
-        toast({
-          title: `Joined b/${channelSlug}`,
-          description: 'You can post in this channel now.',
-        });
-      } catch (error) {
-        toast({
-          title: 'Join failed',
-          description: error instanceof Error ? error.message : 'Please try again.',
-          variant: 'destructive',
-        });
-        return;
-      } finally {
-        setPendingSlug(null);
-      }
-    }
-
     setSelectedChannelSlug(channelSlug);
     setStep('pick_source');
   }
@@ -135,13 +115,14 @@ export function CreateBlueprintFlowModal({ open, onOpenChange, presetChannelSlug
     : selectedChannelSlug
       ? `Posting to b/${selectedChannelSlug}`
       : 'Pick a source.';
+  const channelPickerDescription = 'Pick a curated channel. You will be asked to join when you publish.';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogDescription>{step === 'pick_channel' ? channelPickerDescription : description}</DialogDescription>
         </DialogHeader>
 
         {step === 'pick_channel' ? (
@@ -214,7 +195,7 @@ export function CreateBlueprintFlowModal({ open, onOpenChange, presetChannelSlug
                   <Layers className="h-4 w-4 text-muted-foreground" />
                   <div className="text-sm font-semibold">Library</div>
                 </div>
-                <div className="text-xs text-muted-foreground">Build from a library you already have.</div>
+                <div className="text-xs text-muted-foreground">Build from scratch or use a library.</div>
                 <Button onClick={() => goToSource('library')} className="mt-2">
                   Continue
                 </Button>

@@ -69,19 +69,12 @@ async function ensureTags(slugs: string[], userId: string): Promise<InventoryTag
   const existingTags = existing || [];
   const existingSlugs = new Set(existingTags.map((tag) => tag.slug));
   const missing = normalized.filter((slug) => !existingSlugs.has(slug));
-
-  let created: InventoryTag[] = [];
   if (missing.length > 0) {
-    const { data: createdData, error: createError } = await supabase
-      .from('tags')
-      .insert(missing.map((slug) => ({ slug, created_by: userId })))
-      .select('id, slug');
-
-    if (createError) throw createError;
-    created = createdData || [];
+    // MVP: inventories are channel-scoped; channel tag slugs must already exist in the curated set.
+    throw new Error(`Channel tag(s) not found: ${missing.join(', ')}`);
   }
 
-  return [...existingTags, ...created];
+  return existingTags;
 }
 
 async function hydrateInventories(rows: InventoryRow[], userId?: string | null) {
@@ -164,30 +157,7 @@ export function useInventorySearch(search: string, sort: InventorySort = 'popula
         return hydrateInventories(inventories, user?.id);
       }
 
-      const tagSlug = normalizeTag(trimmed);
       const matchedInventories: InventoryRow[] = [];
-
-      if (tagSlug) {
-        const { data: tagData } = await supabase.from('tags').select('id').eq('slug', tagSlug).maybeSingle();
-        if (tagData?.id) {
-          const { data: inventoryTagRows } = await supabase
-            .from('inventory_tags')
-            .select('inventory_id')
-            .eq('tag_id', tagData.id);
-
-          const inventoryIds = (inventoryTagRows || []).map((row) => row.inventory_id);
-          if (inventoryIds.length > 0) {
-            const { data } = await supabase
-              .from('inventories')
-              .select(INVENTORY_FIELDS)
-              .in('id', inventoryIds)
-              .order(orderBy.column, { ascending: orderBy.ascending });
-
-            matchedInventories.push(...(data || []));
-          }
-        }
-      }
-
       const { data: titleMatches } = await supabase
         .from('inventories')
         .select(INVENTORY_FIELDS)
