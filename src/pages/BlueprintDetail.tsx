@@ -17,6 +17,7 @@ import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
+import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 
 type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
@@ -138,82 +139,84 @@ export default function BlueprintDetail() {
         ) : blueprint ? (
           <>
             <PageSection className="space-y-2">
-              <div className="flex items-center gap-3">
+              <div className="text-xs font-semibold text-muted-foreground">
+                {resolveChannelLabelForBlueprint(blueprint.tags.map((tag) => tag.slug))}
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => navigate(-1)}
+                    aria-label="Go back"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <h1 className="text-2xl font-semibold leading-tight break-words">{blueprint.title}</h1>
+                </div>
+                {isOwner && (
+                  <Link to={`/blueprint/${blueprint.id}/edit`} className="shrink-0">
+                    <Button variant="outline" size="sm">
+                      Edit
+                    </Button>
+                  </Link>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <Link
+                  to={`/u/${blueprint.creator_user_id}`}
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0"
+                >
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage src={blueprint.creator_profile?.avatar_url || undefined} />
+                    <AvatarFallback className="text-[10px]">
+                      {(blueprint.creator_profile?.display_name || 'U').slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm text-muted-foreground truncate">
+                    {blueprint.creator_profile?.display_name || 'Anonymous'}
+                  </span>
+                </Link>
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {formatDistanceToNow(new Date(blueprint.created_at), { addSuffix: true })}
+                </span>
+              </div>
+
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-wrap gap-2 flex-1 min-w-0">
+                  {blueprint.tags.map((tag) => (
+                    <Badge
+                      key={tag.id}
+                      variant="outline"
+                      className={`text-xs cursor-pointer transition-colors border ${
+                        followedIds.has(tag.id)
+                          ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                          : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+                      }`}
+                      onClick={() => handleTagToggle(tag)}
+                    >
+                      #{tag.slug}
+                    </Badge>
+                  ))}
+                </div>
                 <Button
                   variant="ghost"
-                  size="icon"
-                  onClick={() => navigate(-1)}
-                  aria-label="Go back"
+                  size="sm"
+                  className={`shrink-0 ${blueprint.user_liked ? 'text-red-500' : 'text-muted-foreground'}`}
+                  onClick={handleLike}
                 >
-                  <ArrowLeft className="h-4 w-4" />
+                  <Heart className={`h-4 w-4 ${blueprint.user_liked ? 'fill-current' : ''}`} />
+                  <span className="ml-1 text-xs">{blueprint.likes_count}</span>
                 </Button>
-                <h1 className="text-2xl font-semibold leading-tight">{blueprint.title}</h1>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {blueprint.tags.map((tag) => (
-                  <Badge
-                    key={tag.id}
-                    variant="outline"
-                    className={`text-xs cursor-pointer transition-colors border ${
-                      followedIds.has(tag.id)
-                        ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                        : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-                    }`}
-                    onClick={() => handleTagToggle(tag)}
-                  >
-                    #{tag.slug}
-                  </Badge>
-                ))}
               </div>
             </PageSection>
 
             <PageDivider />
             <section className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Link
-                  to={`/u/${blueprint.creator_user_id}`}
-                  className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-                >
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={blueprint.creator_profile?.avatar_url || undefined} />
-                    <AvatarFallback>
-                      {(blueprint.creator_profile?.display_name || 'U').slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">
-                      {blueprint.creator_profile?.display_name || 'Anonymous'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(blueprint.created_at), { addSuffix: true })}
-                    </p>
-                  </div>
-                </Link>
-                <div className="flex items-center gap-2">
-                  {isOwner && (
-                    <Link to={`/blueprint/${blueprint.id}/edit`}>
-                      <Button variant="outline" size="sm">
-                        Edit
-                      </Button>
-                    </Link>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={blueprint.user_liked ? 'text-red-500' : 'text-muted-foreground'}
-                    onClick={handleLike}
-                  >
-                    <Heart className={`h-4 w-4 ${blueprint.user_liked ? 'fill-current' : ''}`} />
-                    <span className="ml-1 text-xs">{blueprint.likes_count}</span>
-                  </Button>
-                </div>
-              </div>
 
               {blueprint.mix_notes && (
-                <div>
-                  <h3 className="font-semibold">Build notes</h3>
-                  <p className="text-sm text-muted-foreground mt-1">{blueprint.mix_notes}</p>
-                </div>
+                <p className="text-sm text-muted-foreground">{blueprint.mix_notes}</p>
               )}
 
               {blueprint.banner_url && (
@@ -250,25 +253,27 @@ export default function BlueprintDetail() {
                 {steps.length > 0 ? (
                   <>
                     <h3 className="font-semibold">Steps</h3>
-                    <div className="mt-3 space-y-3">
+                    <div className="mt-2 space-y-2">
                       {steps.map((step, index) => (
-                        <div key={step.id || `${step.title}-${index}`} className="rounded-md border border-border/40 p-3">
+                        <div key={step.id || `${step.title}-${index}`} className="rounded-md border border-border/40 px-3 py-2.5">
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-sm font-medium">
                               {step.title?.trim() ? step.title : `Step ${index + 1}`}
                             </p>
-                            <Badge variant="secondary" className="text-xs">
-                              {step.items?.length || 0} items
-                            </Badge>
+                            {step.items && step.items.length > 0 ? (
+                              <Badge variant="secondary" className="text-xs">
+                                {step.items.length} items
+                              </Badge>
+                            ) : null}
                           </div>
                           {step.description && (
                             <p className="text-xs text-muted-foreground mt-1">{step.description}</p>
                           )}
-                          <div className="mt-2 space-y-2">
+                          <div className="mt-1.5 space-y-1.5">
                             {step.items && step.items.length > 0 ? (
                               step.items.map((item, itemIndex) => (
                                 <div key={`${step.id || index}-${itemIndex}`} className="text-sm">
-                                  <p className="text-sm">{formatStepItem(item)}</p>
+                                  <p className="text-sm leading-snug">{formatStepItem(item)}</p>
                                   {item.category && (
                                     <p className="text-xs text-muted-foreground">{item.category}</p>
                                   )}
@@ -302,8 +307,8 @@ export default function BlueprintDetail() {
               <PageDivider />
 
               <div>
-                <h3 className="font-semibold">LLM Review</h3>
-                <div className="mt-3">
+                <h3 className="font-semibold">AI Review</h3>
+                <div className="mt-2">
                   <BlueprintAnalysisView review={blueprint.llm_review || ''} />
                 </div>
               </div>
