@@ -145,7 +145,7 @@ export function DiscoverRoutines() {
 
       <div className="space-y-3">
         {isLoading || detailLoading ? (
-          <Card className="bg-card/60 backdrop-blur-sm border-border/50">
+          <Card>
             <CardContent className="p-5 space-y-3">
               <Skeleton className="h-5 w-3/5" />
               <Skeleton className="h-10 w-full" />
@@ -167,7 +167,7 @@ export function DiscoverRoutines() {
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-background/70 backdrop-blur-sm border-border/60 hover:bg-background/90"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-background border-border/60 hover:bg-muted/20"
                     onClick={goPrev}
                     aria-label="Previous blueprint"
                   >
@@ -177,7 +177,7 @@ export function DiscoverRoutines() {
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-background/70 backdrop-blur-sm border-border/60 hover:bg-background/90"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-background border-border/60 hover:bg-muted/20"
                     onClick={goNext}
                     aria-label="Next blueprint"
                   >
@@ -208,7 +208,7 @@ export function DiscoverRoutines() {
                   else goPrev();
                 }}
               >
-                <Card className="bg-card/60 backdrop-blur-sm border-border/50 transition-all duration-300 hover:border-border/80 hover:shadow-md hover:shadow-black/5 group-focus-visible:ring-2 group-focus-visible:ring-primary overflow-hidden">
+                <Card className="border-border/40 transition-colors hover:bg-muted/20 group-focus-visible:ring-2 group-focus-visible:ring-primary overflow-hidden">
                   {featuredDetail.banner_url && (
                     <div className="aspect-[4/1] w-full bg-muted/20">
                       <img

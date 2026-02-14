@@ -6,7 +6,8 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
   <div 
     ref={ref} 
     className={cn(
-      "rounded-xl border bg-card/80 text-card-foreground shadow-soft backdrop-blur-sm transition-all duration-300 hover:shadow-soft-md",
+      // Minimal by default: cards are callouts, not layout scaffolding.
+      "rounded-lg border border-border/40 bg-background text-card-foreground shadow-none",
       className
     )} 
     {...props} 
@@ -14,7 +15,7 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
 ));
 Card.displayName = "Card";
 
-// Glass variant for more ethereal look
+// Legacy glass variant (explicit opt-in only).
 const GlassCard = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
   <div 
     ref={ref} 

@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
-import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBlueprint } from '@/hooks/useBlueprints';
 import { useInventory } from '@/hooks/useInventories';
 import { BlueprintBuilder } from '@/components/blueprint/BlueprintBuilder';
 import type { Json } from '@/integrations/supabase/types';
+import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
 function parseSelectedItems(selected: Json) {
   if (!selected || typeof selected !== 'object' || Array.isArray(selected)) return {} as Record<string, string[]>;
@@ -28,23 +28,22 @@ export default function BlueprintRemix() {
   const isLoading = blueprintLoading || inventoryLoading;
 
   return (
-    <div className="min-h-screen bg-background">
+    <PageRoot>
       <AppHeader />
 
-      <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+      <PageMain className="space-y-6">
         {isLoading ? (
-          <Card>
-            <CardContent className="p-6">
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-24 w-full mt-4" />
-            </CardContent>
-          </Card>
+          <div className="border border-border/40 px-3 py-3">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-24 w-full mt-4" />
+          </div>
         ) : inventory && blueprint ? (
           <>
-            <section className="space-y-2">
-              <h1 className="text-3xl font-semibold">Remix Blueprint</h1>
-              <p className="text-muted-foreground">Source: {blueprint.title}</p>
-            </section>
+            <PageSection className="space-y-2">
+              <h1 className="text-2xl font-semibold">Remix Blueprint</h1>
+              <p className="text-sm text-muted-foreground">Source: {blueprint.title}</p>
+            </PageSection>
+            <PageDivider />
             <BlueprintBuilder
               inventory={inventory}
               initialTitle={`${blueprint.title} Remix`}
@@ -56,11 +55,9 @@ export default function BlueprintRemix() {
             />
           </>
         ) : (
-          <Card>
-            <CardContent className="py-12 text-center">Blueprint or library not found.</CardContent>
-          </Card>
+          <div className="border border-border/40 py-12 text-center">Blueprint or library not found.</div>
         )}
-      </main>
-    </div>
+      </PageMain>
+    </PageRoot>
   );
 }

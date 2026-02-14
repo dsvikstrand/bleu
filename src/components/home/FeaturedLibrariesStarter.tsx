@@ -381,7 +381,7 @@ export function FeaturedLibrariesStarter() {
         <Badge variant="secondary" className="w-fit text-xs">Starter</Badge>
       </div>
 
-      <Card className="bg-card/60 backdrop-blur-sm border-border/50">
+      <Card className="border-border/40">
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-2">
@@ -438,8 +438,8 @@ export function FeaturedLibrariesStarter() {
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="bg-card/60 backdrop-blur-glass rounded-2xl border border-border/50 overflow-hidden">
-                <div className="p-4 border-b border-border/30 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="bg-background rounded-md border border-border/40 overflow-hidden">
+                <div className="p-4 border-b border-border/40 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="space-y-1">
                     <p className="text-sm font-semibold text-primary uppercase tracking-wide">
                       {activeKey === 'morning' ? 'Morning routine' : 'Skincare'}
@@ -473,7 +473,7 @@ export function FeaturedLibrariesStarter() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-border/50 bg-card/50 p-4 space-y-3">
+              <div className="border border-border/40 px-3 py-3 space-y-3">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Lock className="h-4 w-4" />
                   <span>Unlock AI review, banner generation, and publishing when you're ready.</span>

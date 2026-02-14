@@ -27,13 +27,13 @@ export function FeaturedTags() {
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold tracking-tight">Trending Topics</h2>
-        <Link to="/tags" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <Link to="/explore" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           View all →
         </Link>
       </div>
       <div className="flex flex-wrap gap-2">
         {tags.map((tag) => (
-          <Link key={tag.id} to={`/wall?tag=${tag.slug}`}>
+          <Link key={tag.id} to={`/explore?q=${tag.slug}`}>
             <Badge
               variant="outline"
               className="gap-1.5 px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"

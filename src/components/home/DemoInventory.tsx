@@ -56,7 +56,7 @@ export function DemoInventory() {
         <h2 className="text-xl font-semibold tracking-tight">Try It Out</h2>
         <Badge variant="secondary" className="text-xs">Demo</Badge>
       </div>
-      <Card className="bg-card/60 backdrop-blur-sm border-dashed">
+      <Card className="border-dashed">
         <CardHeader className="pb-2">
           <CardTitle className="text-base font-medium flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />

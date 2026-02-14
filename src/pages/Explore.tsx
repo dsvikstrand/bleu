@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
@@ -27,7 +27,18 @@ export default function Explore() {
   const [searchInput, setSearchInput] = useState('');
   const [filter, setFilter] = useState<ExploreFilter>('all');
   const trendingSectionRef = useRef<HTMLDivElement>(null);
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const hasPrefilledRef = useRef(false);
+  const qParam = (searchParams.get('q') || '').trim();
+
+  useEffect(() => {
+    if (hasPrefilledRef.current) return;
+    if (!qParam) return;
+    hasPrefilledRef.current = true;
+    setSearchInput(qParam);
+    setFilter('all');
+  }, [qParam]);
 
   const debouncedQuery = useDebounce(searchInput, 300);
   const { data: results, isLoading } = useExploreSearch({

@@ -32,6 +32,6 @@
 - P3 Phase 3 polish: completed (minimal row copy/layout pass on `/channels`: `Explore` preview label, 3-item preview cap, and slug label hidden in `Suggested`/`More` rows).
 - P3 Posting flow: implemented (channel-scoped `+ Create` flow: where-to-post -> source picker; public publish requires valid joined channel; Library/YouTube removed from top nav).
 - P3 Step 3/3: implemented + pilot started (telemetry + validation gate: `p3_step3_v0` events + `metrics:channels` script + pilot thresholds; kickoff 2026-02-13).
-- App-wide wall-to-wall layout migration (Run 1): in progress. Goal is to make the Reddit-style flat rhythm the default across major pages (remove ambient blobs/gradients, tighten gutters, and retire heavy card chrome) without changing behavior.
+- App-wide wall-to-wall layout migration: Run 1 completed (major surfaces baseline). Run 2 in progress (detail pages + global primitives + remaining Home flattening + `/tags` deep-link cleanup).
 - Supabase migration closeout: completed and documented:
   - `docs/exec-plans/completed/supabase-migration-closure-2026-02-13.md`

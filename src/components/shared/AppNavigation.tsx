@@ -28,7 +28,7 @@ export function AppNavigation({ variant = 'header', mode = 'all' }: AppNavigatio
 
   if (variant === 'floating') {
     return (
-      <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 p-1 bg-card/80 backdrop-blur-glass rounded-full border border-border/50 shadow-soft-lg">
+      <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 p-1 bg-background rounded-full border border-border/40 shadow-soft-lg">
         {visibleItems.map((item) => {
           const isActive = currentPath === item.path;
           const Icon = item.icon;
@@ -53,7 +53,7 @@ export function AppNavigation({ variant = 'header', mode = 'all' }: AppNavigatio
   }
 
   return (
-    <nav className="flex items-center gap-1 p-1 bg-card/50 backdrop-blur-sm rounded-xl border border-border/30">
+    <nav className="flex items-center gap-1 p-1 bg-background rounded-xl border border-border/40">
       {visibleItems.map((item) => {
         const isActive = currentPath === item.path;
         const Icon = item.icon;

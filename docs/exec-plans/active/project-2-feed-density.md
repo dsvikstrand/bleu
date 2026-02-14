@@ -211,3 +211,9 @@ Rules:
 
 Migration checklist (Run 1 targets):
 - Explore, Blueprints, Inventory, YouTube, Home, Settings, Auth, UserProfile (and keep Wall/Channels consistent).
+
+Migration checklist (Run 2 targets):
+- Detail pages: BlueprintDetail, InventoryDetail, PostDetail, BlueprintRemix, NotFound
+- Home modules: DiscoverRoutines, FeaturedLibrariesStarter, DemoInventory, FeaturedTags
+- Global primitives: Card baseline is minimal by default (no blur/shadow), header/nav containers are solid + bordered
+- `/tags` link debt: tag surfaces link to Explore (`/explore?q=...`), and Explore supports `?q=` prefill for deep links

@@ -11,12 +11,12 @@ const buttonVariants = cva(
       variant: {
         default: "bg-primary text-primary-foreground shadow-soft hover:bg-primary/90 hover:shadow-soft-md hover:-translate-y-0.5",
         destructive: "bg-destructive text-destructive-foreground shadow-soft hover:bg-destructive/90",
-        outline: "border border-border/60 bg-card/50 backdrop-blur-sm hover:bg-accent hover:text-accent-foreground hover:border-primary/30",
-        secondary: "bg-secondary/80 text-secondary-foreground backdrop-blur-sm hover:bg-secondary/60",
+        outline: "border border-border/60 bg-background hover:bg-accent hover:text-accent-foreground hover:border-primary/30",
+        secondary: "bg-secondary/80 text-secondary-foreground hover:bg-secondary/60",
         ghost: "hover:bg-accent/50 hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         // Gen X Soft Club variants
-        glass: "bg-card/40 backdrop-blur-glass border border-border/40 text-foreground hover:bg-card/60 hover:border-primary/30 hover:shadow-soft",
+        glass: "bg-card/40 border border-border/40 text-foreground hover:bg-card/60 hover:border-primary/30 hover:shadow-soft",
         glow: "bg-primary text-primary-foreground shadow-glow-aqua hover:shadow-[0_0_40px_hsl(185_55%_50%_/_0.5)]",
         chrome: "bg-gradient-chrome border border-border/50 text-foreground hover:shadow-soft-md",
       },

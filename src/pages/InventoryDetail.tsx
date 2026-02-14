@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +21,7 @@ import {
 import { Heart, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 import { buildUrlWithChannel, getPostableChannel } from '@/lib/channelPostContext';
+import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
 function getCategories(schema: Json) {
   if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return [] as string[];
@@ -136,47 +136,45 @@ export default function InventoryDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <PageRoot>
       <AppHeader />
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      <PageMain className="space-y-6">
         {isLoading ? (
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-40" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-24 w-full" />
-            </CardContent>
-          </Card>
+          <div className="border border-border/40 px-3 py-3 space-y-3">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-24 w-full" />
+          </div>
         ) : inventory ? (
           <>
-            <Card>
-              <CardHeader className="space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle>{inventory.title}</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      {inventory.prompt_inventory}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={inventory.user_liked ? 'text-red-500' : 'text-muted-foreground'}
-                    onClick={handleLike}
-                  >
-                    <Heart className={`h-4 w-4 ${inventory.user_liked ? 'fill-current' : ''}`} />
-                    <span className="ml-1 text-xs">{inventory.likes_count}</span>
-                  </Button>
+            <PageSection className="space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h1 className="text-2xl font-semibold leading-tight">{inventory.title}</h1>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {inventory.prompt_inventory}
+                  </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {inventory.tags.map((tag) => (
-                    <Badge key={tag.id} variant="outline">#{tag.slug}</Badge>
-                  ))}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={inventory.user_liked ? 'text-red-500' : 'text-muted-foreground'}
+                  onClick={handleLike}
+                >
+                  <Heart className={`h-4 w-4 ${inventory.user_liked ? 'fill-current' : ''}`} />
+                  <span className="ml-1 text-xs">{inventory.likes_count}</span>
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {inventory.tags.map((tag) => (
+                  <Badge key={tag.id} variant="outline">#{tag.slug}</Badge>
+                ))}
+              </div>
+            </PageSection>
+
+            <PageDivider />
+
+            <section className="space-y-4">
                 <div>
                   <h3 className="font-semibold">Categories</h3>
                   <div className="flex flex-wrap gap-2 mt-2">
@@ -185,6 +183,9 @@ export default function InventoryDetail() {
                     ))}
                   </div>
                 </div>
+
+                <PageDivider />
+
                 <div>
                   <h3 className="font-semibold">Review sections</h3>
                   {inventory.is_owner ? (
@@ -240,7 +241,7 @@ export default function InventoryDetail() {
                       {sectionError && (
                         <p className="text-sm text-destructive">{sectionError}</p>
                       )}
-                      <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
+                      <div className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
                         <div>
                           <p className="font-medium">Include score</p>
                           <p className="text-sm text-muted-foreground">Adds a 1–100 score in Overview.</p>
@@ -277,16 +278,13 @@ export default function InventoryDetail() {
                     <Button variant="outline">Back to Library</Button>
                   </Link>
                 </div>
-              </CardContent>
-            </Card>
+            </section>
           </>
         ) : (
-          <Card>
-            <CardContent className="py-12 text-center">Library not found.</CardContent>
-          </Card>
+          <div className="border border-border/40 py-12 text-center">Library not found.</div>
         )}
         <AppFooter />
-      </main>
-    </div>
+      </PageMain>
+    </PageRoot>
   );
 }

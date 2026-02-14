@@ -124,6 +124,7 @@ Phase 3 polish lock (2026-02-13):
 - `b/<slug>` row label remains in joined `Channels` and is hidden in `Suggested`/`More` rows to reduce redundancy.
 - Suggested rows hide the preview block when no preview items are available.
 - Channels surfaces now use the wall-to-wall layout primitives (no ambient background blobs/gradients; tighter gutters) with no runtime behavior changes.
+- Tag-link compatibility: since `/tags` is deprecated/redirect-only, tag surfaces now deep-link into Explore (`/explore?q=<slug>`), and Explore supports `?q=` prefill for reliable tag lookup.
 
 Step 2 Phase 2 implementation lock (2026-02-13):
 - Channel pages are now real feed surfaces on `/b/:channelSlug` with `Top` and `Recent` tabs.

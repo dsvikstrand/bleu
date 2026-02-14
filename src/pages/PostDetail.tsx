@@ -6,7 +6,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Heart, Bookmark, FlaskConical, Dumbbell, Beaker } from 'lucide-react';
@@ -14,6 +13,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useBookmarks } from '@/hooks/useBookmarks';
 import { CommentsThread } from '@/components/wall/CommentsThread';
+import { PageDivider, PageMain, PageRoot } from '@/components/layout/Page';
 
 interface WallPostDetail {
   id: string;
@@ -174,27 +174,17 @@ export default function PostDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
-      </div>
-
+    <PageRoot>
       <AppHeader />
 
-      <main className="max-w-3xl mx-auto px-4 py-8">
-
+      <PageMain className="space-y-6">
         {isLoading ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">Loading post...</CardContent>
-          </Card>
+          <div className="border border-border/40 py-12 text-center text-muted-foreground">Loading post...</div>
         ) : !post ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">Post not found.</CardContent>
-          </Card>
+          <div className="border border-border/40 py-12 text-center text-muted-foreground">Post not found.</div>
         ) : (
-          <Card>
-            <CardHeader className="flex flex-row items-center gap-3 pb-2">
+          <div className="space-y-4">
+            <div className="flex flex-row items-center gap-3 pb-2">
               <Avatar className="h-10 w-10">
                 <AvatarImage src={post.profile.avatar_url || undefined} />
                 <AvatarFallback className="bg-primary/10 text-primary text-sm">
@@ -214,24 +204,26 @@ export default function PostDetail() {
                 })()}
                 {post.recipe.recipe_type}
               </Badge>
-            </CardHeader>
+            </div>
 
-            <CardContent className="space-y-3">
-              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+            <PageDivider />
+
+            <div className="space-y-3">
+              <div className="border border-border/40 px-3 py-3 space-y-2">
                 <h3 className="font-semibold">{post.recipe.name}</h3>
                 <p className="text-sm text-muted-foreground">
                   {Array.isArray(post.recipe.items) ? post.recipe.items.length : 0} ingredient
                   {Array.isArray(post.recipe.items) && post.recipe.items.length !== 1 ? 's' : ''}
                 </p>
                 {post.caption && (
-                  <p className="text-sm pt-2 border-t border-border/50">{post.caption}</p>
+                  <p className="text-sm pt-2 border-t border-border/40">{post.caption}</p>
                 )}
               </div>
 
               {post.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {post.tags.map((tag) => (
-                    <Link key={tag.id} to={`/tags?q=${tag.slug}`}>
+                    <Link key={tag.id} to={`/explore?q=${tag.slug}`}>
                       <Badge variant="outline" className="text-xs hover:border-primary hover:text-primary">
                         #{tag.slug}
                       </Badge>
@@ -239,9 +231,11 @@ export default function PostDetail() {
                   ))}
                 </div>
               )}
-            </CardContent>
+            </div>
 
-            <CardFooter className="flex flex-col gap-4">
+            <PageDivider />
+
+            <div className="flex flex-col gap-4">
               <div className="flex items-center gap-4 w-full">
                 <Button
                   variant="ghost"
@@ -265,11 +259,11 @@ export default function PostDetail() {
               </div>
 
               <CommentsThread postId={post.id} />
-            </CardFooter>
-          </Card>
+            </div>
+          </div>
         )}
         <AppFooter />
-      </main>
-    </div>
+      </PageMain>
+    </PageRoot>
   );
 }
