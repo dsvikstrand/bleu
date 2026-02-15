@@ -1,26 +1,27 @@
-# Blueprints (Channels-First)
+# Blueprints (`bleuV1`)
 
-A React + Supabase app for creating, publishing, and discovering blueprints in curated channels.
+A React + Supabase app for turning media into bite-sized blueprints and discussing them with the community.
 
-## Current Product Shape
-- Primary discovery surface: `Feed` (`/wall`)
-- Channels IA: `/channels` and `/b/:channelSlug`
-- Explore search: `/explore`
+## Current Product Direction (`bleuV1`)
+- Source-first: media ingestion is the primary content supply (YouTube first).
+- Personal-first: users get a personal `My Feed` lane from pulled content.
+- Community layer: channel feeds are shared lanes where users vote/comment/add insights.
+- Gated distribution: channel publish is a second-step after quality/safety/channel-fit checks.
+
+## Current Runtime Surfaces
+- Home: `/`
+- Feed: `/wall`
+- Explore: `/explore`
+- Channels: `/channels`
+- Channel page: `/b/:channelSlug`
+- YouTube adapter (manual v0): `/youtube`
 - Blueprint detail: `/blueprint/:blueprintId`
-- Legacy compatibility routes:
-  - `/tags` -> redirects to `/channels`
-  - `/blueprints` -> redirects to `/wall`
-
-## Core UX Model
-- Channels are curated and followable lanes.
-- Tags are blueprint metadata/search terms (not follow lanes).
-- Public posting is channel-scoped via the create flow.
 
 ## Tech Stack
 - Vite + React + TypeScript
 - Tailwind + shadcn/ui
 - Supabase (auth, data, edge functions)
-- Agentic backend for YouTube-to-Blueprint generation
+- Express agentic backend for generation/eval paths
 
 ## Local Development
 ```bash
@@ -34,19 +35,7 @@ npm run build
 npm run test
 npm run docs:refresh-check -- --json
 npm run docs:link-check
-npm run metrics:channels -- --days 7 --json
 ```
 
 ## Documentation Entry Point
-Start here: `docs/README.md`
-
-Recommended first read order:
-1. `docs/README.md`
-2. `docs/architecture.md`
-3. `docs/app/product-spec.md`
-4. `docs/exec-plans/index.md`
-5. `docs/ops/yt2bp_runbook.md`
-
-## Operations
-- YT2BP production runbook: `docs/ops/yt2bp_runbook.md`
-- Supabase migration closure notes: `docs/exec-plans/completed/supabase-migration-closure-2026-02-13.md`
+Start with `docs/README.md`.

@@ -1,6 +1,9 @@
 # Project 3 - Channel Following
 
-Status: `active`
+Status: `completed (archived legacy direction)`
+
+> Archived on 2026-02-14 after direction change to `bleuV1` source-first MVP.
+> Follow-up work now tracked under `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`.
 
 ## Summary
 Project 3 adds runtime channel-follow behavior and feed personalization while preserving existing tag-based discovery.

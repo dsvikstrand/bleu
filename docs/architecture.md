@@ -1,74 +1,89 @@
-# Architecture
+# Architecture (`bleuV1`)
 
 ## 1) Intent And Boundaries
 - Product scope:
-  - Public app for discovering and creating blueprints.
-  - YT2BP (YouTube to Blueprint) is a production flow in MVP.
-  - ASS (Agentic Seed System) seeds content and validates generation quality/safety.
-- Non-goals in current architecture:
-  - No hard dependency on domain-specific golden artifacts for runtime YT2BP.
-  - No instruction-security runtime gate yet (stub only).
+  - Source-first blueprint app.
+  - Personal unfiltered feed (`My Feed`) as primary lane.
+  - Channel feeds as shared lanes with gated promotion.
+- Current adapter baseline:
+  - YouTube adapter is production-ready for manual generation.
+- Non-goals in current MVP:
+  - No broad multi-adapter rollout in the first cut.
+  - No fully open standalone free-form posting model.
+  - No full moderation platform for user-created channels.
 
 ## 2) Runtime Topology
 - Frontend:
-  - React + Vite app.
-  - Main flows in `src/pages/*`, including `YouTubeToBlueprint.tsx`.
+  - React + Vite app (`src/pages/*`).
+  - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
+  - Live feed/community surfaces in `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
 - Backend:
   - Express server in `server/index.ts`.
-  - Endpoint family under `/api/*`, including `/api/youtube-to-blueprint`.
+  - `/api/youtube-to-blueprint` generation pipeline.
 - Data:
-  - Supabase is the system of record for published artifacts.
+  - Supabase is system of record for blueprints, tags, follows, likes/comments, telemetry.
+  - `bleuV1` extension: source-item canonical tables + user feed item tables.
 - Eval assets:
   - Runtime policy/config under `eval/methods/v0/*`.
 - Operations:
-  - Oracle VM runtime with runbook in `docs/ops/yt2bp_runbook.md`.
+  - Oracle VM runtime + logs-first runbook (`docs/ops/yt2bp_runbook.md`).
 
-## 3) Core Flows
-- YT2BP flow:
-  - URL input -> transcript fetch -> draft blueprint generation ->
-  - deterministic checks + LLM quality + LLM content safety + PII checks ->
-  - success response -> publish from UI.
-- ASS flow:
-  - Persona + control composition -> generation nodes -> eval gates -> apply/publish path.
-  - Spec reference: `docs/design-docs/seed_ass_spec.md`.
+## 3) Core Lifecycle (`bleuV1`)
+1. Ingest source item (manual pull now, scheduled pull later).
+2. Generate imported blueprint.
+3. Publish to personal lane (`My Feed`).
+4. Optional user remix/insight.
+5. Channel candidate evaluation.
+6. Gate decision:
+   - pass -> publish to channel feed
+   - fail -> remain personal-only
 
 ## 4) Contracts And Policy Surfaces
-- API contract:
-  - `docs/product-specs/yt2bp_v0_contract.md` is canonical for request/response/error buckets.
+- API contract (adapter v0):
+  - `docs/product-specs/yt2bp_v0_contract.md`
 - Product behavior:
-  - `docs/app/product-spec.md` and `docs/product-specs/youtube_to_blueprint_plan.md`.
-- Eval policy:
-  - `eval/methods/v0/llm_blueprint_quality_v0/global_pack_v0.json`
-  - `eval/methods/v0/llm_content_safety_grading_v0/global_pack_v0.json`
-  - `eval/methods/v0/pii_leakage_v0/global_pack_v0.json`
+  - `docs/app/product-spec.md`
+- Program direction:
+  - `docs/exec-plans/active/bleuv1-source-first-program.md`
+- Eval policy classes used today:
+  - `llm_blueprint_quality_v0`
+  - `llm_content_safety_grading_v0`
+  - `pii_leakage_v0`
+- `bleuV1` gate expansion:
+  - channel-fit gate for channel promotion decisions
 
 ## 5) Invariants
-- API compatibility:
-  - YT2BP v0 changes should be additive or versioned.
-- Safety:
-  - Content safety, PII, and deterministic structural checks can independently block.
-- Operations:
-  - Production debugging is logs-first.
-  - Rate-limits and feature toggles are env-driven.
+- Safety invariants:
+  - Safety and PII checks can block shared-channel distribution.
+- Provenance invariants:
+  - Imported blueprints retain source provenance metadata.
+- Distribution invariants:
+  - Channel publish is never unconditional; it is a gated second-stage action.
+- Compatibility invariants:
+  - Existing public blueprint feed and channel routes remain functional while `My Feed` is introduced.
 
 ## 6) Failure Modes And Recovery
-- Frequent classes:
+- Frequent classes (adapter/generation):
   - `INVALID_URL`, `NO_CAPTIONS`, `PROVIDER_FAIL`, `TIMEOUT`, `RATE_LIMITED`,
     `GENERATION_FAIL`, `SAFETY_BLOCKED`, `PII_BLOCKED`.
+- `bleuV1` distribution classes:
+  - `CHANNEL_FIT_BLOCKED`, `QUALITY_BLOCKED`, `DUPLICATE_INGEST`.
 - Recovery authority:
-  - Runbook commands in `docs/ops/yt2bp_runbook.md`.
-  - Fast rollback through env toggles (`YT2BP_*` flags).
+  - Logs-first triage in `docs/ops/yt2bp_runbook.md`.
+  - Feature/env toggles for fast rollback.
 
 ## 7) Extension Model
-- New source adapters:
-  - Add endpoint-specific source pipeline and keep contract stable.
+- New adapters:
+  - Add canonical adapter interface and preserve downstream lifecycle contract.
+  - Gate rollout by reliability + cache hit + approval metrics.
 - New eval classes:
-  - Add config pack in `eval/methods/v0/<method_id>/`.
-  - Register class and wire through active policy only after smoke tests.
-- Future track:
-  - `llm_instruction_security_v0` is reserved for prompt-injection/jailbreak handling.
+  - Add method pack under `eval/methods/v0/<method_id>/`.
+  - Wire into channel candidate stage only after smoke checks.
+- Community layer expansion:
+  - Keep user insights/remixes attached to imported blueprints in MVP.
 
 ## 8) Document Ownership
 - Canonical architecture doc: `docs/architecture.md`.
-- Index + navigation: `docs/README.md`.
-- Freshness mapping for required doc updates: `docs/_freshness_map.json`.
+- Product contract: `docs/app/product-spec.md`.
+- Active program plan: `docs/exec-plans/active/bleuv1-source-first-program.md`.
+- Freshness mapping: `docs/_freshness_map.json`.

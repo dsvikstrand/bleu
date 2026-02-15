@@ -1,6 +1,9 @@
 # Channels-First UX Program
 
-Status: `active`
+Status: `completed (archived legacy direction)`
+
+> Archived on 2026-02-14 after direction change to `bleuV1` source-first MVP.
+> Replacement active program: `docs/exec-plans/active/bleuv1-source-first-program.md`.
 
 ## 1) Problem Statement
 Current UX is blueprint-capable but not cold-user efficient. Users face:

@@ -1,6 +1,9 @@
 # Project 4 - Blueprint Detail Priority
 
-Status: `draft`
+Status: `completed (archived legacy direction)`
+
+> Archived on 2026-02-14 after direction change to `bleuV1` source-first MVP.
+> Blueprint-detail priorities for the new direction should be versioned under active `bleuV1` plans.
 
 ## Goal
 Refocus blueprint detail page on content value and action clarity, with channel context prioritized over author prominence.

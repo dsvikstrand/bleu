@@ -1,6 +1,9 @@
 # Project 5 - Metrics And Validation
 
-Status: `draft`
+Status: `completed (archived legacy direction)`
+
+> Archived on 2026-02-14 after direction change to `bleuV1` source-first MVP.
+> New metric contracts are tracked under active `bleuV1` plans.
 
 ## Goal
 Validate Channels-first UX impact with measurable outcomes and explicit GO/HOLD/PIVOT rules.

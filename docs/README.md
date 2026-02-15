@@ -5,22 +5,28 @@ This folder is the source of truth for product, architecture, planning, and oper
 ## Read Order For New Engineers/Models
 1. `docs/architecture.md`
 2. `docs/app/product-spec.md`
-3. `docs/exec-plans/index.md`
-4. `docs/ops/yt2bp_runbook.md`
-5. `docs/references/channel-taxonomy-v0.md`
+3. `docs/agentic/README.md`
+4. `docs/agentic/foundation/north-star.md`
+5. `docs/agentic/executable/README.md`
+6. `docs/exec-plans/index.md`
+7. `docs/exec-plans/active/bleuv1-source-first-program.md`
+8. `docs/ops/yt2bp_runbook.md`
 
 ## Canonical Documents
 - Architecture: `docs/architecture.md`
 - Product behavior/spec: `docs/app/product-spec.md`
 - Execution registry (active/completed): `docs/exec-plans/index.md`
-- Program direction: `docs/exec-plans/active/channels-first-ux-program.md`
-- Channel taxonomy reference: `docs/references/channel-taxonomy-v0.md`
-- YT2BP product plan: `docs/product-specs/youtube_to_blueprint_plan.md`
-- YT2BP API contract: `docs/product-specs/yt2bp_v0_contract.md`
-- ASS design spec: `docs/design-docs/seed_ass_spec.md`
+- Program direction (`bleuV1`): `docs/exec-plans/active/bleuv1-source-first-program.md`
+- Active MVP project: `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
+- Agentic foundation pack: `docs/agentic/foundation/`
+- Agentic executable pack: `docs/agentic/executable/`
+- YT2BP API contract (adapter v0): `docs/product-specs/yt2bp_v0_contract.md`
+- YT2BP runbook: `docs/ops/yt2bp_runbook.md`
+- ASS design spec (seed/eval system): `docs/design-docs/seed_ass_spec.md`
 
 ## Folder Map
 - `docs/app/` product-level behavior and user flow docs
+- `docs/agentic/` foundation and executable docs for agentic execution
 - `docs/architecture.md` system topology and invariants
 - `docs/design-docs/` technical design + diagrams
 - `docs/exec-plans/active/` currently active plans/program docs
