@@ -79,6 +79,15 @@ type ApiEnvelope<T> = {
   meta?: Record<string, unknown>;
 };
 
+class ApiRequestError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 function getApiBase() {
   if (config.agenticBackendUrl) {
     return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
@@ -110,13 +119,18 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<ApiEnvel
   const json = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
   if (!response.ok || !json) {
     const message = json?.message || `Request failed (${response.status})`;
-    throw new Error(message);
+    throw new ApiRequestError(response.status, message);
   }
   if (!json.ok) {
-    throw new Error(json.message || 'Request failed.');
+    throw new ApiRequestError(response.status, json.message || 'Request failed.');
   }
 
   return json;
+}
+
+function shouldFallbackToSupabase(error: unknown) {
+  if (!(error instanceof ApiRequestError)) return true;
+  return error.status === 404 || error.status >= 500;
 }
 
 async function ensureTagBySlug(slug: string, userId: string) {
@@ -270,42 +284,46 @@ export async function submitCandidateAndEvaluate(input: {
   if (!apiBase) {
     return submitCandidateAndEvaluateFallback(input);
   }
+  try {
+    const upsertResult = await apiRequest<{
+      id: string;
+      user_feed_item_id: string;
+      channel_slug: string;
+      status: string;
+    }>('/channel-candidates', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_feed_item_id: input.userFeedItemId,
+        channel_slug: input.channelSlug,
+      }),
+    });
 
-  const upsertResult = await apiRequest<{
-    id: string;
-    user_feed_item_id: string;
-    channel_slug: string;
-    status: string;
-  }>('/channel-candidates', {
-    method: 'POST',
-    body: JSON.stringify({
-      user_feed_item_id: input.userFeedItemId,
-      channel_slug: input.channelSlug,
-    }),
-  });
+    const candidateId = upsertResult.data.id;
 
-  const candidateId = upsertResult.data.id;
+    const evalResult = await apiRequest<{
+      candidate_id: string;
+      decision: 'pass' | 'warn' | 'block';
+      next_state: 'candidate_submitted' | 'candidate_pending_manual_review' | 'channel_rejected';
+      reason_code: string;
+    }>(`/channel-candidates/${candidateId}/evaluate`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
 
-  const evalResult = await apiRequest<{
-    candidate_id: string;
-    decision: 'pass' | 'warn' | 'block';
-    next_state: 'candidate_submitted' | 'candidate_pending_manual_review' | 'channel_rejected';
-    reason_code: string;
-  }>(`/channel-candidates/${candidateId}/evaluate`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
-
-  const nextState = evalResult.data.next_state;
-  return {
-    candidateId,
-    status: nextState === 'candidate_pending_manual_review'
-      ? ('pending_manual_review' as const)
-      : nextState === 'channel_rejected'
-        ? ('rejected' as const)
-        : ('passed' as const),
-    reasonCode: evalResult.data.reason_code,
-  };
+    const nextState = evalResult.data.next_state;
+    return {
+      candidateId,
+      status: nextState === 'candidate_pending_manual_review'
+        ? ('pending_manual_review' as const)
+        : nextState === 'channel_rejected'
+          ? ('rejected' as const)
+          : ('passed' as const),
+      reasonCode: evalResult.data.reason_code,
+    };
+  } catch (error) {
+    if (!shouldFallbackToSupabase(error)) throw error;
+    return submitCandidateAndEvaluateFallback(input);
+  }
 }
 
 async function publishCandidateFallback(input: {
@@ -360,14 +378,18 @@ export async function publishCandidate(input: {
   if (!apiBase) {
     return publishCandidateFallback(input);
   }
-
-  await apiRequest<{ candidate_id: string; published: boolean; channel_slug: string }>(
-    `/channel-candidates/${input.candidateId}/publish`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ tag_slug: input.channelSlug }),
-    },
-  );
+  try {
+    await apiRequest<{ candidate_id: string; published: boolean; channel_slug: string }>(
+      `/channel-candidates/${input.candidateId}/publish`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ tag_slug: input.channelSlug }),
+      },
+    );
+  } catch (error) {
+    if (!shouldFallbackToSupabase(error)) throw error;
+    return publishCandidateFallback(input);
+  }
 }
 
 async function rejectCandidateFallback(input: {
@@ -402,12 +424,16 @@ export async function rejectCandidate(input: {
   if (!apiBase) {
     return rejectCandidateFallback(input);
   }
-
-  await apiRequest<{ candidate_id: string; reason_code: string }>(
-    `/channel-candidates/${input.candidateId}/reject`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ reason_code: input.reasonCode }),
-    },
-  );
+  try {
+    await apiRequest<{ candidate_id: string; reason_code: string }>(
+      `/channel-candidates/${input.candidateId}/reject`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason_code: input.reasonCode }),
+      },
+    );
+  } catch (error) {
+    if (!shouldFallbackToSupabase(error)) throw error;
+    return rejectCandidateFallback(input);
+  }
 }
