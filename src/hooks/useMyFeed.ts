@@ -49,9 +49,16 @@ export function useMyFeed() {
       if (feedError) throw feedError;
       if (!feedRows || feedRows.length === 0) return [] as MyFeedItemView[];
 
-      const sourceIds = [...new Set(feedRows.map((row) => row.source_item_id).filter(Boolean))] as string[];
-      const blueprintIds = [...new Set(feedRows.map((row) => row.blueprint_id).filter(Boolean))] as string[];
-      const feedItemIds = feedRows.map((row) => row.id);
+      const filteredFeedRows = feedRows.filter((row) => {
+        const isLegacyPendingWithoutBlueprint =
+          !row.blueprint_id && (row.state === 'my_feed_pending_accept' || row.state === 'my_feed_skipped');
+        return !isLegacyPendingWithoutBlueprint;
+      });
+      if (filteredFeedRows.length === 0) return [] as MyFeedItemView[];
+
+      const sourceIds = [...new Set(filteredFeedRows.map((row) => row.source_item_id).filter(Boolean))] as string[];
+      const blueprintIds = [...new Set(filteredFeedRows.map((row) => row.blueprint_id).filter(Boolean))] as string[];
+      const feedItemIds = filteredFeedRows.map((row) => row.id);
 
       const [{ data: sources }, { data: blueprints }, { data: candidates }] = await Promise.all([
         supabase.from('source_items').select('id, source_url, title, source_channel_title, thumbnail_url').in('id', sourceIds),
@@ -99,7 +106,7 @@ export function useMyFeed() {
         });
       });
 
-      return feedRows.map((row) => {
+      return filteredFeedRows.map((row) => {
         const source = sourceMap.get(row.source_item_id);
         const blueprint = blueprintMap.get(row.blueprint_id);
 

@@ -33,6 +33,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ### W1 - My Feed As First-Class Surface
 - Introduce/finish personal unfiltered feed lane behavior.
 - Ensure channel fail does not remove personal access.
+- Hide legacy no-blueprint pending/skipped rows during migration cleanup.
 
 ### W2 - Channel Candidate Gating
 - Keep promotion as explicit second step from My Feed.

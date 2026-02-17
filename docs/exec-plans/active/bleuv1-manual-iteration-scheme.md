@@ -199,6 +199,10 @@ Evaluation
 - manual smoke: repeat subscribe -> no duplicate notice cards
 - regression smoke: channel submit/publish flow still works
 
+Completion evidence (2026-02-18)
+- One-time cleanup removed legacy no-blueprint skipped/pending test rows.
+- `My Feed` now filters legacy no-blueprint pending/skipped rows by default.
+
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary
 2. Plan with touched files and acceptance checks

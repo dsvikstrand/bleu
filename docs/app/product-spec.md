@@ -10,6 +10,7 @@ a3) [have] `My Feed` personal unfiltered lane is available as `/my-feed` (featur
 a4) [have] Auto-ingestion from followed YouTube channels is available with auto-only UX and new-uploads-only behavior (no initial old-video prefill).
 a5) [have] Channel publish is an explicit second-stage lifecycle from personal feed candidates.
 a6) [have] Channel gate runtime is currently bypass-first (`EVAL_BYPASSED`) while gate-mode framework hardening is completed.
+a7) [have] Legacy pending/skipped feed rows without blueprints are hidden in `My Feed` UI to reduce migration noise.
 
 ## Core Model
 b1) `Source Item`

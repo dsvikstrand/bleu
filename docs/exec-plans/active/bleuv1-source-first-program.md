@@ -102,6 +102,7 @@ Rules:
   - MVP UX is auto-only; create/reactivate sets checkpoint and skips initial old-video prefill.
   - successful create/reactivate inserts one persistent `subscription_notice` feed card per user/channel.
   - future uploads after checkpoint ingest directly into `my_feed_published`.
+  - UI hides legacy no-blueprint pending/skipped feed rows to keep My Feed migration-safe.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.
