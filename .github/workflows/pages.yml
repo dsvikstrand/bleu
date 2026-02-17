@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["main", "lovable-main"]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -20,12 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set build base path
-        run: |
-          if [ "${{ github.ref_name }}" = "lovable-main" ]; then
-            echo "VITE_BASE_PATH=/remix-of-stackwise-advisor/lovable-backend/" >> $GITHUB_ENV
-          else
-            echo "VITE_BASE_PATH=/remix-of-stackwise-advisor/" >> $GITHUB_ENV
-          fi
+        run: echo "VITE_BASE_PATH=/remix-of-stackwise-advisor/" >> $GITHUB_ENV
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -40,21 +35,11 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: ${{ env.VITE_BASE_PATH }}
-          VITE_AGENTIC_BACKEND_URL: ${{ github.ref_name == 'main' && 'https://bapi.vdsai.cloud' || '' }}
+          VITE_AGENTIC_BACKEND_URL: https://bapi.vdsai.cloud
 
-      - name: Deploy (main)
-        if: github.ref_name == 'main'
+      - name: Deploy
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
-          keep_files: true
-
-      - name: Deploy (lovable-main)
-        if: github.ref_name == 'lovable-main'
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          destination_dir: lovable-backend
           keep_files: true
