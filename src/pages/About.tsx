@@ -10,9 +10,13 @@ export default function About() {
           <h1 className="text-lg font-semibold">About Blueprints</h1>
           <div className="space-y-4 text-sm text-muted-foreground">
             <p>
-              Blueprints is a community space for sharing step-by-step routines built from
-              libraries. Use it to discover what works, remix it for your needs, and share
-              back with others.
+              Blueprints is a source-first community app. Pull content into your personal My Feed,
+              remix it into useful steps, then submit high-quality items to channel feeds for
+              discussion and voting.
+            </p>
+            <p>
+              Legacy library flows still exist in parts of the app for compatibility, but they are
+              deprecated in the MVP primary journey.
             </p>
             <div>
               <p className="font-medium text-foreground">Contact</p>

@@ -6,7 +6,7 @@
 ## Status Snapshot
 a1) [have] YouTube to Blueprint generation is live (`/youtube` + `/api/youtube-to-blueprint`).
 a2) [have] Public feed/channel/community primitives are live (`/wall`, `/channels`, `/b/:channelSlug`, likes/comments).
-a3) [todo] `My Feed` personal unfiltered lane as a first-class route/surface.
+a3) [have] `My Feed` personal unfiltered lane is available as `/my-feed` (feature-flagged rollout).
 a4) [todo] Auto-ingestion from followed source channels (YouTube first).
 a5) [todo] Channel publish as explicit second-stage lifecycle from personal feed candidates.
 
@@ -35,6 +35,8 @@ c4) Channel gates run (`channel_fit`, `quality`, `safety`, `pii`).
 c5) Result:
 - pass -> publish to channel feed
 - fail -> remain in `My Feed` (personal-only)
+c6) Warn-path result in selected mode:
+- `channel_fit`/`quality` warn routes candidate to `candidate_pending_manual_review` before terminal publish/reject.
 
 ## Product Principles
 p1) Source-first content supply (not creator-first posting).
@@ -49,6 +51,8 @@ m2) My Feed default visibility: personal/private lane until channel promotion.
 m3) Channel promotion default mode: selected/manual approve path.
 m4) User contribution default: insights/remixes attached to imported blueprints (no standalone free-form posting in MVP core).
 m5) Low-confidence channel candidates default action: blocked from channel, retained in My Feed.
+m6) Evaluator default mode: all-gates-run with aggregated decision evidence.
+m7) Planned mutable interfaces use explicit auth scope + idempotency mode and unified response envelope.
 
 ## Primary User Flows (`bleuV1`)
 f1) User connects/follows YouTube sources (manual first, auto-ingestion later).
@@ -65,7 +69,7 @@ r4) [have] Channels index: `/channels`
 r5) [have] Channel page: `/b/:channelSlug`
 r6) [have] YouTube adapter page (manual v0): `/youtube`
 r7) [have] Blueprint detail: `/blueprint/:blueprintId`
-r8) [todo] My Feed first-class route (example target: `/my-feed`)
+r8) [have] My Feed first-class route: `/my-feed`
 r9) [have] Compatibility redirects: `/tags` -> `/channels`, `/blueprints` -> `/wall`
 
 ## Scope Boundaries (MVP)

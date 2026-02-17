@@ -2,6 +2,13 @@
 
 Purpose: keep human intervention minimal and focused on high-risk boundaries.
 
+## Milestone Definition (CP3 Unit)
+A milestone is an objective bundle of 3-8 dependent tasks that produces exactly one integration candidate.
+
+Rules:
+- milestone is objective-based, not calendar-based.
+- one integration candidate maps to one CP3 review.
+
 ## Mandatory Checkpoints (Exactly 3)
 
 ### CP1: Scope And Identity Check
@@ -31,7 +38,7 @@ Artifacts required
 
 ### CP3: Release Readiness Check
 Trigger
-- Milestone integration candidate ready for merge/push.
+- Objective-bundle milestone integration candidate ready for merge/push.
 
 Required human review
 - Confirm review-gates pass.

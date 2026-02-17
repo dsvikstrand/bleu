@@ -19,7 +19,7 @@ import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layou
 const FILTER_OPTIONS: { value: ExploreFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'blueprints', label: 'Blueprints' },
-  { value: 'inventories', label: 'Libraries' },
+  { value: 'inventories', label: 'Legacy Libraries' },
   { value: 'users', label: 'Users' },
 ];
 
@@ -117,9 +117,9 @@ export default function Explore() {
       <PageMain>
         <PageSection className="mb-6">
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Explore</p>
-          <h1 className="text-2xl font-semibold mt-1">Search blueprints, inventories, and creators</h1>
+          <h1 className="text-2xl font-semibold mt-1">Search blueprints, channels, and creators</h1>
           <p className="text-sm text-muted-foreground mt-2">
-            Start with a keyword, then narrow by type or jump into trending channels below.
+            Start with a keyword, then narrow by type or jump into trending channels.
           </p>
         </PageSection>
 
@@ -139,7 +139,7 @@ export default function Explore() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search blueprints, inventories, users..."
+            placeholder="Search blueprints, channels, users..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="pl-10 h-11 text-base border-border/50"
@@ -166,7 +166,7 @@ export default function Explore() {
             <div className="text-center py-8">
               <h2 className="text-2xl font-semibold mb-2">Discover what works</h2>
               <p className="text-muted-foreground">
-                Search blueprints, inventories, and creators - or explore trending topics below.
+                Search blueprints and creators, or explore trending channels below.
               </p>
             </div>
 

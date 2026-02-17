@@ -19,16 +19,19 @@
 5. `candidate_submitted`
 - Item submitted for channel promotion decision.
 
-6. `candidate_evaluated_pass`
-- All gate criteria passed for channel publish.
+6. `candidate_pending_manual_review`
+- Candidate has at least one `warn` outcome in selected mode and needs user review before final publish/reject.
 
-7. `candidate_evaluated_fail`
-- One or more required gates failed.
+7. `candidate_evaluated_pass`
+- All mandatory gate criteria passed for channel publish.
 
-8. `channel_published`
+8. `candidate_evaluated_fail`
+- One or more mandatory gate criteria failed with block outcomes.
+
+9. `channel_published`
 - Shared channel publication completed.
 
-9. `channel_rejected`
+10. `channel_rejected`
 - Candidate not published to channel and recorded with reason code(s).
 
 ## Actor Ownership Per Transition
@@ -36,12 +39,14 @@ System-owned transitions
 - `source_discovered -> source_normalized`
 - `source_normalized -> blueprint_generated`
 - `blueprint_generated -> my_feed_published`
-- `candidate_submitted -> candidate_evaluated_pass|candidate_evaluated_fail`
+- `candidate_submitted -> candidate_pending_manual_review|candidate_evaluated_pass|candidate_evaluated_fail`
 - `candidate_evaluated_pass -> channel_published`
 - `candidate_evaluated_fail -> channel_rejected`
 
 User-owned transitions
 - `my_feed_published -> candidate_submitted`
+- `candidate_pending_manual_review -> candidate_submitted` (after remix/insight edit and re-submit)
+- `candidate_pending_manual_review -> channel_rejected` (manual decline)
 - optional remix/insight updates attached to blueprint
 
 Moderator/admin-owned transitions (future-compatible)
@@ -70,6 +75,7 @@ Terminal state invariants
 ## Invalid Transitions
 - `source_discovered -> channel_published` (skips required generation and gate stages)
 - `my_feed_published -> channel_published` (skips candidate evaluation)
+- `candidate_pending_manual_review -> channel_published` without re-evaluation/pass record
 - `candidate_evaluated_fail -> channel_published` without explicit override path
 - `channel_rejected -> channel_published` without re-evaluation or override record
 
@@ -77,13 +83,14 @@ Terminal state invariants
 1. Channel publish is never unconditional.
 2. My Feed publication does not imply channel eligibility.
 3. Channel gate failure does not remove personal access by default.
+4. Selected-mode warns require explicit `candidate_pending_manual_review` handling.
 
 ## Stop-And-Inspect Alignment
 Checkpoint 1 (scope identity)
 - confirm lifecycle still enforces source-first and channel-gated distribution.
 
 Checkpoint 2 (state ownership)
-- verify actor ownership and retry policy remain decision-complete.
+- verify actor ownership, warn routing, and retry policy remain decision-complete.
 
 Checkpoint 3 (phase close)
 - verify invalid transitions and terminal invariants are reflected in implementation specs.

@@ -16,7 +16,23 @@ export const config = {
 
   /** Vite base path (for SPA routing on GitHub Pages etc.). */
   basePath: import.meta.env.BASE_URL as string,
+
+  /** Feature flags for phased bleuV1 rollout. */
+  features: {
+    myFeedV1: toBool(import.meta.env.VITE_FEATURE_MY_FEED_V1, true),
+    sourceAdapterV1: toBool(import.meta.env.VITE_FEATURE_SOURCE_ADAPTER_V1, true),
+    channelSubmitV1: toBool(import.meta.env.VITE_FEATURE_CHANNEL_SUBMIT_V1, true),
+    gatePipelineV1: toBool(import.meta.env.VITE_FEATURE_GATE_PIPELINE_V1, true),
+  },
 } as const;
+
+function toBool(raw: unknown, fallback: boolean) {
+  if (raw === undefined || raw === null || raw === '') return fallback;
+  const normalized = String(raw).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+}
 
 /**
  * Return the Supabase Edge Function URL for a given function name.

@@ -209,6 +209,88 @@ export type Database = {
           },
         ]
       }
+      channel_candidates: {
+        Row: {
+          channel_slug: string
+          created_at: string
+          id: string
+          status: string
+          submitted_by_user_id: string
+          updated_at: string
+          user_feed_item_id: string
+        }
+        Insert: {
+          channel_slug: string
+          created_at?: string
+          id?: string
+          status?: string
+          submitted_by_user_id: string
+          updated_at?: string
+          user_feed_item_id: string
+        }
+        Update: {
+          channel_slug?: string
+          created_at?: string
+          id?: string
+          status?: string
+          submitted_by_user_id?: string
+          updated_at?: string
+          user_feed_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_candidates_user_feed_item_id_fkey"
+            columns: ["user_feed_item_id"]
+            isOneToOne: false
+            referencedRelation: "user_feed_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_gate_decisions: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          gate_id: string
+          id: string
+          method_version: string | null
+          outcome: string
+          policy_version: string
+          reason_code: string
+          score: number | null
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          gate_id: string
+          id?: string
+          method_version?: string | null
+          outcome: string
+          policy_version?: string
+          reason_code: string
+          score?: number | null
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          gate_id?: string
+          id?: string
+          method_version?: string | null
+          outcome?: string
+          policy_version?: string
+          reason_code?: string
+          score?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_gate_decisions_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "channel_candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventories: {
         Row: {
           created_at: string
@@ -597,6 +679,139 @@ export type Database = {
           follower_count?: number
           id?: string
           slug?: string
+        }
+        Relationships: []
+      }
+      source_items: {
+        Row: {
+          canonical_key: string
+          created_at: string
+          id: string
+          ingest_status: string
+          metadata: Json
+          published_at: string | null
+          source_native_id: string
+          source_type: string
+          source_url: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          canonical_key: string
+          created_at?: string
+          id?: string
+          ingest_status?: string
+          metadata?: Json
+          published_at?: string | null
+          source_native_id: string
+          source_type: string
+          source_url: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          canonical_key?: string
+          created_at?: string
+          id?: string
+          ingest_status?: string
+          metadata?: Json
+          published_at?: string | null
+          source_native_id?: string
+          source_type?: string
+          source_url?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_feed_items: {
+        Row: {
+          blueprint_id: string
+          created_at: string
+          id: string
+          last_decision_code: string | null
+          remix_version_id: string | null
+          source_item_id: string
+          state: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          blueprint_id: string
+          created_at?: string
+          id?: string
+          last_decision_code?: string | null
+          remix_version_id?: string | null
+          source_item_id: string
+          state?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          blueprint_id?: string
+          created_at?: string
+          id?: string
+          last_decision_code?: string | null
+          remix_version_id?: string | null
+          source_item_id?: string
+          state?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_feed_items_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_feed_items_remix_version_id_fkey"
+            columns: ["remix_version_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_feed_items_source_item_id_fkey"
+            columns: ["source_item_id"]
+            isOneToOne: false
+            referencedRelation: "source_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_source_subscriptions: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          mode: string
+          source_channel_id: string
+          source_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          mode?: string
+          source_channel_id: string
+          source_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          mode?: string
+          source_channel_id?: string
+          source_type?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

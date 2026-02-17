@@ -2,7 +2,7 @@
 
 Purpose: define non-negotiable checks before integration.
 
-## Mandatory Gates
+## Mandatory Gates (All Tasks)
 1. Docs governance
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
@@ -17,15 +17,27 @@ Purpose: define non-negotiable checks before integration.
 - no violation of decision matrix defaults
 - no checkpoint-bypass for required triggers
 
-## Conditional Gates
-- Unit/integration tests when code behavior changes
-- Smoke checks for ingest/gate pipeline when backend path changes
+## Mandatory Code Baseline (Code-Changing Tasks)
+1. Always required
+- `npm run lint`
+- `npm run test`
+
+2. Conditionally required build
+Run `npm run build` when touched changes include any of:
+- routing/navigation
+- shared components/layout primitives
+- type-heavy refactors
+- publish/auth/data flow paths
+
+## Conditional Domain Gates
+- Smoke checks for ingest/gate pipeline when backend ingestion/candidate paths change
 - Metrics script sanity when telemetry interfaces change
 
 ## Fail Conditions
 - missing rollback for required task classes
 - unresolved blocking risk from risk-register owner
 - ambiguous terminology violating terminology-rules
+- missing mandatory code baseline for code-changing tasks
 
 ## Integrator Output Format
 - `task_id`

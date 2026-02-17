@@ -1,7 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, Users, Search, Leaf } from 'lucide-react';
+import { Home, Users, Search, Leaf, Inbox } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { config } from '@/config/runtime';
 
 interface AppNavigationProps {
   variant?: 'header' | 'floating';
@@ -15,7 +16,10 @@ export function AppNavigation({ variant = 'header', mode = 'all', className }: A
 
   const allNavItems = [
     { path: '/', label: 'Home', icon: Home, showWhen: 'public-only' as const },
-    { path: '/wall', label: 'Feed', icon: Users, showWhen: 'auth-only' as const },
+    ...(config.features.myFeedV1
+      ? [{ path: '/my-feed', label: 'My Feed', icon: Inbox, showWhen: 'auth-only' as const }]
+      : []),
+    { path: '/wall', label: 'Channel Feed', icon: Users, showWhen: 'auth-only' as const },
     { path: '/channels', label: 'Channels', icon: Leaf, showWhen: 'always' as const },
     { path: '/explore', label: 'Explore', icon: Search, showWhen: 'always' as const },
   ];

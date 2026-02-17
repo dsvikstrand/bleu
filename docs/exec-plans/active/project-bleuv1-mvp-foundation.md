@@ -1,115 +1,75 @@
-# Project - bleuV1 MVP Foundation
+# Project - bleuV1 MVP Build (Manual Iterative)
 
 Status: `active`
 
-## Goal
-Produce decision-complete docs so multi-agent implementation can run with minimal human invention.
+## Objective
+Deliver the remaining `bleuV1` MVP through a manual iterative build loop with clear checkpoints and low ambiguity.
 
-## Phase Breakdown
-1. Phase 1 - Foundation contracts (`completed`)
-2. Phase 2 - Executable contracts (`active`)
-3. Phase 3 - Automation wiring (`planned`)
+## Execution Scheme Reference
+- Primary sequence and progress tracker:
+  - `docs/exec-plans/active/bleuv1-manual-iteration-scheme.md`
 
-## Locked Defaults
+## Active Delivery Protocol
+1. User proposes a concrete update.
+2. Assistant provides implementation plan (scope, touched files, validation).
+3. User approves with `PA`.
+4. Assistant implements and validates.
+5. Assistant reports outcomes and follow-up options.
+
+## Operating Mode
+- Active mode: manual iterative execution.
+- Paused mode: multi-agent orchestration automation.
+- Agentic docs remain as reference contracts only and are not mandatory for each feature iteration.
+
+## Product Defaults (Locked)
 1. YouTube-only adapter scope for MVP.
 2. My Feed default visibility is personal/private until channel promotion.
 3. Channel promotion default mode is selected/manual approve.
 4. User value-add is insight/remix on imported blueprints; no standalone free-form post model in MVP core.
 5. Low-confidence channel candidates are blocked from channel and retained in My Feed.
-6. Stop-and-inspect checkpoints are capped at three per milestone.
-7. Orchestration control plane default is CLI-first (`codex exec`) + GitHub Actions.
 
-## Phase 1 Completion Evidence
-- Foundation files:
-  - `docs/agentic/foundation/north-star.md`
-  - `docs/agentic/foundation/mvp-scope-contract.md`
-  - `docs/agentic/foundation/system-map.md`
-  - `docs/agentic/foundation/lifecycle-and-state-machine.md`
-  - `docs/agentic/foundation/data-contract.md`
-  - `docs/agentic/foundation/gate-policy.md`
-  - `docs/agentic/foundation/risk-register.md`
-  - `docs/agentic/foundation/glossary.md`
-- Navigation/governance updates:
-  - `docs/README.md`
-  - `docs/_freshness_map.json`
+## Current Workstreams
+### W1 - My Feed As First-Class Surface
+- Introduce/finish personal unfiltered feed lane behavior.
+- Ensure channel fail does not remove personal access.
 
-## Phase 2 Deliverables And Done Criteria
+### W2 - Channel Candidate Gating
+- Keep promotion as explicit second step from My Feed.
+- Preserve quality/safety/channel-fit constraints.
 
-### E1 - Executable entrypoint
-- File: `docs/agentic/executable/README.md`
-- Done when:
-  1. Executable read order is explicit.
-  2. Foundation -> executable mapping is explicit.
-  3. Role ownership is explicit.
+### W3 - YouTube Pull And Caching
+- Keep YouTube-first ingestion flow stable.
+- Reuse generated artifacts for duplicate pulls when canonical source id matches.
 
-### E2 - Decision matrix
-- File: `docs/agentic/executable/decision-matrix.md`
-- Done when:
-  1. Defaults and refusal rules are explicit.
-  2. Override authority model is explicit.
-  3. Escalation triggers are explicit.
+### W4 - Community Value Layer
+- Keep insights/remixes tied to imported blueprints.
+- Maintain vote/comment utility on shared channel content.
 
-### E3 - Task queue contract
-- Files:
-  - `docs/agentic/executable/task-queue-scope.md`
-  - `docs/agentic/executable/task-schema.md`
-- Done when:
-  1. Task classes and decomposition rules are explicit.
-  2. Atomic task schema includes acceptance tests and rollback requirements.
-  3. JSON example is valid and complete.
+## Acceptance Baseline Per Iteration
+1. Scope and behavior align with `docs/app/product-spec.md`.
+2. Architecture assumptions remain aligned with `docs/architecture.md`.
+3. Docs freshness check passes:
+- `npm run docs:refresh-check -- --json`
+4. Docs link check passes:
+- `npm run docs:link-check`
+5. Additional validation is run when change risk requires it.
 
-### E4 - Interface and schema contracts
-- Files:
-  - `docs/agentic/executable/interface-contracts.md`
-  - `docs/agentic/executable/schema-contracts.md`
-- Done when:
-  1. Planned interfaces are documented as spec-only.
-  2. Entity invariants, idempotency, and cache contracts are explicit.
-  3. Compatibility and rollback constraints are explicit.
+## Checkpoint Policy (Manual)
+- CP1: identity/scope changes (one-line promise, in/out-of-scope shifts).
+- CP2: policy/data/auth boundary changes.
+- CP3: milestone close where multiple dependent tasks converge.
 
-### E5 - State and eval execution contracts
-- Files:
-  - `docs/agentic/executable/state-machine-tests.md`
-  - `docs/agentic/executable/eval-harness.md`
-- Done when:
-  1. Lifecycle scenarios include valid/invalid/retry/terminal tests.
-  2. Gate order, threshold behavior, and fail-closed rules are explicit.
-  3. Decision payload contract is explicit.
-
-### E6 - Governance and language enforcement
-- Files:
-  - `docs/agentic/executable/stop-inspect-policy.md`
-  - `docs/agentic/executable/terminology-rules.md`
-  - `docs/agentic/executable/review-gates.md`
-- Done when:
-  1. Exactly three mandatory checkpoint classes are defined.
-  2. Terminology lint-style rules prevent identity drift.
-  3. Integration minimum gates are explicit.
-
-### E7 - Role handoff contracts
-- File: `docs/agentic/executable/role-contracts.md`
-- Done when:
-  1. Planner/Implementer/Evaluator/Integrator I/O contracts are explicit.
-  2. Must-not constraints are explicit per role.
-  3. Handoff artifact minimum is explicit.
-
-### E8 - Canonical and freshness wiring
-- Files:
-  - `docs/agentic/README.md`
-  - `docs/README.md`
-  - `docs/_freshness_map.json`
-- Done when:
-  1. Canonical read order includes executable pack.
-  2. Freshness map requires executable docs where relevant.
-
-## Validation Checklist (Phase 2)
-- `npm run docs:refresh-check -- --json` passes.
-- `npm run docs:link-check` passes.
-- Contradiction audit passes: no active docs reintroduce library-first or standalone-post-first identity.
-- Completeness audit passes: locked defaults appear in canonical + foundation + executable docs.
-- Traceability audit passes: each foundation doc has at least one executable contract mapping.
-
-## Deferred Items (Phase 3+)
+## Deferred (On Hold)
 - `codex exec` orchestration scripts and role runner wrappers.
-- CI workflow implementation for evaluator and integrator gates.
+- CI workflow implementation for evaluator/integrator automation.
 - Automated checkpoint enforcement.
+
+## Reference Material (Paused Track)
+- `docs/agentic/README.md`
+- `docs/agentic/foundation/`
+- `docs/agentic/executable/`
+
+## Completion Criteria For This Plan
+1. Remaining MVP work is shipped through manual iterations without identity drift.
+2. Core product contract remains stable and understandable in one sentence.
+3. Deferred automation work can be resumed later without blocking MVP delivery.

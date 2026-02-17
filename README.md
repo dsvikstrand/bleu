@@ -8,6 +8,11 @@ A React + Supabase app for turning media into bite-sized blueprints and discussi
 - Community layer: channel feeds are shared lanes where users vote/comment/add insights.
 - Gated distribution: channel publish is a second-step after quality/safety/channel-fit checks.
 
+## Current Delivery Mode
+- Active mode: manual iterative delivery.
+- Loop: you propose change -> plan -> `PA` -> implementation -> validation.
+- Agentic orchestration docs are retained as reference and are not the active delivery path.
+
 ## Current Runtime Surfaces
 - Home: `/`
 - Feed: `/wall`
@@ -21,7 +26,7 @@ A React + Supabase app for turning media into bite-sized blueprints and discussi
 - Vite + React + TypeScript
 - Tailwind + shadcn/ui
 - Supabase (auth, data, edge functions)
-- Express agentic backend for generation/eval paths
+- Express backend for generation/eval paths
 
 ## Local Development
 ```bash

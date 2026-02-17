@@ -4,7 +4,7 @@
 a1) [have] Clear wedge: `YouTube URL -> editable blueprint draft`.
 a2) [have] Strict MVP path is implemented for single-video YouTube flows.
 a3) [have] Real endpoint is live: `POST /api/youtube-to-blueprint`.
-a4) [have] Public route is live at `/youtube` and is reachable via channel-scoped `+ Create` flow (nav entry may be hidden).
+a4) [have] Public route is live at `/youtube` and now routes generated output into personal lane (`/my-feed`) before channel sharing.
 a5) [have] Focused YT2BP pilot completed and reviewed.
 a6) [have] YT2BP quality gate (LLM grading, min-score, retry) is wired server-side.
 a7) [have] YT2BP content safety gate (LLM grading + one retry) is wired server-side.
@@ -19,6 +19,8 @@ a15) [have] 2026-02-13 UI note: Project 3 Step 1 join-state wiring (Explore/Chan
 a16) [have] 2026-02-13 UI note: Channels IA routing foundation (`/channels`, `/b/:channelSlug`, `/tags` deprecation redirect, curated catalog guards) is frontend-only and does not change YT2BP API/runtime contract.
 a17) [have] 2026-02-13 UI note: Channel-scoped `+ Create` flow gates public publishing behind joined channels and routes to `/youtube?channel=<slug>&intent=post`; frontend-only and does not change YT2BP API/runtime contract.
 a18) [have] 2026-02-13 UI note: App-wide wall-to-wall layout migration (Run 1) updates the YouTube page framing to a minimal document-like layout (no ambient blobs/gradients, tighter gutters); frontend-only and does not change YT2BP API/runtime contract.
+a19) [have] 2026-02-17 flow update: generated YouTube drafts are saved to `My Feed` first (`my_feed_published`), then optionally promoted via channel candidate flow.
+a20) [have] 2026-02-17 backend update: channel-candidate lifecycle endpoints and gate decision persistence are available for second-step channel publication.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract
@@ -45,6 +47,7 @@ b4) [todo] Validate with a focused pilot
 c1) [have] Users can generate and publish a usable draft in one session.
 c2) [have] Transcript retrieval is working with provider abstraction.
 c3) [todo] Reliability must be validated on a focused pilot set.
+c4) [have] Personal-first contract is enforced: YT2BP does not directly publish to channel feed.
 
 ## Q & A
 
@@ -129,6 +132,7 @@ c5) [todo] Implement runtime `llm_instruction_security_v0` (prompt injection / j
 
 ### Step 1 - Ship the Simple YT2BP Entry
 d1) [have] `/youtube` is live and reachable via channel-scoped `+ Create` flow (nav entry optional/hidden).
+d1b) [have] Post-generation action now defaults to `Save to My Feed` with route transition to `/my-feed`.
 d2) [have] Keep the page minimal:
 - One URL input.
 - One primary action: `Generate Blueprint`.
@@ -138,7 +142,7 @@ d2) [have] Keep the page minimal:
 d3) [have] No source customization and no edit-mode branch in v1.
 d4) [have] Same-page preview is implemented.
 d5) [have] Logged-out users can preview and are prompted to log in to publish.
-d6) [have] Channel-scoped posting rule: public publish is blocked unless a valid `channel` context is present and joined.
+d6) [have] Channel posting is now a second-step candidate submission from `My Feed` (idempotent submit + gated evaluation).
 
 ### Step 2 - Build the Core Pipeline (URL -> Blueprint)
 e1) [have] Transcript ingestion is behind one adapter:

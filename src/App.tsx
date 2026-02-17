@@ -13,6 +13,7 @@ import UserProfile from "./pages/UserProfile";
 import Channels from "./pages/Channels";
 import ChannelPage from "./pages/ChannelPage";
 import PostDetail from "./pages/PostDetail";
+import MyFeed from "./pages/MyFeed";
 import Inventory from "./pages/Inventory";
 import InventoryCreate from "./pages/InventoryCreate";
 import InventoryDetail from "./pages/InventoryDetail";
@@ -41,6 +42,9 @@ const App = () => (
             <Route path="/youtube" element={<YouTubeToBlueprint />} />
             <Route path="/channels" element={<Channels />} />
             <Route path="/b/:channelSlug" element={<ChannelPage />} />
+            {config.features.myFeedV1 && (
+              <Route path="/my-feed" element={<RequireAuth><MyFeed /></RequireAuth>} />
+            )}
             <Route path="/wall" element={<Wall />} />
             <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
             <Route path="/auth" element={<Auth />} />

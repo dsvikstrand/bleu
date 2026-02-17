@@ -14,6 +14,7 @@ Output
 Must not
 - invent scope beyond decision matrix
 - hand off tasks without acceptance tests
+- omit auth/idempotency fields on mutable endpoint tasks
 
 ## Implementer Contract
 Input
@@ -27,6 +28,7 @@ Output
 Must not
 - alter locked defaults without checkpoint flow
 - bypass schema/interface contracts
+- bypass declared auth/idempotency requirements in interface contracts
 
 ## Evaluator Contract
 Input
@@ -34,12 +36,14 @@ Input
 
 Output
 - pass/fail report against acceptance tests
+- schema validation result for task artifact (`task-artifact.schema.json`)
 - policy compliance report (state-machine + eval-harness)
 - blocker reason codes for any fail
 
 Must not
 - silently downgrade failed checks
 - approve when checkpoint is required but missing
+- approve when auth/idempotency compliance is unresolved
 
 ## Integrator Contract
 Input
@@ -51,6 +55,7 @@ Output
 Must not
 - integrate when review-gates fail
 - integrate without required stop-checkpoint signoff
+- integrate task artifacts that fail schema validation
 
 ## Handoff Artifact Minimum
 Each role handoff must include:

@@ -15,20 +15,25 @@ This policy defines channel promotion semantics for imported blueprints. It is a
 4. `pii`
 - Checks potential leakage of sensitive personal information.
 
+## Execution Mode Default
+- Default evaluator mode: `all_gates_run`.
+- Rationale: produce complete audit evidence for candidate decisions and reduce hidden failure causes.
+- Optional future mode: short-circuit mode may be introduced only with explicit policy version bump.
+
 ## Threshold Classes
 - `pass`: eligible for publish contribution in this gate.
-- `warn`: non-blocking issue for personal lane; policy may still block channel depending on class.
+- `warn`: caution requiring selected-mode manual review when allowed by class policy.
 - `block`: hard fail for channel publish.
 
 ## Class-Specific Policy
 `channel_fit`
 - `pass`: publish eligible.
-- `warn`: hold for manual review in selected mode.
+- `warn`: route to manual review in selected mode.
 - `block`: reject channel publish.
 
 `quality`
 - `pass`: publish eligible.
-- `warn`: hold for manual review in selected mode.
+- `warn`: route to manual review in selected mode.
 - `block`: reject channel publish.
 
 `safety`
@@ -44,7 +49,7 @@ This policy defines channel promotion semantics for imported blueprints. It is a
 ## Global Decision Rule
 - Channel publish requires all mandatory gate classes to avoid `block`.
 - Low-confidence candidates are blocked from channel by default in MVP.
-- `warn` outcomes in `channel_fit` and `quality` route to manual review path in selected mode.
+- In selected mode, `warn` outcomes in `channel_fit` and `quality` route to `candidate_pending_manual_review`.
 
 ## Personal Vs Channel Policy
 Explicit lock:

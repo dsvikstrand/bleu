@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bleuv1.local/schemas/task-artifact.schema.json",
+  "title": "bleuV1 Task Artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "title",
+    "class",
+    "intent",
+    "in_scope",
+    "out_of_scope",
+    "inputs",
+    "files_to_touch",
+    "constraints",
+    "dependencies",
+    "acceptance_tests",
+    "rollback_plan",
+    "owner_role",
+    "status",
+    "auth_scope",
+    "idempotency_mode",
+    "build_required_reason",
+    "checkpoint_required"
+  ],
+  "properties": {
+    "task_id": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 },
+    "class": {
+      "type": "string",
+      "enum": ["docs_contract", "interface_spec", "implementation", "evaluation", "ops_observability"]
+    },
+    "intent": { "type": "string", "minLength": 1 },
+    "in_scope": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "out_of_scope": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "inputs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "files_to_touch": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "constraints": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "acceptance_tests": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "rollback_plan": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "owner_role": {
+      "type": "string",
+      "enum": ["planner", "implementer", "evaluator", "integrator"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["todo", "in_progress", "blocked", "done"]
+    },
+    "auth_scope": {
+      "type": "string",
+      "enum": ["none", "user_required", "service_required", "mixed"]
+    },
+    "idempotency_mode": {
+      "type": "string",
+      "enum": ["none", "natural_key_upsert", "requires_idempotency_key", "hybrid"]
+    },
+    "build_required_reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "checkpoint_required": {
+      "type": "string",
+      "enum": ["none", "cp1", "cp2", "cp3"]
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

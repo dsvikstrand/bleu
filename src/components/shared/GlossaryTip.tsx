@@ -9,11 +9,11 @@ import { HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const GLOSSARY: Record<string, string> = {
-  inventory: 'A library is a collection of items you can choose from—like a recipe ingredient list.',
-  blueprint: 'Your personal selection from a library, with AI-powered analysis.',
-  wall: 'The community feed where users share and discover blueprints.',
+  inventory: 'Legacy concept: libraries remain in the codebase but are deprecated in the primary MVP journey.',
+  blueprint: 'A bite-sized, step-by-step summary generated from source content, optionally remixed by users.',
+  wall: 'Channel Feed: the shared lane where evaluated blueprints are published for community feedback.',
   tag: 'A label that helps organize and discover content.',
-  remix: "Create your own version of someone else's blueprint.",
+  remix: 'A user-edited insight variant attached to an imported blueprint.',
 };
 
 interface GlossaryTipProps {

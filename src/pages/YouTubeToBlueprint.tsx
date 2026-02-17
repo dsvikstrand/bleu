@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Input } from '@/components/ui/input';
@@ -11,21 +11,9 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCreateBlueprint } from '@/hooks/useBlueprints';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { getFunctionUrl } from '@/config/runtime';
+import { config, getFunctionUrl } from '@/config/runtime';
 import { logMvpEvent } from '@/lib/logEvent';
-import { useTagFollows } from '@/hooks/useTagFollows';
-import { useTagsBySlugs } from '@/hooks/useTags';
-import { getPostableChannel } from '@/lib/channelPostContext';
+import { ensureSourceItemForYouTube, getExistingUserFeedItem, upsertUserFeedItem } from '@/lib/myFeedApi';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 
@@ -144,20 +132,9 @@ function toYouTubeErrorMessage(errorCode: YouTubeToBlueprintErrorResponse['error
 
 export default function YouTubeToBlueprint() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { session, user } = useAuth();
   const { toast } = useToast();
   const createBlueprint = useCreateBlueprint();
-  const { getFollowState, joinChannel } = useTagFollows();
-
-  const postChannelSlug = (searchParams.get('channel') || '').trim();
-  const postChannel = postChannelSlug ? getPostableChannel(postChannelSlug) : null;
-  const { data: postChannelTagRows = [] } = useTagsBySlugs(postChannel ? [postChannel.tagSlug] : []);
-  const postChannelTagId = postChannelTagRows.find((row) => row.slug === postChannel?.tagSlug)?.id || null;
-  const postChannelFollowState = postChannelTagId ? getFollowState({ id: postChannelTagId }) : 'not_joined';
-  const isPostChannelJoined = postChannelFollowState === 'joined' || postChannelFollowState === 'leaving';
-  const [showJoinToPublishDialog, setShowJoinToPublishDialog] = useState(false);
-  const [isJoiningToPublish, setIsJoiningToPublish] = useState(false);
 
   const [videoUrl, setVideoUrl] = useState('');
   const [generateReview, setGenerateReview] = useState(true);
@@ -167,7 +144,7 @@ export default function YouTubeToBlueprint() {
   const [progressValue, setProgressValue] = useState(0);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [result, setResult] = useState<YouTubeToBlueprintSuccessResponse | null>(null);
-  const [isPublishing, setIsPublishing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const progressResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const phaseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -246,6 +223,11 @@ export default function YouTubeToBlueprint() {
       userId: user?.id,
       metadata: { source: 'youtube_mvp' },
     });
+    await logMvpEvent({
+      eventName: 'source_pull_requested',
+      userId: user?.id,
+      metadata: { source_type: 'youtube', source: 'youtube_mvp' },
+    });
 
     try {
       const response = await fetch(YOUTUBE_ENDPOINT, {
@@ -281,6 +263,11 @@ export default function YouTubeToBlueprint() {
         userId: user?.id,
         metadata: { source: 'youtube_mvp', run_id: json.run_id },
       });
+      await logMvpEvent({
+        eventName: 'source_pull_succeeded',
+        userId: user?.id,
+        metadata: { source_type: 'youtube', run_id: json.run_id },
+      });
     } catch {
       await logMvpEvent({
         eventName: 'youtube_fail',
@@ -305,23 +292,30 @@ export default function YouTubeToBlueprint() {
     }
   }
 
-  async function publishGeneratedBlueprint(options?: { bypassJoinCheck?: boolean }) {
-    if (!result || !user || isPublishing) return;
-    if (!postChannel) {
-      toast({
-        title: 'Choose a channel to post',
-        description: 'Public blueprints must be posted to a channel. Start from a channel page or use Create.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    if (!options?.bypassJoinCheck && !isPostChannelJoined) {
-      setShowJoinToPublishDialog(true);
-      return;
-    }
-    setIsPublishing(true);
+  async function saveToMyFeed() {
+    if (!result || !user || isSaving) return;
+    setIsSaving(true);
     try {
-      const tagsForSave = Array.from(new Set([...(result.draft.tags || []), postChannel.tagSlug]));
+      const sourceItem = await ensureSourceItemForYouTube({
+        videoUrl: videoUrl.trim(),
+        title: result.draft.title,
+        metadata: {
+          run_id: result.run_id,
+          transcript_source: result.meta.transcript_source,
+          confidence: result.meta.confidence,
+        },
+      });
+
+      const existing = await getExistingUserFeedItem(user.id, sourceItem.id);
+      if (existing) {
+        toast({
+          title: 'Already in My Feed',
+          description: 'This source is already available in your personal feed.',
+        });
+        navigate('/my-feed');
+        return;
+      }
+
       const created = await createBlueprint.mutateAsync({
         inventoryId: null,
         title: result.draft.title,
@@ -331,42 +325,42 @@ export default function YouTubeToBlueprint() {
         reviewPrompt: 'youtube_mvp',
         bannerUrl: result.banner.url,
         llmReview: result.review.summary,
-        tags: tagsForSave,
-        isPublic: true,
+        tags: result.draft.tags || [],
+        isPublic: false,
       });
+
+      await upsertUserFeedItem({
+        userId: user.id,
+        sourceItemId: sourceItem.id,
+        blueprintId: created.id,
+        state: 'my_feed_published',
+      });
+
       await logMvpEvent({
-        eventName: 'youtube_publish',
+        eventName: 'my_feed_publish_succeeded',
         userId: user.id,
         blueprintId: created.id,
-        metadata: { source: 'youtube_mvp' },
+        metadata: {
+          source_type: 'youtube',
+          canonical_key: sourceItem.canonical_key,
+        },
       });
-      navigate(`/blueprint/${created.id}`);
-    } catch (error) {
-      toast({
-        title: 'Publish failed',
-        description: error instanceof Error ? error.message : 'Could not publish blueprint.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsPublishing(false);
-    }
-  }
 
-  async function handleJoinAndPublish() {
-    if (!postChannel || !postChannelTagId) return;
-    setIsJoiningToPublish(true);
-    try {
-      await joinChannel({ id: postChannelTagId, slug: postChannel.tagSlug });
-      setShowJoinToPublishDialog(false);
-      await publishGeneratedBlueprint({ bypassJoinCheck: true });
+      toast({
+        title: 'Saved to My Feed',
+        description: config.features.channelSubmitV1
+          ? 'You can submit this to channels from My Feed.'
+          : 'Personal copy saved successfully.',
+      });
+      navigate('/my-feed');
     } catch (error) {
       toast({
-        title: 'Join failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
+        title: 'Save failed',
+        description: error instanceof Error ? error.message : 'Could not save to My Feed.',
         variant: 'destructive',
       });
     } finally {
-      setIsJoiningToPublish(false);
+      setIsSaving(false);
     }
   }
 
@@ -375,35 +369,19 @@ export default function YouTubeToBlueprint() {
       <AppHeader />
       <PageMain className="space-y-6">
         <PageSection>
-          {postChannel ? (
-            <div className="border border-border/40 px-3 py-3 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">Posting to b/{postChannel.slug}</p>
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  {isPostChannelJoined ? 'Publish will post into this channel.' : 'Join this channel to publish publicly.'}
-                </p>
-              </div>
-              <div className="shrink-0">
-                <Button asChild size="sm" variant="outline">
-                  <Link to={`/b/${postChannel.slug}`}>{isPostChannelJoined ? 'View' : 'Join'}</Link>
-                </Button>
-              </div>
+          <div className="border border-border/40 px-3 py-3 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Personal-first flow</p>
+              <p className="text-xs text-muted-foreground line-clamp-2">
+                Generated content saves to My Feed first. Submit to channels as a second step.
+              </p>
             </div>
-          ) : (
-            <div className="border border-border/40 px-3 py-3 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">Choose a channel to post</p>
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  Public blueprints must be posted to a channel. Start from a channel page or use + Create.
-                </p>
-              </div>
-              <div className="shrink-0">
-                <Button asChild size="sm" variant="outline">
-                  <Link to="/channels?create=1">Pick channel</Link>
-                </Button>
-              </div>
+            <div className="shrink-0">
+              <Button asChild size="sm" variant="outline">
+                <Link to="/my-feed">Open My Feed</Link>
+              </Button>
             </div>
-          )}
+          </div>
         </PageSection>
 
         <PageDivider />
@@ -492,59 +470,30 @@ export default function YouTubeToBlueprint() {
 
               {!user ? (
                 <div className="rounded-md border border-border/40 p-3 flex items-center justify-between gap-3">
-                  <p className="text-sm text-muted-foreground">Log in to publish this blueprint.</p>
+                  <p className="text-sm text-muted-foreground">Log in to save this blueprint in My Feed.</p>
                   <Button asChild size="sm">
-                    <Link to="/auth">Log in to publish</Link>
-                  </Button>
-                </div>
-              ) : !postChannel ? (
-                <div className="rounded-md border border-border/40 p-3 flex items-center justify-between gap-3">
-                  <p className="text-sm text-muted-foreground">Choose a channel before publishing.</p>
-                  <Button asChild size="sm" variant="outline">
-                    <Link to="/channels?create=1">Pick channel</Link>
-                  </Button>
-                </div>
-              ) : !isPostChannelJoined ? (
-                <div className="rounded-md border border-border/40 p-3 flex items-center justify-between gap-3">
-                  <p className="text-sm text-muted-foreground">Join b/{postChannel.slug} to publish publicly.</p>
-                  <Button size="sm" variant="outline" onClick={() => setShowJoinToPublishDialog(true)}>
-                    Join
+                    <Link to="/auth">Log in to save</Link>
                   </Button>
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={publishGeneratedBlueprint} disabled={isPublishing}>
-                    {isPublishing ? 'Publishing...' : 'Publish'}
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={saveToMyFeed} disabled={isSaving}>
+                      {isSaving ? 'Saving...' : 'Save to My Feed'}
+                    </Button>
+                    {config.features.channelSubmitV1 && (
+                      <Button asChild variant="outline">
+                        <Link to="/my-feed">Manage channel submissions in My Feed</Link>
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Channel publishing is handled after submit and gate checks in My Feed.
+                  </p>
                 </div>
               )}
             </PageSection>
           </>
-        )}
-
-        {postChannel && (
-          <AlertDialog open={showJoinToPublishDialog} onOpenChange={setShowJoinToPublishDialog}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Join b/{postChannel.slug} to publish</AlertDialogTitle>
-                <AlertDialogDescription>
-                  You need to join this channel before you can publish publicly.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={isJoiningToPublish}>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={(e) => {
-                    e.preventDefault();
-                    void handleJoinAndPublish();
-                  }}
-                  disabled={isJoiningToPublish}
-                >
-                  {isJoiningToPublish ? 'Joining...' : 'Join'}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         )}
         <AppFooter />
       </PageMain>

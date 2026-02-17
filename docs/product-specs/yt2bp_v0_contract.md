@@ -14,6 +14,7 @@
 - 2026-02-13 note: Channels IA/routing phase (`/channels`, `/b/:channelSlug`, curated slug guards, `/tags` redirect) is UI-only and does not alter this contract.
 - 2026-02-13 note: Channel-scoped `+ Create` flow routes to `/youtube?channel=<slug>&intent=post` and blocks public publish unless channel is valid and joined; this is UI/product behavior and does not alter this endpoint contract.
 - 2026-02-13 note: App-wide wall-to-wall layout migration (Run 1) updates YouTube page framing to a minimal document-like layout; UI-only and does not alter this contract.
+- 2026-02-17 note: dual-feed rollout moved post-generation behavior to personal-first (`/my-feed`) with channel submission as a separate candidate lifecycle; this does not alter the YT2BP request/response envelope.
 
 ## Request
 ```json
@@ -83,6 +84,11 @@
 - `YT2BP_AUTH_LIMIT_PER_MIN`
 - `YT2BP_IP_LIMIT_PER_HOUR`
 
+## Integration contract (bleuV1)
+- This endpoint is responsible for source extraction + draft generation only.
+- Persisting personal feed state and channel candidate promotion happens in separate app/backend flows.
+- Channel publish/reject is intentionally out of this endpoint scope.
+
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: 120s.
 - Quality retries: controlled by `YT2BP_QUALITY_MAX_RETRIES`.
@@ -94,3 +100,4 @@
 - Multi-video merge.
 - Instruction-security runtime checks (`llm_instruction_security_v0` is planned only).
 - Contract-breaking schema changes.
+- Direct channel publication from YT2BP call path.

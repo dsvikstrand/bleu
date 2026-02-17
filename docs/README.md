@@ -2,31 +2,37 @@
 
 This folder is the source of truth for product, architecture, planning, and operations.
 
-## Read Order For New Engineers/Models
+## Delivery Mode
+- Active: manual iterative build loop.
+- Protocol: propose update -> planning pass -> `PA` -> implement + evaluate.
+- Agentic orchestration docs are reference material and not the active execution path.
+
+## Read Order For Current Work
 1. `docs/architecture.md`
 2. `docs/app/product-spec.md`
-3. `docs/agentic/README.md`
-4. `docs/agentic/foundation/north-star.md`
-5. `docs/agentic/executable/README.md`
-6. `docs/exec-plans/index.md`
-7. `docs/exec-plans/active/bleuv1-source-first-program.md`
-8. `docs/ops/yt2bp_runbook.md`
+3. `docs/exec-plans/index.md`
+4. `docs/exec-plans/active/bleuv1-source-first-program.md`
+5. `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
+6. `docs/exec-plans/active/bleuv1-manual-iteration-scheme.md`
+7. `docs/ops/yt2bp_runbook.md`
 
 ## Canonical Documents
 - Architecture: `docs/architecture.md`
 - Product behavior/spec: `docs/app/product-spec.md`
 - Execution registry (active/completed): `docs/exec-plans/index.md`
 - Program direction (`bleuV1`): `docs/exec-plans/active/bleuv1-source-first-program.md`
-- Active MVP project: `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
-- Agentic foundation pack: `docs/agentic/foundation/`
-- Agentic executable pack: `docs/agentic/executable/`
+- Active MVP build plan (manual): `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
+- Active stepwise execution scheme: `docs/exec-plans/active/bleuv1-manual-iteration-scheme.md`
 - YT2BP API contract (adapter v0): `docs/product-specs/yt2bp_v0_contract.md`
 - YT2BP runbook: `docs/ops/yt2bp_runbook.md`
-- ASS design spec (seed/eval system): `docs/design-docs/seed_ass_spec.md`
+
+## Reference-Only (Paused)
+- Agentic foundation pack: `docs/agentic/foundation/`
+- Agentic executable pack: `docs/agentic/executable/`
 
 ## Folder Map
 - `docs/app/` product-level behavior and user flow docs
-- `docs/agentic/` foundation and executable docs for agentic execution
+- `docs/agentic/` reference contracts from paused orchestration track
 - `docs/architecture.md` system topology and invariants
 - `docs/design-docs/` technical design + diagrams
 - `docs/exec-plans/active/` currently active plans/program docs

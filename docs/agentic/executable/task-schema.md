@@ -17,10 +17,13 @@ Purpose: define a strict task artifact format for planner output and evaluator c
 - `rollback_plan` (explicit undo steps)
 - `owner_role` (enum: `planner|implementer|evaluator|integrator`)
 - `status` (enum: `todo|in_progress|blocked|done`)
+- `auth_scope` (enum: `none|user_required|service_required|mixed`)
+- `idempotency_mode` (enum: `none|natural_key_upsert|requires_idempotency_key|hybrid`)
+- `build_required_reason` (string; use `none` when not required)
+- `checkpoint_required` (`none|cp1|cp2|cp3`)
 
 ## Optional Fields
 - `risk_level` (`low|medium|high`)
-- `checkpoint_required` (`none|cp1|cp2|cp3`)
 - `notes`
 
 ## JSON Example (Planner Output)
@@ -52,7 +55,8 @@ Purpose: define a strict task artifact format for planner output and evaluator c
   ],
   "dependencies": ["BLEUV1-T038"],
   "acceptance_tests": [
-    "unit test verifies reason_code persistence on block",
+    "npm run lint",
+    "npm run test",
     "docs:refresh-check passes",
     "docs:link-check passes"
   ],
@@ -62,8 +66,11 @@ Purpose: define a strict task artifact format for planner output and evaluator c
   ],
   "owner_role": "implementer",
   "status": "todo",
-  "risk_level": "medium",
-  "checkpoint_required": "cp2"
+  "auth_scope": "service_required",
+  "idempotency_mode": "requires_idempotency_key",
+  "build_required_reason": "publish/auth/data flow paths",
+  "checkpoint_required": "cp2",
+  "risk_level": "medium"
 }
 ```
 
@@ -72,3 +79,5 @@ Purpose: define a strict task artifact format for planner output and evaluator c
 2. `acceptance_tests` must contain at least one executable verification command or deterministic assertion.
 3. `rollback_plan` must be explicit for `implementation` and `ops_observability` classes.
 4. `checkpoint_required` must match stop policy triggers if risk class demands it.
+5. `auth_scope` and `idempotency_mode` must align with interface contracts for affected endpoints.
+6. `build_required_reason` must be non-`none` when code changes touch conditional build trigger paths.

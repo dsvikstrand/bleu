@@ -61,7 +61,7 @@ Required fields
 - `user_id`
 - `source_item_id`
 - `blueprint_id`
-- `state` (`my_feed_published`, `candidate_submitted`, `channel_published`, `channel_rejected`)
+- `state` (`my_feed_published`, `candidate_submitted`, `candidate_pending_manual_review`, `channel_published`, `channel_rejected`)
 - `created_at`, `updated_at`
 
 Optional fields
@@ -79,7 +79,7 @@ Required fields
 - `id`
 - `user_feed_item_id`
 - `channel_slug`
-- `status` (`pending`, `passed`, `failed`, `published`, `rejected`)
+- `status` (`pending`, `pending_manual_review`, `passed`, `failed`, `published`, `rejected`)
 - `submitted_by_user_id`
 - `created_at`, `updated_at`
 
@@ -142,7 +142,14 @@ Feed publish
 - inserting `UserFeedItem` for same (`user_id`, `source_item_id`) should upsert/no-op, not duplicate.
 
 Candidate submission
-- re-submit for same (`user_feed_item_id`, `channel_slug`) should update existing pending/failed candidate unless policy requires new version.
+- re-submit for same (`user_feed_item_id`, `channel_slug`) should update existing pending/pending_manual_review/failed candidate unless policy requires new version.
+
+Endpoint idempotency modes
+- `POST /api/source-subscriptions`: `natural_key_upsert`
+- `POST /api/ingestion/jobs/trigger`: `requires_idempotency_key`
+- `POST /api/channel-candidates/:id/evaluate`: `requires_idempotency_key`
+- `POST /api/channel-candidates/:id/publish`: `requires_idempotency_key`
+- `POST /api/channel-candidates/:id/reject`: `requires_idempotency_key`
 
 ## Duplicate Merge Rules
 1. Cross-user duplicates
@@ -160,7 +167,7 @@ System-owned
 - source normalization, generation, gate evaluation, publication writes
 
 User-owned
-- candidate submission, optional remix/insight creation, personal hide/remove actions
+- candidate submission, manual review decisions, optional remix/insight creation, personal hide/remove actions
 
 Moderator-owned
 - policy override decisions and enforced channel removals
@@ -172,6 +179,7 @@ Event names
 - `source_pull_failed`
 - `my_feed_publish_succeeded`
 - `candidate_submitted`
+- `candidate_manual_review_pending`
 - `candidate_gate_result`
 - `channel_publish_succeeded`
 - `channel_publish_rejected`

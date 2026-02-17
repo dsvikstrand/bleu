@@ -1,6 +1,17 @@
 flowchart TD
   %% ASS simple conceptual map
   %% Major stages only + eval gates
+  
+
+%% Keep node and edge labels ASCII-only. Avoid unicode symbols (example: `✔`) and emojis.
+%% Avoid `<` and `>` in labels (example: use `PERSONA_ID` instead of `<id>`).
+%% Avoid multiline labels and escape tricks. Keep labels single-line.
+%% Prefer quoted labels for punctuation: `NODE_ID["text here"]` instead of `NODE_ID[text here]`.
+%% Keep node ids simple: letters/numbers/underscores only (put extra info in the label).
+%% For note nodes (`NOTE{{...}}`), keep note text short and ASCII.
+%% Debug method: if rendering breaks, remove or comment the last edits until it renders, then add text back incrementally.
+%%) If you hit a Mermaid parse error, paste the error line number and snippet. I will rewrite the offending labels to the safe subset above.
+
 
   START([Start Run]) --> PREFLIGHT[Preflight Checks]
   PREFLIGHT --> AP[AP Persona]

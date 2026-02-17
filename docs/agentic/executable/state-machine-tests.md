@@ -9,24 +9,33 @@ Purpose: convert lifecycle semantics into deterministic evaluator checks.
 
 ### Valid Path Scenarios
 1. Happy path publish
-- Given valid source and all gate pass
+- Given valid source and all mandatory gates pass
 - Expect terminal state `channel_published`
 
 2. Personal-only reject path
-- Given gate block on candidate
+- Given at least one mandatory gate block outcome
 - Expect terminal state `channel_rejected`
 - Expect My Feed item retained
 
-3. Warn/manual review path
-- Given warn result in selected mode
-- Expect pending manual review outcome before publish/reject
+3. Warn/manual review path (selected mode)
+- Given warn in `channel_fit` and/or `quality` with no blocks
+- Expect transition to `candidate_pending_manual_review`
+- Expect explicit user action before publish/reject terminal state
+
+4. Manual review re-submit path
+- Given `candidate_pending_manual_review` and user remix/re-submit
+- Expect transition back to `candidate_submitted` then re-evaluation
 
 ### Invalid Transition Scenarios
 1. Direct publish bypass
 - Attempt `my_feed_published -> channel_published` without candidate evaluation
 - Must fail with transition error
 
-2. Reject to publish without re-eval
+2. Pending-review direct publish
+- Attempt `candidate_pending_manual_review -> channel_published` without pass evaluation record
+- Must fail
+
+3. Reject to publish without re-eval
 - Attempt `channel_rejected -> channel_published` without override/re-eval record
 - Must fail
 
@@ -44,21 +53,25 @@ Purpose: convert lifecycle semantics into deterministic evaluator checks.
 - terminal states are unique and deterministic
 - invalid transitions generate explicit reason code
 - candidate failure does not auto-remove personal access
+- warn routing in selected mode lands in explicit pending manual review state
 
 ## Test Artifact Format (Example)
 ```json
 {
-  "scenario_id": "SM-REJECT-001",
+  "scenario_id": "SM-WARN-001",
   "start_state": "candidate_submitted",
   "inputs": {
     "gate_results": [
-      { "gate_id": "quality", "outcome": "block", "reason_code": "QUALITY_TOO_SHALLOW" }
+      { "gate_id": "channel_fit", "outcome": "warn", "reason_code": "FIT_AMBIGUOUS" },
+      { "gate_id": "quality", "outcome": "pass", "reason_code": "" },
+      { "gate_id": "safety", "outcome": "pass", "reason_code": "" },
+      { "gate_id": "pii", "outcome": "pass", "reason_code": "" }
     ]
   },
   "expected": {
-    "terminal_state": "channel_rejected",
-    "my_feed_retained": true,
-    "reason_codes": ["QUALITY_TOO_SHALLOW"]
+    "transition_state": "candidate_pending_manual_review",
+    "terminal_state": null,
+    "reason_codes": ["FIT_AMBIGUOUS"]
   }
 }
 ```

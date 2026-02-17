@@ -6,6 +6,18 @@
 - Service unit: `agentic-backend.service`
 - Primary owner: app backend maintainers
 
+## bleuV1 dual-feed integration context
+- YT2BP remains the ingestion/generation entrypoint only.
+- Personal-first routing is now expected:
+  - generated draft is saved to `My Feed` (`user_feed_items.state = my_feed_published`).
+  - channel visibility is a second-step candidate flow, not direct YT2BP publish.
+- Candidate lifecycle endpoints (same backend service):
+  - `POST /api/channel-candidates`
+  - `GET /api/channel-candidates/:id`
+  - `POST /api/channel-candidates/:id/evaluate`
+  - `POST /api/channel-candidates/:id/publish`
+  - `POST /api/channel-candidates/:id/reject`
+
 ## Health checks
 - Local service health:
 ```bash
@@ -99,6 +111,20 @@ Safe defaults:
   2) Verify `OPENAI_API_KEY` and model availability.
   3) If incident pressure: use fallback profile below.
 
+### `candidate_pending_manual_review` growth
+- Meaning: gate pipeline is producing warn outcomes (fit/quality) and routing to manual review.
+- Action:
+  1) Inspect `channel_gate_decisions` for dominant `reason_code`.
+  2) Verify candidate inputs (channel slug, tags, step_count) are mapped correctly.
+  3) If noisy channel-fit warns dominate, tune fit policy before enabling broader auto paths.
+
+### `channel_rejected` spike
+- Meaning: block outcomes (safety/PII/quality) are increasing and channel publish throughput drops.
+- Action:
+  1) Inspect `channel_gate_decisions.reason_code` distribution.
+  2) Confirm reject path is preserving personal visibility (My Feed should remain visible).
+  3) Escalate only after checking for source-content drift (e.g., different incoming topic mix).
+
 ## Rollback / fallback controls
 Incident profile (temporary):
 - Keep endpoint up, reduce strictness first:
@@ -122,4 +148,19 @@ npm run smoke:yt2bp -- --base-url https://bapi.vdsai.cloud
 - Metrics summary (Oracle logs):
 ```bash
 ssh oracle-free 'cd /home/ubuntu/remix-of-stackwise-advisor && npm run metrics:yt2bp -- --source journalctl --json'
+```
+
+## Candidate lifecycle smoke (auth required)
+Use a valid bearer token and existing `user_feed_item_id`.
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/channel-candidates \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"user_feed_item_id":"<uuid>","channel_slug":"skincare"}'
+```
+
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/channel-candidates/<candidate_id>/evaluate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json'
 ```

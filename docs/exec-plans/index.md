@@ -6,9 +6,16 @@ This file is the authoritative active/completed registry for execution plans.
 - `docs/exec-plans/active/bleuv1-source-first-program.md`
   Program-level umbrella for `bleuV1` source-first MVP direction.
 - `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
-  Active project: lock contract, lifecycle, and implementation handoff for `bleuV1` MVP.
+  Active manual iterative build plan for the remaining MVP work.
+- `docs/exec-plans/active/bleuv1-manual-iteration-scheme.md`
+  Step-by-step execution scheme with per-step completion tracking (plan -> PA -> implement -> evaluate).
 - `docs/exec-plans/tech-debt-tracker.md`
   Deferred work backlog and non-blocking engineering debt.
+
+## Paused Reference (Not Active)
+- `docs/agentic/README.md`
+- `docs/agentic/foundation/`
+- `docs/agentic/executable/`
 
 ## Completed
 - `docs/exec-plans/completed/project-1-ia-and-lingo.md`
@@ -31,7 +38,8 @@ This file is the authoritative active/completed registry for execution plans.
 ## Current Program Snapshot
 - Legacy channels-first program: completed/archived.
 - `bleuV1` source-first program: active.
-- `bleuV1` MVP foundation project: active.
+- `bleuV1` MVP build execution: manual iterative mode.
+- Agentic orchestration: paused reference path.
 
 ## Rules
 - Keep only truly active docs in `active/`.

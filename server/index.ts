@@ -10,6 +10,8 @@ import { createLLMClient } from './llm/client';
 import { consumeCredit, getCredits } from './credits';
 import { getTranscriptForVideo } from './transcript/getTranscript';
 import { TranscriptProviderError } from './transcript/types';
+import { getAdapterForUrl } from './adapters/registry';
+import { evaluateCandidateForChannel } from './gates';
 import type {
   BlueprintAnalysisRequest,
   BlueprintGenerationRequest,
@@ -86,7 +88,7 @@ const yt2bpAnonLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.ip,
-  skip: (_req, res) => Boolean((res.locals.user as { id?: string } | undefined)?.id),
+  skip: (_req, res) => !!(res.locals.user as { id?: string } | undefined)?.id,
   handler: (req, res) => yt2bpRateLimitHandler('anon', req, res),
 });
 
@@ -99,7 +101,7 @@ const yt2bpAuthLimiter = rateLimit({
     const user = res.locals.user as { id?: string } | undefined;
     return user?.id || req.ip;
   },
-  skip: (_req, res) => !Boolean((res.locals.user as { id?: string } | undefined)?.id),
+  skip: (_req, res) => !(res.locals.user as { id?: string } | undefined)?.id,
   handler: (req, res) => yt2bpRateLimitHandler('auth', req, res),
 });
 
@@ -770,7 +772,16 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
   }
 
   const runId = `yt2bp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const validatedUrl = validateYouTubeUrl(parsed.data.video_url);
+  const adapter = getAdapterForUrl(parsed.data.video_url);
+  if (!adapter) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_URL',
+      message: 'Only YouTube URLs are supported.',
+      run_id: runId,
+    });
+  }
+  const validatedUrl = adapter.validate(parsed.data.video_url);
   if (!validatedUrl.ok) {
     return res.status(400).json({
       ok: false,
@@ -800,7 +811,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
     const result = await withTimeout(
       runYouTubePipeline({
         runId,
-        videoId: validatedUrl.videoId,
+        videoId: validatedUrl.sourceNativeId,
         videoUrl: parsed.data.video_url,
         generateReview: parsed.data.generate_review,
         generateBanner: parsed.data.generate_banner,
@@ -835,6 +846,287 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
       run_id: runId,
     });
   }
+});
+
+function getAuthedSupabaseClient(authToken: string) {
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: `Bearer ${authToken}` } },
+  });
+}
+
+app.post('/api/channel-candidates', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+
+  const body = req.body as { user_feed_item_id?: string; channel_slug?: string };
+  const userFeedItemId = String(body.user_feed_item_id || '').trim();
+  const channelSlug = String(body.channel_slug || '').trim();
+  if (!userFeedItemId || !channelSlug) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'user_feed_item_id and channel_slug required', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const { data, error } = await db
+    .from('channel_candidates')
+    .upsert(
+      {
+        user_feed_item_id: userFeedItemId,
+        channel_slug: channelSlug,
+        submitted_by_user_id: userId,
+        status: 'pending',
+      },
+      { onConflict: 'user_feed_item_id,channel_slug' },
+    )
+    .select('id, user_feed_item_id, channel_slug, status')
+    .single();
+
+  if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
+
+  await db.from('user_feed_items').update({ state: 'candidate_submitted', last_decision_code: null }).eq('id', userFeedItemId);
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'candidate upserted',
+    data,
+  });
+});
+
+app.get('/api/channel-candidates/:id', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const candidateId = req.params.id;
+  const { data: candidate, error: candidateError } = await db
+    .from('channel_candidates')
+    .select('id, user_feed_item_id, channel_slug, status, created_at, updated_at')
+    .eq('id', candidateId)
+    .maybeSingle();
+
+  if (candidateError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: candidateError.message, data: null });
+  if (!candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Candidate not found', data: null });
+
+  const { data: decisions } = await db
+    .from('channel_gate_decisions')
+    .select('gate_id, outcome, reason_code, score, policy_version, method_version, created_at')
+    .eq('candidate_id', candidateId)
+    .order('created_at', { ascending: false });
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'candidate status',
+    data: {
+      ...candidate,
+      decisions: decisions || [],
+    },
+  });
+});
+
+app.post('/api/channel-candidates/:id/evaluate', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const candidateId = req.params.id;
+  const { data: candidate, error: candidateError } = await db
+    .from('channel_candidates')
+    .select('id, user_feed_item_id, channel_slug, status')
+    .eq('id', candidateId)
+    .maybeSingle();
+  if (candidateError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: candidateError.message, data: null });
+  if (!candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Candidate not found', data: null });
+
+  const { data: feedItem, error: feedError } = await db
+    .from('user_feed_items')
+    .select('id, blueprint_id')
+    .eq('id', candidate.user_feed_item_id)
+    .maybeSingle();
+  if (feedError || !feedItem) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: feedError?.message || 'Feed item missing', data: null });
+
+  const { data: blueprint, error: blueprintError } = await db
+    .from('blueprints')
+    .select('id, title, llm_review, steps')
+    .eq('id', feedItem.blueprint_id)
+    .maybeSingle();
+  if (blueprintError || !blueprint) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: blueprintError?.message || 'Blueprint missing', data: null });
+
+  const { data: tagRows } = await db
+    .from('blueprint_tags')
+    .select('tags(slug)')
+    .eq('blueprint_id', blueprint.id);
+  const tagSlugs = (tagRows || [])
+    .map((row) => (row.tags as { slug?: string } | null)?.slug || '')
+    .filter(Boolean);
+
+  const stepCount = Array.isArray(blueprint.steps) ? blueprint.steps.length : 0;
+  const evaluation = evaluateCandidateForChannel({
+    title: blueprint.title,
+    llmReview: blueprint.llm_review,
+    channelSlug: candidate.channel_slug,
+    tagSlugs,
+    stepCount,
+  });
+
+  const decisionsPayload = evaluation.decisions.map((decision) => ({
+    candidate_id: candidate.id,
+    gate_id: decision.gate_id,
+    outcome: decision.outcome,
+    reason_code: decision.reason_code,
+    score: decision.score ?? null,
+    policy_version: 'bleuv1-gate-policy-v1.0',
+    method_version: decision.method_version || 'gate-v1',
+  }));
+
+  const { error: insertError } = await db.from('channel_gate_decisions').insert(decisionsPayload);
+  if (insertError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: insertError.message, data: null });
+
+  await db.from('channel_candidates').update({ status: evaluation.candidateStatus }).eq('id', candidate.id);
+  await db
+    .from('user_feed_items')
+    .update({ state: evaluation.feedState, last_decision_code: evaluation.reasonCode })
+    .eq('id', candidate.user_feed_item_id);
+
+  console.log('[candidate_gate_result]', JSON.stringify({
+    candidate_id: candidate.id,
+    channel_slug: candidate.channel_slug,
+    aggregate: evaluation.aggregate,
+    reason_code: evaluation.reasonCode,
+    execution_mode: 'all_gates_run',
+  }));
+  if (evaluation.candidateStatus === 'pending_manual_review') {
+    console.log('[candidate_manual_review_pending]', JSON.stringify({
+      candidate_id: candidate.id,
+      channel_slug: candidate.channel_slug,
+      reason_code: evaluation.reasonCode,
+    }));
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'candidate evaluated',
+    data: {
+      candidate_id: candidate.id,
+      decision: evaluation.aggregate,
+      next_state: evaluation.feedState,
+      reason_code: evaluation.reasonCode,
+    },
+    meta: {
+      execution_mode: 'all_gates_run',
+    },
+  });
+});
+
+app.post('/api/channel-candidates/:id/publish', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const candidateId = req.params.id;
+  const body = req.body as { tag_slug?: string };
+
+  const { data: candidate, error: candidateError } = await db
+    .from('channel_candidates')
+    .select('id, user_feed_item_id, channel_slug, status')
+    .eq('id', candidateId)
+    .maybeSingle();
+  if (candidateError || !candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: candidateError?.message || 'Candidate not found', data: null });
+
+  const { data: feedItem, error: feedError } = await db
+    .from('user_feed_items')
+    .select('id, blueprint_id')
+    .eq('id', candidate.user_feed_item_id)
+    .maybeSingle();
+  if (feedError || !feedItem) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: feedError?.message || 'Feed item missing', data: null });
+
+  const { error: publishError } = await db
+    .from('blueprints')
+    .update({ is_public: true })
+    .eq('id', feedItem.blueprint_id);
+  if (publishError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: publishError.message, data: null });
+
+  const tagSlug = String(body.tag_slug || candidate.channel_slug || 'general').trim().toLowerCase();
+  let tagId: string | null = null;
+  const { data: existingTag } = await db.from('tags').select('id').eq('slug', tagSlug).maybeSingle();
+  if (existingTag?.id) {
+    tagId = existingTag.id;
+  } else {
+    const { data: createdTag, error: tagCreateError } = await db
+      .from('tags')
+      .insert({ slug: tagSlug, created_by: userId })
+      .select('id')
+      .single();
+    if (tagCreateError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: tagCreateError.message, data: null });
+    tagId = createdTag.id;
+  }
+
+  const { error: tagLinkError } = await db
+    .from('blueprint_tags')
+    .upsert({ blueprint_id: feedItem.blueprint_id, tag_id: tagId }, { onConflict: 'blueprint_id,tag_id' });
+  if (tagLinkError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: tagLinkError.message, data: null });
+
+  await db.from('channel_candidates').update({ status: 'published' }).eq('id', candidate.id);
+  await db.from('user_feed_items').update({ state: 'channel_published', last_decision_code: 'ALL_GATES_PASS' }).eq('id', candidate.user_feed_item_id);
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'candidate published',
+    data: {
+      candidate_id: candidate.id,
+      published: true,
+      channel_slug: candidate.channel_slug,
+    },
+  });
+});
+
+app.post('/api/channel-candidates/:id/reject', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const candidateId = req.params.id;
+  const body = req.body as { reason_code?: string };
+  const reasonCode = String(body.reason_code || 'MANUAL_REJECT').trim();
+
+  const { data: candidate, error: candidateError } = await db
+    .from('channel_candidates')
+    .select('id, user_feed_item_id')
+    .eq('id', candidateId)
+    .maybeSingle();
+  if (candidateError || !candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: candidateError?.message || 'Candidate not found', data: null });
+
+  await db.from('channel_candidates').update({ status: 'rejected' }).eq('id', candidate.id);
+  await db.from('user_feed_items').update({ state: 'channel_rejected', last_decision_code: reasonCode }).eq('id', candidate.user_feed_item_id);
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'candidate rejected',
+    data: {
+      candidate_id: candidate.id,
+      reason_code: reasonCode,
+    },
+  });
 });
 
 function normalizeGeneratedBlueprint(
@@ -916,39 +1208,6 @@ function mapPipelineError(error: unknown): PipelineErrorShape | null {
     return { error_code: error.code, message: error.message };
   }
   return null;
-}
-
-function validateYouTubeUrl(rawUrl: string) {
-  try {
-    const url = new URL(rawUrl.trim());
-    const host = url.hostname.replace(/^www\./, '');
-    if (url.searchParams.has('list')) {
-      return { ok: false as const, errorCode: 'INVALID_URL' as const, message: 'Playlist URLs are not supported.' };
-    }
-
-    if (host === 'youtube.com' || host === 'm.youtube.com') {
-      if (url.pathname !== '/watch') {
-        return { ok: false as const, errorCode: 'INVALID_URL' as const, message: 'Only single YouTube watch URLs are supported.' };
-      }
-      const videoId = url.searchParams.get('v')?.trim() || '';
-      if (!/^[a-zA-Z0-9_-]{8,15}$/.test(videoId)) {
-        return { ok: false as const, errorCode: 'INVALID_URL' as const, message: 'Invalid YouTube video URL.' };
-      }
-      return { ok: true as const, videoId };
-    }
-
-    if (host === 'youtu.be') {
-      const videoId = url.pathname.replace(/^\/+/, '').split('/')[0]?.trim() || '';
-      if (!/^[a-zA-Z0-9_-]{8,15}$/.test(videoId)) {
-        return { ok: false as const, errorCode: 'INVALID_URL' as const, message: 'Invalid YouTube short URL.' };
-      }
-      return { ok: true as const, videoId };
-    }
-
-    return { ok: false as const, errorCode: 'INVALID_URL' as const, message: 'Only YouTube URLs are supported.' };
-  } catch {
-    return { ok: false as const, errorCode: 'INVALID_URL' as const, message: 'Invalid URL.' };
-  }
 }
 
 function flattenDraftText(draft: {

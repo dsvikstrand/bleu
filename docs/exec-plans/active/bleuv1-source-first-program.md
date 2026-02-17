@@ -74,3 +74,18 @@ Rules:
 - D-002: MVP adapter scope starts with YouTube only.
 - D-003: Channel publish is a gated second step.
 - D-004: User value-add in MVP is insight/remix on imported blueprints.
+
+## 11) Implementation Snapshot (2026-02-17)
+- Personal lane is now first-class:
+  - `/my-feed` route exists and is gated by auth.
+  - YouTube pulls land in `My Feed` first (`my_feed_published`), not directly in public channels.
+- Shared lane is explicit second step:
+  - Candidate submit path exists via `POST /api/channel-candidates`.
+  - Candidate status lookup exists via `GET /api/channel-candidates/:id`.
+- Gate flow is wired with all-gates-run aggregation:
+  - evaluate path: `POST /api/channel-candidates/:id/evaluate`
+  - outcomes route to `candidate_submitted | candidate_pending_manual_review | channel_rejected`.
+  - terminal moderation actions exist: publish/reject endpoints.
+- Data foundation is additive and adapter-ready:
+  - new tables: `source_items`, `user_source_subscriptions`, `user_feed_items`, `channel_candidates`, `channel_gate_decisions`.
+  - adapter abstraction introduced (`BaseAdapter`, `YouTubeAdapter`, registry), with YouTube as MVP implementation.

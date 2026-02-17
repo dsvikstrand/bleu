@@ -7,7 +7,6 @@ import { CommunityStats } from '@/components/home/CommunityStats';
 import { TopBlueprints } from '@/components/home/TopBlueprints';
 import { FeaturedTags } from '@/components/home/FeaturedTags';
 import { HowItWorks } from '@/components/home/HowItWorks';
-import { FeaturedLibrariesStarter } from '@/components/home/FeaturedLibrariesStarter';
 import { DiscoverRoutines } from '@/components/home/DiscoverRoutines';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -65,10 +64,10 @@ export default function Home() {
             </span>
           </h1>
           <p className="text-sm uppercase tracking-widest text-primary/80 font-medium">
-            Create & share recipes for life routines
+            Pull, refine, and share bite-sized blueprints
           </p>
           <p className="text-base text-muted-foreground max-w-md mx-auto leading-relaxed">
-            Build routines from shared libraries, get AI reviews, and publish your own.
+            Pull from YouTube into My Feed first, then submit the best items to Channels.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <Link to="/explore">
@@ -77,9 +76,9 @@ export default function Home() {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <Link to="/wall">
+            <Link to="/my-feed">
               <Button size="lg" variant="outline" className="gap-2">
-                Browse the Wall
+                Open My Feed
                 <Sparkles className="h-4 w-4" />
               </Button>
             </Link>
@@ -97,9 +96,6 @@ export default function Home() {
 
         {/* Top blueprints */}
         <TopBlueprints />
-
-        {/* Starter build experience (no LLM calls) */}
-        <FeaturedLibrariesStarter />
 
         {/* Featured tags */}
         <FeaturedTags />

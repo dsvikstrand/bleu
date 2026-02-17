@@ -2,10 +2,21 @@
 
 This folder is the control surface for moving from manual planning to multi-agent execution.
 
+Current status: paused reference track. Manual iterative delivery is the active execution mode.
+
 ## Intent
 - Phase 1 (foundation): decision-locked descriptive contracts.
 - Phase 2 (executable): machine-actionable role/task/eval contracts.
 - Phase 3 (automation): scripted orchestration and CI automation on top of Phase 2.
+
+## Phase 2.1 Hardening Locks
+1. Lifecycle includes explicit manual-review state: `candidate_pending_manual_review`.
+2. Unified API envelope is default for planned endpoints.
+3. Auth model uses user/service split.
+4. Idempotency uses hybrid strategy.
+5. Evaluator mode defaults to all-gates-run with aggregated decision.
+6. Code-changing tasks require lint+test always, build conditionally by risk area.
+7. CP3 milestone unit is objective bundle (3-8 tasks, one integration candidate).
 
 ## Read Order (Foundation)
 1. `docs/agentic/foundation/north-star.md`
@@ -21,14 +32,15 @@ This folder is the control surface for moving from manual planning to multi-agen
 1. `docs/agentic/executable/decision-matrix.md`
 2. `docs/agentic/executable/task-queue-scope.md`
 3. `docs/agentic/executable/task-schema.md`
-4. `docs/agentic/executable/interface-contracts.md`
-5. `docs/agentic/executable/schema-contracts.md`
-6. `docs/agentic/executable/state-machine-tests.md`
-7. `docs/agentic/executable/eval-harness.md`
-8. `docs/agentic/executable/stop-inspect-policy.md`
-9. `docs/agentic/executable/terminology-rules.md`
-10. `docs/agentic/executable/role-contracts.md`
-11. `docs/agentic/executable/review-gates.md`
+4. `docs/agentic/executable/task-artifact.schema.json`
+5. `docs/agentic/executable/interface-contracts.md`
+6. `docs/agentic/executable/schema-contracts.md`
+7. `docs/agentic/executable/state-machine-tests.md`
+8. `docs/agentic/executable/eval-harness.md`
+9. `docs/agentic/executable/stop-inspect-policy.md`
+10. `docs/agentic/executable/terminology-rules.md`
+11. `docs/agentic/executable/role-contracts.md`
+12. `docs/agentic/executable/review-gates.md`
 
 ## Foundation -> Executable Mapping
 - `north-star.md` -> `decision-matrix.md`
@@ -43,7 +55,7 @@ This folder is the control surface for moving from manual planning to multi-agen
 ## Role Ownership
 - Planner: decision matrix + queue scope + task schema.
 - Implementer: interface/schema/state contracts.
-- Evaluator: eval harness + review gates.
+- Evaluator: eval harness + review gates + task schema validation.
 - Integrator: stop-inspect policy + release gate decisions.
 
 ## Guardrails

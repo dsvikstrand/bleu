@@ -16,10 +16,12 @@
 - Frontend:
   - React + Vite app (`src/pages/*`).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
-  - Live feed/community surfaces in `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
+  - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
 - Backend:
   - Express server in `server/index.ts`.
   - `/api/youtube-to-blueprint` generation pipeline.
+  - Adapter abstraction in `server/adapters/*` (`BaseAdapter`, `YouTubeAdapter`, registry).
+  - Candidate gate pipeline in `server/gates/*` (`Gate` contract + ordered all-gates-run execution).
 - Data:
   - Supabase is system of record for blueprints, tags, follows, likes/comments, telemetry.
   - `bleuV1` extension: source-item canonical tables + user feed item tables.
@@ -33,10 +35,11 @@
 2. Generate imported blueprint.
 3. Publish to personal lane (`My Feed`).
 4. Optional user remix/insight.
-5. Channel candidate evaluation.
+5. Channel candidate evaluation (all-gates-run default, aggregated decision).
 6. Gate decision:
    - pass -> publish to channel feed
-   - fail -> remain personal-only
+   - warn in selected mode (`channel_fit`/`quality`) -> `candidate_pending_manual_review`
+   - fail/block -> remain personal-only
 
 ## 4) Contracts And Policy Surfaces
 - API contract (adapter v0):
@@ -51,6 +54,10 @@
   - `pii_leakage_v0`
 - `bleuV1` gate expansion:
   - channel-fit gate for channel promotion decisions
+- executable interface hardening:
+  - unified API envelope for planned endpoints
+  - user/service auth split for mutable operations
+  - hybrid idempotency model (natural-key upserts + idempotency keys)
 
 ## 5) Invariants
 - Safety invariants:

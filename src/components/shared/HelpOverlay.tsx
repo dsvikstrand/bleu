@@ -10,25 +10,25 @@ interface HelpOverlayProps {
 }
 
 const FLOW_STEPS = [
-  { label: 'Generate a Library', hint: 'Describe what you need in a few words.' },
-  { label: 'Build Your Blueprint', hint: 'Pick items, add steps, and add context.' },
-  { label: 'Review + Publish', hint: 'Get an AI review, then share with the community.' },
-  { label: 'Follow Tags', hint: 'Shape your feed and discover similar routines.' },
-  { label: 'Explore the Wall', hint: 'Browse and save blueprints from others.' },
+  { label: 'Pull From YouTube', hint: 'Use a single video URL to generate a blueprint draft.' },
+  { label: 'Save To My Feed', hint: 'Personal intake lane keeps content private by default.' },
+  { label: 'Add Insight or Remix', hint: 'Refine and add context before sharing.' },
+  { label: 'Submit To Channel', hint: 'Run quality/safety checks before public distribution.' },
+  { label: 'Community Feedback', hint: 'Votes and comments keep channel feeds relevant.' },
 ];
 
 const FEATURE_CARDS = [
   {
-    title: 'Libraries',
-    description: 'Libraries are smart ingredient lists. Generate one, then use it to build a Blueprint.',
+    title: 'My Feed',
+    description: 'My Feed is your personal pulled-content lane. Everything lands here first.',
     icon: Sparkles,
-    bullets: ['Generate from a short prompt', 'Customize categories and items', 'Reuse across blueprints'],
+    bullets: ['Private-by-default intake', 'Review before sharing', 'Keeps rejected channel items accessible'],
   },
   {
     title: 'Blueprints',
-    description: 'Blueprints are step-by-step routines. Build, review, and publish when ready.',
+    description: 'Blueprints are step-by-step summaries from source content, with optional user remix.',
     icon: Layers,
-    bullets: ['Organize steps visually', 'Add context for each item', 'Publish or keep private'],
+    bullets: ['Generated from media sources', 'Attach insight/remix', 'Submit to channels as second step'],
   },
   {
     title: 'Tags',
@@ -38,9 +38,9 @@ const FEATURE_CARDS = [
   },
   {
     title: 'Community',
-    description: 'Explore, like, and learn from other people’s blueprints.',
+    description: 'Channel feeds are shared lanes for evaluated blueprints and community opinions.',
     icon: Users,
-    bullets: ['Discover new routines', 'Save favorites', 'Share your own'],
+    bullets: ['Vote and comment', 'Promote high-signal content', 'Discuss practical value'],
   },
 ];
 
@@ -64,9 +64,9 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                <Badge variant="secondary">Libraries</Badge>
+                <Badge variant="secondary">My Feed</Badge>
                 <Badge variant="secondary">Blueprints</Badge>
-                <Badge variant="secondary">Tags</Badge>
+                <Badge variant="secondary">Channels</Badge>
                 <Badge variant="secondary">Community</Badge>
               </div>
             </div>
@@ -77,11 +77,10 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                   <CardContent className="p-6 space-y-2">
                     <p className="text-sm font-semibold">Let’s get oriented</p>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      Here’s the goal: take a simple idea, break it into parts, and turn it into a
-                      step‑by‑step routine you can actually follow. Libraries are your ingredients,
-                      Blueprints are your instructions, and the community is your feedback loop. As we
-                      go, you’ll refine your routine, learn from others, and end up with something you
-                      can reuse anytime.
+                      Here’s the goal: turn source content into actionable blueprints you can consume
+                      in bite-sized form. My Feed is your personal intake lane, and Channels are the
+                      shared lane after quality checks. You can remix insights, submit what is useful,
+                      and learn from community feedback.
                     </p>
                   </CardContent>
                 </Card>
@@ -94,7 +93,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                       </div>
                       <div>
                         <p className="text-sm font-semibold">The Flow</p>
-                        <p className="text-xs text-muted-foreground">From idea → library → build → blueprint → community</p>
+                        <p className="text-xs text-muted-foreground">Source pull → My Feed → submit → channel feed</p>
                       </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -141,7 +140,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <div>
                       <p className="text-sm font-semibold">Tip for first‑time users</p>
                       <p className="text-xs text-muted-foreground">
-                        Start with “Generate Library,” then build a blueprint you can refine later.
+                        Start with YouTube pull, save to My Feed, and submit only the best items.
                       </p>
                     </div>
                     <Button

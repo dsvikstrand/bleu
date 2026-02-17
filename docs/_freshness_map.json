@@ -15,14 +15,8 @@
         "docs/architecture.md",
         "docs/product-specs/youtube_to_blueprint_plan.md",
         "docs/product-specs/yt2bp_v0_contract.md",
-        "docs/agentic/foundation/north-star.md",
-        "docs/agentic/foundation/mvp-scope-contract.md",
-        "docs/agentic/foundation/lifecycle-and-state-machine.md",
-        "docs/agentic/foundation/gate-policy.md",
-        "docs/agentic/executable/decision-matrix.md",
-        "docs/agentic/executable/interface-contracts.md",
-        "docs/agentic/executable/eval-harness.md",
-        "docs/agentic/executable/terminology-rules.md"
+        "docs/exec-plans/active/project-bleuv1-mvp-foundation.md",
+        "docs/exec-plans/active/bleuv1-manual-iteration-scheme.md"
       ],
       "suggested_sections": [
         "Adapter flow",
@@ -34,13 +28,16 @@
       "id": "frontend-feeds-and-channels",
       "paths": [
         "src/pages/Wall.tsx",
+        "src/pages/MyFeed.tsx",
         "src/pages/Explore.tsx",
         "src/pages/Channels.tsx",
         "src/pages/ChannelPage.tsx",
         "src/components/explore/**",
         "src/lib/channel*.ts",
+        "src/lib/myFeed*.ts",
         "src/lib/channelsCatalog.ts",
         "src/hooks/useChannelFeed.ts",
+        "src/hooks/useMyFeed.ts",
         "src/hooks/useTagFollows.ts"
       ],
       "required_docs": [
@@ -48,14 +45,7 @@
         "docs/architecture.md",
         "docs/exec-plans/active/bleuv1-source-first-program.md",
         "docs/exec-plans/active/project-bleuv1-mvp-foundation.md",
-        "docs/agentic/foundation/north-star.md",
-        "docs/agentic/foundation/lifecycle-and-state-machine.md",
-        "docs/agentic/foundation/gate-policy.md",
-        "docs/agentic/foundation/glossary.md",
-        "docs/agentic/executable/decision-matrix.md",
-        "docs/agentic/executable/state-machine-tests.md",
-        "docs/agentic/executable/eval-harness.md",
-        "docs/agentic/executable/terminology-rules.md"
+        "docs/exec-plans/active/bleuv1-manual-iteration-scheme.md"
       ],
       "suggested_sections": [
         "My Feed and channel roles",
@@ -71,20 +61,12 @@
         "scripts/yt2bp_metrics_from_logs.mjs"
       ],
       "required_docs": [
+        "docs/app/product-spec.md",
         "docs/architecture.md",
         "docs/product-specs/yt2bp_v0_contract.md",
         "docs/ops/yt2bp_runbook.md",
-        "docs/agentic/foundation/system-map.md",
-        "docs/agentic/foundation/lifecycle-and-state-machine.md",
-        "docs/agentic/foundation/data-contract.md",
-        "docs/agentic/foundation/gate-policy.md",
-        "docs/agentic/foundation/risk-register.md",
-        "docs/agentic/executable/interface-contracts.md",
-        "docs/agentic/executable/schema-contracts.md",
-        "docs/agentic/executable/state-machine-tests.md",
-        "docs/agentic/executable/eval-harness.md",
-        "docs/agentic/executable/stop-inspect-policy.md",
-        "docs/agentic/executable/review-gates.md"
+        "docs/exec-plans/active/project-bleuv1-mvp-foundation.md",
+        "docs/exec-plans/active/bleuv1-manual-iteration-scheme.md"
       ],
       "suggested_sections": [
         "API contract",
@@ -102,8 +84,9 @@
       "required_docs": [
         "docs/design-docs/seed_ass_spec.md",
         "docs/design-docs/ASS_simple.mmd",
-        "docs/agentic/foundation/gate-policy.md",
-        "docs/agentic/executable/eval-harness.md"
+        "docs/ops/yt2bp_runbook.md",
+        "docs/exec-plans/active/project-bleuv1-mvp-foundation.md",
+        "docs/exec-plans/active/bleuv1-manual-iteration-scheme.md"
       ],
       "suggested_sections": [
         "Eval classes",
@@ -120,10 +103,8 @@
       "required_docs": [
         "docs/app/product-spec.md",
         "docs/architecture.md",
-        "docs/agentic/foundation/data-contract.md",
-        "docs/agentic/foundation/lifecycle-and-state-machine.md",
-        "docs/agentic/executable/interface-contracts.md",
-        "docs/agentic/executable/schema-contracts.md"
+        "docs/exec-plans/active/project-bleuv1-mvp-foundation.md",
+        "docs/exec-plans/active/bleuv1-manual-iteration-scheme.md"
       ],
       "suggested_sections": [
         "Schema contract",
@@ -132,7 +113,7 @@
       ]
     },
     {
-      "id": "agentic-docs",
+      "id": "agentic-docs-reference",
       "paths": [
         "docs/agentic/**"
       ],
@@ -140,12 +121,14 @@
         "docs/README.md",
         "docs/app/product-spec.md",
         "docs/architecture.md",
+        "docs/exec-plans/index.md",
         "docs/exec-plans/active/project-bleuv1-mvp-foundation.md",
+        "docs/exec-plans/active/bleuv1-manual-iteration-scheme.md",
         "docs/agentic/README.md",
         "docs/agentic/executable/README.md"
       ],
       "suggested_sections": [
-        "Decision lock",
+        "Reference status",
         "Lifecycle contract",
         "Role handoff and gates"
       ]
