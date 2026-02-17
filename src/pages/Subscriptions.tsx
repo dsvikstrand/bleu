@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { formatRelativeShort } from '@/lib/timeFormat';
 import {
   ApiRequestError,
   createSourceSubscription,
@@ -17,6 +18,7 @@ import {
   listSourceSubscriptions,
   type SourceSubscription,
 } from '@/lib/subscriptionsApi';
+import { evaluateSubscriptionHealth, summarizeSubscriptionHealth } from '@/lib/subscriptionHealth';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { config } from '@/config/runtime';
 
@@ -138,6 +140,19 @@ export default function Subscriptions() {
     () => subscriptions.filter((subscription) => subscription.is_active),
     [subscriptions],
   );
+  const nowMs = useMemo(() => Date.now(), [activeSubscriptions]);
+  const healthBySubscriptionId = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof evaluateSubscriptionHealth>>();
+    activeSubscriptions.forEach((subscription) => {
+      map.set(subscription.id, evaluateSubscriptionHealth(subscription, nowMs));
+    });
+    return map;
+  }, [activeSubscriptions, nowMs]);
+  const healthSummary = useMemo(
+    () => summarizeSubscriptionHealth(activeSubscriptions, nowMs),
+    [activeSubscriptions, nowMs],
+  );
+  const hasWidespreadDelay = healthSummary.total > 0 && healthSummary.delayedRatio >= 0.5;
 
   return (
     <PageRoot>
@@ -184,6 +199,34 @@ export default function Subscriptions() {
           </CardContent>
         </Card>
 
+        {!subscriptionsQuery.isLoading && !subscriptionsQuery.error ? (
+          <Card className="border-border/40">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Ingestion health</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">Active {healthSummary.total}</Badge>
+                <Badge variant="secondary">Healthy {healthSummary.healthy}</Badge>
+                <Badge variant="outline">Delayed {healthSummary.delayed}</Badge>
+                <Badge variant="destructive">Errors {healthSummary.error}</Badge>
+                <Badge variant="outline">Waiting {healthSummary.neverPolled}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Last successful poll:{' '}
+                {healthSummary.lastSuccessfulPollAt
+                  ? `${formatRelativeShort(healthSummary.lastSuccessfulPollAt)} (${formatDateTime(healthSummary.lastSuccessfulPollAt)})`
+                  : 'Not recorded yet'}
+              </p>
+              {hasWidespreadDelay ? (
+                <p className="text-xs text-amber-700">
+                  Polling looks delayed across many subscriptions. If this persists for more than 90 minutes, check ingestion health in ops runbook.
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
+
         {subscriptionsQuery.isLoading ? (
           <div className="space-y-3">
             <Skeleton className="h-24 rounded-xl" />
@@ -205,43 +248,48 @@ export default function Subscriptions() {
                 {activeSubscriptions.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No subscriptions yet.</p>
                 ) : (
-                  activeSubscriptions.map((subscription) => (
-                    <div key={subscription.id} className="rounded-md border border-border/40 p-3 space-y-2">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <p className="text-sm font-medium">
-                          {subscription.source_channel_title || subscription.source_channel_id}
+                  activeSubscriptions.map((subscription) => {
+                    const health = healthBySubscriptionId.get(subscription.id) || evaluateSubscriptionHealth(subscription, nowMs);
+                    return (
+                      <div key={subscription.id} className="rounded-md border border-border/40 p-3 space-y-2">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <p className="text-sm font-medium">
+                            {subscription.source_channel_title || subscription.source_channel_id}
+                          </p>
+                          <div className="flex gap-2">
+                            <Badge variant="secondary">Active</Badge>
+                            <Badge variant={health.badgeVariant}>{health.label}</Badge>
+                            <Badge variant="outline">{subscription.mode}</Badge>
+                          </div>
+                        </div>
+                        <a
+                          href={getChannelUrl(subscription)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block text-xs underline text-muted-foreground break-all"
+                        >
+                          {getChannelUrl(subscription)}
+                        </a>
+                        <p className="text-xs text-muted-foreground">{health.detail}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Last polled: {formatDateTime(subscription.last_polled_at)}
                         </p>
-                        <div className="flex gap-2">
-                          <Badge variant="secondary">Active</Badge>
-                          <Badge variant="outline">{subscription.mode}</Badge>
+                        {subscription.last_sync_error ? (
+                          <p className="text-xs text-red-600/90">Sync issue: {subscription.last_sync_error}</p>
+                        ) : null}
+                        <div className="flex flex-wrap justify-end gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleUnsubscribe(subscription)}
+                            disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
+                          >
+                            {isRowPending(subscription.id) ? 'Unsubscribing...' : 'Unsubscribe'}
+                          </Button>
                         </div>
                       </div>
-                      <a
-                        href={getChannelUrl(subscription)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block text-xs underline text-muted-foreground break-all"
-                      >
-                        {getChannelUrl(subscription)}
-                      </a>
-                      <p className="text-xs text-muted-foreground">
-                        Last polled: {formatDateTime(subscription.last_polled_at)}
-                      </p>
-                      {subscription.last_sync_error ? (
-                        <p className="text-xs text-red-600/90">Sync issue: {subscription.last_sync_error}</p>
-                      ) : null}
-                      <div className="flex flex-wrap justify-end gap-2 pt-1">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleUnsubscribe(subscription)}
-                          disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
-                        >
-                          {isRowPending(subscription.id) ? 'Unsubscribing...' : 'Unsubscribe'}
-                        </Button>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </CardContent>
             </Card>

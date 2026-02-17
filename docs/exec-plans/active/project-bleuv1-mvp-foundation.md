@@ -54,6 +54,8 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Insert persistent `subscription_notice` item in My Feed per subscribed channel.
 - Add `/subscriptions` page as first-class management surface (Step 1 foundation + Step 2 simplification).
 - Step 2 simplified actions on `/subscriptions`: active-list `Unsubscribe` only (sync/reactivate UI deferred).
+- Step 3 reliability pass adds `/subscriptions` health summary/badges and delayed-warning trust signals.
+- Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Keep sync/deactivate and pending accept/skip endpoints as compatibility/operator paths.
 - Keep debug simulation endpoint env-gated (`ENABLE_DEBUG_ENDPOINTS`) for non-prod ingestion testing.
 - Debug simulation auth contract: `x-service-token` only (no user bearer required).

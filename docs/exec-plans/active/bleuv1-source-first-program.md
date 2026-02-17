@@ -110,6 +110,10 @@ Rules:
   - My Feed now exposes a compact `Manage subscriptions` link (large subscription modal removed).
   - row-level action now simplified to `Unsubscribe`; sync/reactivate UI is deferred.
   - debug simulation remains operator-only and hidden from UI.
+- Ingestion trust hardening (2026-02-17):
+  - `/subscriptions` now shows health states per row (`Healthy`, `Delayed`, `Error`, `Waiting`) and summary counts.
+  - delayed polling warning appears when delay ratio is elevated.
+  - service-auth latest-job endpoint added: `GET /api/ingestion/jobs/latest`.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

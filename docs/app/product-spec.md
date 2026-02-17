@@ -12,6 +12,7 @@ a5) [have] Channel publish is an explicit second-stage lifecycle from personal f
 a6) [have] Channel gate runtime is currently bypass-first (`EVAL_BYPASSED`) while gate-mode framework hardening is completed.
 a7) [have] Legacy pending/skipped feed rows without blueprints are hidden in `My Feed` UI to reduce migration noise.
 a8) [have] `/subscriptions` is simplified for MVP to two visible actions: add `Subscribe` and per-row `Unsubscribe`.
+a9) [have] `/subscriptions` now surfaces ingestion trust signals (healthy/delayed/error/waiting) based on polling freshness and sync errors.
 
 ## Core Model
 b1) `Source Item`
@@ -121,10 +122,11 @@ si7) `POST /api/my-feed/items/:id/accept`
 si8) `POST /api/my-feed/items/:id/skip`
 si9) debug-only endpoint (service auth + env gate): `POST /api/debug/subscriptions/:id/simulate-new-uploads` (`ENABLE_DEBUG_ENDPOINTS=true` required, authenticated by `x-service-token`, no user bearer token required)
 si10) YouTube channel resolver accepts handle/channel URL/channel ID and uses `browseId` fallback parsing for handle pages where `channelId` is absent.
+si11) service-ops endpoint: `GET /api/ingestion/jobs/latest` (service auth; latest ingestion health snapshot)
 
 ## Next Milestone (Hardening)
 n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.
-n2) Add `shadow` mode diagnostics without changing publish eligibility.
+n2) Harden ingestion reliability visibility (polling freshness + latest job checks) before adding more subscription features.
 n3) Reserve `enforce` mode for non-prod verification until dedicated rollout approval.
 
 ## Key References

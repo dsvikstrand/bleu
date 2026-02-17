@@ -152,6 +152,7 @@ app.use((req, res, next) => {
   const isDebugSimulationRoute = /^\/api\/debug\/subscriptions\/[^/]+\/simulate-new-uploads$/.test(req.path);
   const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
     || req.path === '/api/ingestion/jobs/trigger'
+    || req.path === '/api/ingestion/jobs/latest'
     || (debugEndpointsEnabled && isDebugSimulationRoute);
 
   if (!supabaseClient) {
@@ -1545,6 +1546,46 @@ app.post('/api/ingestion/jobs/trigger', async (req, res) => {
       skipped,
       failures,
     },
+  });
+});
+
+app.get('/api/ingestion/jobs/latest', async (req, res) => {
+  if (!isServiceRequestAuthorized(req)) {
+    return res.status(401).json({ ok: false, error_code: 'SERVICE_AUTH_REQUIRED', message: 'Missing or invalid service token', data: null });
+  }
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  const { data, error } = await db
+    .from('ingestion_jobs')
+    .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: data ? 'latest ingestion job fetched' : 'no ingestion jobs found',
+    data: data
+      ? {
+          job_id: data.id,
+          trigger: data.trigger,
+          scope: data.scope,
+          status: data.status,
+          started_at: data.started_at,
+          finished_at: data.finished_at,
+          processed_count: data.processed_count,
+          inserted_count: data.inserted_count,
+          skipped_count: data.skipped_count,
+          error_code: data.error_code,
+          error_message: data.error_message,
+        }
+      : null,
   });
 });
 

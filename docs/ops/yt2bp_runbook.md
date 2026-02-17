@@ -30,6 +30,11 @@ ssh oracle-free 'curl -sS http://localhost:8787/api/health'
 ```bash
 curl -sS https://bapi.vdsai.cloud/api/health
 ```
+- Latest ingestion job (service auth):
+```bash
+curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/latest \
+  -H "x-service-token: $INGESTION_SERVICE_TOKEN"
+```
 - Public YT2BP endpoint basic probe:
 ```bash
 curl -sS -X POST https://bapi.vdsai.cloud/api/youtube-to-blueprint \
@@ -210,6 +215,17 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/ingestion/jobs/trigger \
   --data '{}'
 ```
 
+Latest ingestion job snapshot:
+```bash
+curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/latest \
+  -H "x-service-token: $INGESTION_SERVICE_TOKEN"
+```
+
+Staleness guidance:
+- If latest `finished_at` is older than 90 minutes, treat ingestion as delayed and start triage.
+- If latest `status` is `failed` or `error_code` is `PARTIAL_FAILURE`, inspect per-subscription `last_sync_error`.
+- If latest endpoint reports no jobs, verify Oracle cron registration first.
+
 Debug simulation trigger (single subscription, non-prod only):
 ```bash
 curl -sS -X POST https://bapi.vdsai.cloud/api/debug/subscriptions/<subscription_id>/simulate-new-uploads \
@@ -246,6 +262,22 @@ Example cron entry:
 ```bash
 */30 * * * * curl -sS -X POST https://bapi.vdsai.cloud/api/ingestion/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-ingestion-cron.log 2>&1
 ```
+
+## Ingestion reliability triage
+1. Confirm cron is running and writing logs:
+```bash
+ssh oracle-free 'sudo crontab -l | grep ingestion/jobs/trigger'
+ssh oracle-free 'tail -n 100 /var/log/bleuv1-ingestion-cron.log'
+```
+2. Check latest ingestion snapshot:
+```bash
+curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/latest -H "x-service-token: $INGESTION_SERVICE_TOKEN"
+```
+3. If delayed/failed, inspect backend logs:
+```bash
+ssh oracle-free 'sudo journalctl -u agentic-backend.service -n 200 --no-pager'
+```
+4. Spot-check subscription error rows in app UI (`/subscriptions`) via `Sync issue` and health badges.
 
 ## Traceability keys and expected logs
 Required IDs for triage:

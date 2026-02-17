@@ -30,6 +30,7 @@ Execution mode:
 11. [have] Step 10 - MVP subscription simplification (auto-only UX + no prefill + notice cards)
 12. [have] Step 11 - Subscriptions page foundation (add + read-only active/inactive)
 13. [have] Step 12 - Subscriptions management simplification (subscribe/unsubscribe only)
+14. [have] Step 13 - Ingestion reliability visibility (health signals + latest job endpoint)
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -252,6 +253,29 @@ Completion evidence (2026-02-17)
 - Updated `src/pages/Subscriptions.tsx` to show active subscriptions only with `Unsubscribe` as the sole row action.
 - Removed sync/reactivate controls and inactive-section UI from `/subscriptions`.
 - Kept backend contracts unchanged (`DELETE` remains soft deactivate; re-subscribe reactivates existing rows).
+
+### Step 13 - Ingestion reliability visibility
+Scope
+- surface ingestion trust status in `/subscriptions` without expanding user controls
+- add a service-auth API to fetch latest ingestion job status for operator checks
+- keep subscription UX simple (`Subscribe` / `Unsubscribe`)
+
+Definition of done
+- `/subscriptions` shows per-subscription health state (`healthy`, `delayed`, `error`, `waiting`)
+- `/subscriptions` shows aggregate health summary and delayed warning indicator
+- backend exposes `GET /api/ingestion/jobs/latest` with service-token auth
+- runbook includes latest-job check and stale-poll triage guidance
+
+Evaluation
+- unit test: health mapping boundaries (59/60/61 minute threshold) pass
+- manual smoke: health badges and summary visible with real subscription rows
+- service smoke: latest ingestion job endpoint returns deterministic payload
+- docs freshness and link checks pass
+
+Completion evidence (2026-02-17)
+- Added `src/lib/subscriptionHealth.ts` and `src/test/subscriptionHealth.test.ts`.
+- Updated `src/pages/Subscriptions.tsx` with health badges, summary counts, and delayed warning.
+- Added `GET /api/ingestion/jobs/latest` (service-auth) to `server/index.ts`.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

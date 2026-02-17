@@ -17,7 +17,7 @@
   - React + Vite app (`src/pages/*`).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
-  - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: add + active-list `Unsubscribe`).
+  - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: add + active-list `Unsubscribe` + ingestion health signals).
 - Backend:
   - Express server in `server/index.ts`.
   - `/api/youtube-to-blueprint` generation pipeline.
@@ -25,6 +25,7 @@
     - `POST|GET|PATCH|DELETE /api/source-subscriptions`
     - `POST /api/source-subscriptions/:id/sync`
     - `POST /api/ingestion/jobs/trigger` (service auth)
+    - `GET /api/ingestion/jobs/latest` (service auth, latest job snapshot)
     - `POST /api/debug/subscriptions/:id/simulate-new-uploads` (debug-only, service auth + `ENABLE_DEBUG_ENDPOINTS=true`; middleware allows service-token access without bearer user auth)
     - `POST /api/my-feed/items/:id/accept|skip`
   - Adapter abstraction in `server/adapters/*` (`BaseAdapter`, `YouTubeAdapter`, registry).
@@ -49,6 +50,7 @@
    - create one persistent notice card (`user_feed_items.state = subscription_notice`).
 3. Subscription sync after checkpoint:
    - new uploads generate immediately to `my_feed_published`.
+   - subscription health state is derived in UI from `last_polled_at` + `last_sync_error` (`healthy`, `delayed`, `error`, `never_polled`).
 4. Optional user remix/insight.
 5. Channel candidate evaluation (all-gates-run default, aggregated decision).
 6. Gate decision:
