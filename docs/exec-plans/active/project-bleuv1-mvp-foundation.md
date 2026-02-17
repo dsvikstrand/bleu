@@ -62,6 +62,13 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Handle resolution hardening: parse YouTube `browseId` fallback for handle URLs that omit explicit `channelId` metadata.
 - Run scheduler trigger from Oracle (`/api/ingestion/jobs/trigger` with service auth).
 
+### W6 - Search Discovery (YouTube)
+- Add auth-only `/search` route and nav entry for query-based discovery.
+- Add backend endpoint `GET /api/youtube-search` (YouTube Data API provider).
+- Keep results transient until explicit `Generate Blueprint`.
+- Enable per-result one-click `Subscribe Channel` with existing idempotent subscription API.
+- Keep direct URL route `/youtube` as fallback and unchanged baseline.
+
 ## Acceptance Baseline Per Iteration
 1. Scope and behavior align with `docs/app/product-spec.md`.
 2. Architecture assumptions remain aligned with `docs/architecture.md`.

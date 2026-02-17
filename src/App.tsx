@@ -13,6 +13,7 @@ import UserProfile from "./pages/UserProfile";
 import Channels from "./pages/Channels";
 import ChannelPage from "./pages/ChannelPage";
 import PostDetail from "./pages/PostDetail";
+import SearchPage from "./pages/Search";
 import MyFeed from "./pages/MyFeed";
 import Subscriptions from "./pages/Subscriptions";
 import Inventory from "./pages/Inventory";
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/blueprints" element={<Navigate to="/wall" replace />} />
             <Route path="/youtube" element={<YouTubeToBlueprint />} />
             <Route path="/channels" element={<Channels />} />
+            <Route path="/search" element={<RequireAuth><SearchPage /></RequireAuth>} />
             <Route path="/b/:channelSlug" element={<ChannelPage />} />
             {config.features.myFeedV1 && (
               <Route path="/my-feed" element={<RequireAuth><MyFeed /></RequireAuth>} />

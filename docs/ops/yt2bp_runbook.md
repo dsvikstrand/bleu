@@ -63,6 +63,7 @@ ssh oracle-free 'cd /home/ubuntu/remix-of-stackwise-advisor && git pull --ff-onl
 ## Environment checklist
 Required runtime variables:
 - `OPENAI_API_KEY`
+- `YOUTUBE_DATA_API_KEY` (required for `/api/youtube-search`)
 - `TRANSCRIPT_PROVIDER` (`yt_to_text` or `youtube_timedtext`)
 - `YT2BP_ENABLED`
 - `YT2BP_QUALITY_ENABLED`
@@ -187,6 +188,12 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/channel-candidates/<candidate_id>/
 ```
 
 ## Subscription + ingestion smoke
+YouTube search smoke (auth required):
+```bash
+curl -sS "https://bapi.vdsai.cloud/api/youtube-search?q=skincare%202026%20best&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 Create a subscription (MVP auto-only behavior):
 ```bash
 curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions \

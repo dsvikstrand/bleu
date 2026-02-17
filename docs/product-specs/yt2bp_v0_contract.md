@@ -21,6 +21,7 @@
 - 2026-02-18 note: debug simulation endpoint (`/api/debug/subscriptions/:id/simulate-new-uploads`) is env-gated (`ENABLE_DEBUG_ENDPOINTS`) and service-auth only (`x-service-token`, no user bearer required); this also remains outside the YT2BP envelope.
 - 2026-02-18 note: YouTube subscription channel resolution now includes `browseId` fallback parsing for handle pages where direct `channelId` metadata is unavailable.
 - 2026-02-17 note: ingestion reliability visibility adds service-auth endpoint `GET /api/ingestion/jobs/latest`; this is an ops path and does not alter the YT2BP envelope.
+- 2026-02-17 note: auth-only YouTube discovery endpoint `GET /api/youtube-search` is additive and does not alter the YT2BP envelope.
 
 ## Request
 ```json
@@ -97,6 +98,7 @@
 - Channel publish/reject is intentionally out of this endpoint scope.
 - Subscription sync and manual pending-card acceptance are intentionally outside this endpoint contract.
 - Ingestion health polling (`/api/ingestion/jobs/latest`) is intentionally outside this endpoint contract.
+- YouTube query discovery (`/api/youtube-search`) is intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: 120s.

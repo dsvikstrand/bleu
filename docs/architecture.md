@@ -16,6 +16,7 @@
 - Frontend:
   - React + Vite app (`src/pages/*`).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
+  - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: add + active-list `Unsubscribe` + ingestion health signals).
 - Backend:
@@ -24,6 +25,7 @@
   - subscription ingestion APIs:
     - `POST|GET|PATCH|DELETE /api/source-subscriptions`
     - `POST /api/source-subscriptions/:id/sync`
+    - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
     - `POST /api/ingestion/jobs/trigger` (service auth)
     - `GET /api/ingestion/jobs/latest` (service auth, latest job snapshot)
     - `POST /api/debug/subscriptions/:id/simulate-new-uploads` (debug-only, service auth + `ENABLE_DEBUG_ENDPOINTS=true`; middleware allows service-token access without bearer user auth)
@@ -42,6 +44,7 @@
 
 ## 3) Core Lifecycle (`bleuV1`)
 1. Ingest source item (manual URL pull or subscription sync).
+   - discovery option: user can search YouTube results in `/search` before selecting a source video.
 2. Subscription create/reactivate:
    - user opens `/subscriptions` and submits channel URL/channel ID/@handle.
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.

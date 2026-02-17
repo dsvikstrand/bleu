@@ -18,6 +18,11 @@ import {
   resolveYouTubeChannel,
   type YouTubeFeedVideo,
 } from './services/youtubeSubscriptions';
+import {
+  clampYouTubeSearchLimit,
+  searchYouTubeVideos,
+  YouTubeSearchError,
+} from './services/youtubeSearch';
 import type {
   BlueprintAnalysisRequest,
   BlueprintGenerationRequest,
@@ -66,6 +71,11 @@ const ingestionServiceToken = String(process.env.INGESTION_SERVICE_TOKEN || '').
 const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX_PER_SUBSCRIPTION) || 5);
 const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
 const debugEndpointsEnabled = debugEndpointsEnabledRaw === 'true' || debugEndpointsEnabledRaw === '1' || debugEndpointsEnabledRaw === 'on';
+const youtubeDataApiKey = String(process.env.YOUTUBE_DATA_API_KEY || '').trim();
+
+if (!youtubeDataApiKey) {
+  console.warn('[youtube-search] YOUTUBE_DATA_API_KEY is not configured. /api/youtube-search will return SEARCH_DISABLED.');
+}
 
 function getRetryAfterSeconds(req: express.Request) {
   const resetTime = (req as express.Request & { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime;
@@ -858,6 +868,79 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
       error_code: 'GENERATION_FAIL',
       message,
       run_id: runId,
+    });
+  }
+});
+
+app.get('/api/youtube-search', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  if (!userId) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const query = String(req.query.q || '').trim();
+  if (query.length < 2) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_QUERY',
+      message: 'Query must be at least 2 characters.',
+      data: null,
+    });
+  }
+
+  if (!youtubeDataApiKey) {
+    return res.status(503).json({
+      ok: false,
+      error_code: 'SEARCH_DISABLED',
+      message: 'YouTube search is not configured.',
+      data: null,
+    });
+  }
+
+  const rawLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
+  const limit = clampYouTubeSearchLimit(rawLimit, 10);
+  const pageToken = typeof req.query.page_token === 'string' ? req.query.page_token.trim() : '';
+
+  try {
+    const result = await searchYouTubeVideos({
+      apiKey: youtubeDataApiKey,
+      query,
+      limit,
+      pageToken: pageToken || undefined,
+    });
+
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'youtube search complete',
+      data: {
+        results: result.results,
+        next_page_token: result.nextPageToken,
+      },
+    });
+  } catch (error) {
+    if (error instanceof YouTubeSearchError) {
+      const status = error.code === 'INVALID_QUERY'
+        ? 400
+        : error.code === 'SEARCH_DISABLED'
+          ? 503
+          : error.code === 'RATE_LIMITED'
+            ? 429
+            : 502;
+      return res.status(status).json({
+        ok: false,
+        error_code: error.code,
+        message: error.message,
+        data: null,
+      });
+    }
+
+    const message = error instanceof Error ? error.message : 'YouTube search failed.';
+    return res.status(502).json({
+      ok: false,
+      error_code: 'PROVIDER_FAIL',
+      message,
+      data: null,
     });
   }
 });

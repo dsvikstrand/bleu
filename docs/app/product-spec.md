@@ -13,6 +13,7 @@ a6) [have] Channel gate runtime is currently bypass-first (`EVAL_BYPASSED`) whil
 a7) [have] Legacy pending/skipped feed rows without blueprints are hidden in `My Feed` UI to reduce migration noise.
 a8) [have] `/subscriptions` is simplified for MVP to two visible actions: add `Subscribe` and per-row `Unsubscribe`.
 a9) [have] `/subscriptions` now surfaces ingestion trust signals (healthy/delayed/error/waiting) based on polling freshness and sync errors.
+a10) [have] Auth-only `Search` route (`/search`) now supports YouTube query discovery with one-click `Generate Blueprint` and `Subscribe Channel`.
 
 ## Core Model
 b1) `Source Item`
@@ -73,10 +74,13 @@ m8) Runtime default `CHANNEL_GATES_MODE=bypass`; non-prod may run `shadow` or `e
 ## Primary User Flows (`bleuV1`)
 f1) User follows YouTube channels from `/subscriptions` (channel URL/channel ID/@handle).
 f2) User can unsubscribe from active channels directly on `/subscriptions` (unsubscribed rows disappear from the page list).
-f3) On subscribe/reactivate, user gets one subscription notice card and future uploads ingest automatically into `My Feed`.
-f4) User scans, remixes, and adds insights.
-f5) Eligible items are promoted to channel feeds after gates.
-f6) Community votes/comments to surface higher-value items.
+f3) User can search YouTube from `/search` and get transient result suggestions (not persisted yet).
+f4) User selects `Generate Blueprint` on a result to generate and save directly into `My Feed`.
+f5) User can subscribe to a result’s channel from the same search card.
+f6) On subscribe/reactivate, user gets one subscription notice card and future uploads ingest automatically into `My Feed`.
+f7) User scans, remixes, and adds insights.
+f8) Eligible items are promoted to channel feeds after gates.
+f9) Community votes/comments to surface higher-value items.
 
 ## Route and IA Snapshot
 r1) [have] Home: `/`
@@ -87,8 +91,9 @@ r5) [have] Channel page: `/b/:channelSlug`
 r6) [have] YouTube adapter page (manual v0): `/youtube`
 r7) [have] Blueprint detail: `/blueprint/:blueprintId`
 r8) [have] My Feed first-class route: `/my-feed`
-r9) [have] Subscriptions route: `/subscriptions` (URL-accessible in Step 1; nav wiring deferred)
-r10) [have] Compatibility redirects: `/tags` -> `/channels`, `/blueprints` -> `/wall`
+r9) [have] Subscriptions route: `/subscriptions`
+r10) [have] Search route: `/search` (auth-only)
+r11) [have] Compatibility redirects: `/tags` -> `/channels`, `/blueprints` -> `/wall`
 
 ## Scope Boundaries (MVP)
 s1) In scope
@@ -123,11 +128,13 @@ si8) `POST /api/my-feed/items/:id/skip`
 si9) debug-only endpoint (service auth + env gate): `POST /api/debug/subscriptions/:id/simulate-new-uploads` (`ENABLE_DEBUG_ENDPOINTS=true` required, authenticated by `x-service-token`, no user bearer token required)
 si10) YouTube channel resolver accepts handle/channel URL/channel ID and uses `browseId` fallback parsing for handle pages where `channelId` is absent.
 si11) service-ops endpoint: `GET /api/ingestion/jobs/latest` (service auth; latest ingestion health snapshot)
+si12) YouTube search endpoint: `GET /api/youtube-search?q=<query>&limit=<1..25>&page_token=<optional>`
 
 ## Next Milestone (Hardening)
 n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.
-n2) Harden ingestion reliability visibility (polling freshness + latest job checks) before adding more subscription features.
-n3) Reserve `enforce` mode for non-prod verification until dedicated rollout approval.
+n2) Iterate YouTube search discovery flow before introducing multi-adapter search.
+n3) Harden ingestion reliability visibility (polling freshness + latest job checks) before adding more subscription features.
+n4) Reserve `enforce` mode for non-prod verification until dedicated rollout approval.
 
 ## Key References
 k1) Architecture: `docs/architecture.md`

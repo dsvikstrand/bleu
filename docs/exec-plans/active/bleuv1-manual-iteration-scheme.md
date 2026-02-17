@@ -31,6 +31,7 @@ Execution mode:
 12. [have] Step 11 - Subscriptions page foundation (add + read-only active/inactive)
 13. [have] Step 12 - Subscriptions management simplification (subscribe/unsubscribe only)
 14. [have] Step 13 - Ingestion reliability visibility (health signals + latest job endpoint)
+15. [have] Step 14 - YouTube Search-to-Blueprint (auth-only `/search` with generate + subscribe)
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -276,6 +277,31 @@ Completion evidence (2026-02-17)
 - Added `src/lib/subscriptionHealth.ts` and `src/test/subscriptionHealth.test.ts`.
 - Updated `src/pages/Subscriptions.tsx` with health badges, summary counts, and delayed warning.
 - Added `GET /api/ingestion/jobs/latest` (service-auth) to `server/index.ts`.
+
+### Step 14 - YouTube Search-to-Blueprint (minimal, nav-visible)
+Scope
+- add auth-only `/search` discovery route and nav entry
+- show transient YouTube search suggestions with no auto-save side effects
+- allow one-click `Generate Blueprint` and `Subscribe Channel` from result cards
+
+Definition of done
+- `/search` is visible in main nav for signed-in users
+- backend provides `GET /api/youtube-search` with deterministic error envelope
+- clicking `Generate Blueprint` on a result saves to My Feed and routes user to `/my-feed`
+- clicking `Subscribe Channel` is idempotent and reuses existing subscription APIs
+- `/youtube` direct URL flow remains unchanged
+
+Evaluation
+- unit tests pass for search query validation, limit clamping, and response normalization
+- manual smoke: search returns cards and actions work (`Generate Blueprint`, `Subscribe Channel`, `Open on YouTube`)
+- regression smoke: `/youtube` URL workflow still works
+- docs freshness and link checks pass
+
+Completion evidence (2026-02-17)
+- Added `server/services/youtubeSearch.ts` and wired `GET /api/youtube-search` in `server/index.ts`.
+- Added frontend API client `src/lib/youtubeSearchApi.ts` and tests in `src/test/youtubeSearchApi.test.ts`.
+- Added Search UI route/page (`src/pages/Search.tsx`) and nav item in `src/components/shared/AppNavigation.tsx`.
+- Documented `YOUTUBE_DATA_API_KEY` requirement and additive endpoint contract updates.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

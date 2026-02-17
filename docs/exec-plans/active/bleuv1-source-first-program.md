@@ -114,6 +114,12 @@ Rules:
   - `/subscriptions` now shows health states per row (`Healthy`, `Delayed`, `Error`, `Waiting`) and summary counts.
   - delayed polling warning appears when delay ratio is elevated.
   - service-auth latest-job endpoint added: `GET /api/ingestion/jobs/latest`.
+- Search discovery surface (2026-02-17):
+  - auth-only `/search` route added with nav visibility for signed-in users.
+  - backend endpoint `GET /api/youtube-search` added for relevance-ordered YouTube query results.
+  - search results are transient and not persisted to My Feed until explicit `Generate Blueprint`.
+  - each result card supports `Generate Blueprint`, `Subscribe Channel`, and `Open on YouTube`.
+  - environment requirement added: `YOUTUBE_DATA_API_KEY`.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.
@@ -121,3 +127,4 @@ Rules:
 3. Design future “sync specific videos” flow before exposing sync controls in UI.
 4. Add richer ingestion observability dashboards from `ingestion_jobs` + `mvp_events`.
 5. Keep gate behavior in `bypass` until dedicated enforcement cycle approval.
+6. Add pagination and quota guardrails iteration for `/api/youtube-search` based on production usage.
