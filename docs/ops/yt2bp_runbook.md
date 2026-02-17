@@ -212,6 +212,7 @@ Expected behavior:
 - one `subscription_notice` feed item is inserted for this user/channel.
 - future uploads are ingested automatically.
 - subscription rows returned by `GET /api/source-subscriptions` may include `source_channel_avatar_url` (read-time enrichment from YouTube API).
+- subscription auto-ingest generation runs with review enabled and banner disabled by default.
 
 User-triggered sync (operator/debug path):
 ```bash

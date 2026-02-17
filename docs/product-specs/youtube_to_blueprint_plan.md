@@ -23,6 +23,9 @@ a19) [have] 2026-02-17 flow update: generated YouTube drafts are saved to `My Fe
 a20) [have] 2026-02-17 backend update: channel-candidate lifecycle endpoints and gate decision persistence are available for second-step channel publication.
 a21) [have] 2026-02-17 UX update: optional AI review and banner run as separate post-generation steps (core draft completes first).
 a22) [have] 2026-02-17 gating note: production channel-gate runtime is currently bypass-first (`EVAL_BYPASSED`) pending enforcement rollout.
+a23) [have] 2026-02-18 default update: `/youtube` generation now sends toggle values from UI, so `Generate AI review` and `Generate banner` are both on by default unless user turns them off.
+a24) [have] 2026-02-18 search handoff update: `Generate Blueprint` on `/search` opens `/youtube` with a prefilled video URL and review/banner defaults on, so users get staged progress feedback in one place.
+a25) [have] 2026-02-18 ingestion default update: subscription auto-ingestion enables review by default and keeps banner generation off by default for throughput.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract
@@ -141,6 +144,7 @@ d2) [have] Keep the page minimal:
 - Two optional toggles:
 - `Generate AI review`
 - `Generate banner`
+d2b) [have] Toggle behavior is now respected end-to-end by request payload (no hardcoded-off override).
 d3) [have] No source customization and no edit-mode branch in v1.
 d4) [have] Same-page preview is implemented.
 d5) [have] Logged-out users can preview and are prompted to log in to publish.
@@ -230,3 +234,6 @@ j4) [have] Frozen API contract added:
 - `docs/product-specs/yt2bp_v0_contract.md`
 j5) [have] Endpoint kill switch added:
 - `YT2BP_ENABLED=true|false`
+j6) [have] Search integration added without contract break:
+- `/search` delegates execution to `/youtube` for generation progress UX.
+- YT2BP endpoint envelope and URL-input contract remain unchanged.

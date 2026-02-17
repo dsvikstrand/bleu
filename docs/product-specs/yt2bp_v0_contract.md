@@ -24,6 +24,7 @@
 - 2026-02-17 note: auth-only YouTube discovery endpoint `GET /api/youtube-search` is additive and does not alter the YT2BP envelope.
 - 2026-02-17 note: auth-only YouTube channel discovery endpoint `GET /api/youtube-channel-search` is additive and does not alter the YT2BP envelope.
 - 2026-02-17 note: `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` read-time enrichment for UI; this remains outside the YT2BP envelope.
+- 2026-02-17 note: subscription auto-ingest generation now enables review-by-default while keeping banner disabled; this remains outside the YT2BP endpoint envelope.
 
 ## Request
 ```json

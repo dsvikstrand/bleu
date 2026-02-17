@@ -463,8 +463,8 @@ export default function YouTubeToBlueprint() {
 
     const payload: YouTubeToBlueprintRequest = {
       video_url: videoUrl.trim(),
-      generate_review: false,
-      generate_banner: false,
+      generate_review: optionalToggles.generateReview,
+      generate_banner: optionalToggles.generateBanner,
       source: 'youtube_mvp',
     };
     setIsGenerating(true);

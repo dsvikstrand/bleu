@@ -167,8 +167,8 @@ export default function SearchPage() {
       const params = new URLSearchParams({
         video_url: result.video_url,
         autostart: '1',
-        generate_review: '0',
-        generate_banner: '0',
+        generate_review: '1',
+        generate_banner: '1',
         source: 'youtube_search',
       });
       navigate(`/youtube?${params.toString()}`);

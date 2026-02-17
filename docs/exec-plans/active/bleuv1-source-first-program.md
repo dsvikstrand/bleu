@@ -104,6 +104,7 @@ Rules:
   - successful create/reactivate inserts one persistent `subscription_notice` feed card per user/channel.
   - future uploads after checkpoint ingest directly into `my_feed_published`.
   - UI hides legacy no-blueprint pending/skipped feed rows to keep My Feed migration-safe.
+  - auto-ingestion now runs with AI review enabled and banner generation disabled by default.
 - Subscriptions surface foundation (2026-02-17):
   - `/subscriptions` route is live behind the same auth + feature gate as `/my-feed`.
   - page supports channel search + subscribe, plus active-list `Unsubscribe` for MVP simplicity.
@@ -111,7 +112,8 @@ Rules:
   - row-level action now simplified to `Unsubscribe`; sync/reactivate UI is deferred.
   - debug simulation remains operator-only and hidden from UI.
 - Ingestion trust hardening (2026-02-17):
-  - `/subscriptions` now shows health states per row (`Healthy`, `Delayed`, `Error`, `Waiting`) and summary counts.
+  - `/subscriptions` keeps per-row health states (`Healthy`, `Delayed`, `Error`, `Waiting`) for operator clarity.
+  - aggregate "Ingestion health" summary box is removed from the end-user MVP surface to reduce confusion.
   - delayed polling warning appears when delay ratio is elevated.
   - service-auth latest-job endpoint added: `GET /api/ingestion/jobs/latest`.
 - Search discovery surface (2026-02-17):
@@ -119,11 +121,16 @@ Rules:
   - backend endpoint `GET /api/youtube-search` added for relevance-ordered YouTube query results.
   - search results are transient and not persisted to My Feed until explicit `Generate Blueprint`.
   - each result card supports `Generate Blueprint`, `Subscribe Channel`, and `Open on YouTube`.
+  - `Generate Blueprint` from search opens `/youtube` with prefilled URL and default review/banner enabled so users see staged generation progress.
   - environment requirement added: `YOUTUBE_DATA_API_KEY`.
 - Channel discovery for subscriptions (2026-02-17):
   - backend endpoint `GET /api/youtube-channel-search` added for relevance-ordered channel results.
   - `/subscriptions` now supports search-first channel discovery with one-click `Subscribe`.
   - `Add Subscription` popup is the only in-UI subscribe entrypoint (manual fallback input removed).
+- My Feed publishing UX refresh (2026-02-18):
+  - blueprint items now render in a channel-feed-like card style for visual consistency.
+  - submit/review/publish/reject actions moved behind a compact `+` button that opens a `Submit to Channel` popup.
+  - card footer keeps simple status text (`Not submitted yet` or candidate status) to preserve state clarity.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

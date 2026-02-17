@@ -34,6 +34,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Introduce/finish personal unfiltered feed lane behavior.
 - Ensure channel fail does not remove personal access.
 - Hide legacy no-blueprint pending/skipped rows during migration cleanup.
+- Align My Feed card presentation to channel-feed style and move submission controls into compact `+` popup flow.
 
 ### W2 - Channel Candidate Gating
 - Keep promotion as explicit second step from My Feed.
@@ -57,6 +58,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 3 reliability pass adds `/subscriptions` health summary/badges and delayed-warning trust signals.
 - Step 4 discovery pass adds auth-only channel search in `/subscriptions` with per-result `Subscribe` (popup flow, manual paste removed).
 - Step 5 row polish adds optional channel avatars and removes technical row badges from subscription rows.
+- Step 6 UX simplification removes aggregate ingestion summary card from `/subscriptions` while keeping unsubscribe and row-level signals.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Keep sync/deactivate and pending accept/skip endpoints as compatibility/operator paths.
 - Keep debug simulation endpoint env-gated (`ENABLE_DEBUG_ENDPOINTS`) for non-prod ingestion testing.

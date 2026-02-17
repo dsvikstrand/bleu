@@ -1257,7 +1257,7 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
     runId,
     videoId: input.videoId,
     videoUrl: input.videoUrl,
-    generateReview: false,
+    generateReview: true,
     generateBanner: false,
     authToken: '',
   });

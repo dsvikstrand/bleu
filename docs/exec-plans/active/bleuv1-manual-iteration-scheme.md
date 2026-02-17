@@ -34,6 +34,7 @@ Execution mode:
 15. [have] Step 14 - YouTube Search-to-Blueprint (auth-only `/search` with generate + subscribe)
 16. [have] Step 15 - Subscription channel search (auth-only `/subscriptions` discovery + subscribe)
 17. [have] Step 16 - Subscription row polish (avatar enrichment + hide technical row badges)
+18. [have] Step 17 - Feed UX polish (hide ingestion summary + My Feed `+` submit popup + review/banner defaults)
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -348,6 +349,34 @@ Completion evidence (2026-02-17)
 - Updated `server/index.ts` to enrich `GET /api/source-subscriptions` with YouTube avatar metadata (no schema changes).
 - Updated `src/lib/subscriptionsApi.ts` type contract with optional `source_channel_avatar_url`.
 - Updated `src/pages/Subscriptions.tsx` row rendering to show avatars and hide technical badges.
+
+### Step 17 - Feed UX polish (My Feed + defaults)
+Scope
+- remove aggregate ingestion-health summary box from `/subscriptions`
+- move My Feed submission actions into a compact `+` popup flow
+- align My Feed blueprint cards with channel-feed style (banner + summary + tags)
+- enable review/banner by default for manual/search generation paths
+- enable review-by-default for subscription auto-ingest generation (banner remains off)
+
+Definition of done
+- `/subscriptions` no longer shows aggregate health summary counts
+- My Feed blueprint cards show `+` and open submit dialog for channel submission actions
+- My Feed still shows `Not submitted yet` when candidate does not exist
+- Search -> Generate opens `/youtube` with review/banner on by default
+- auto-ingested subscription items include review text more consistently
+
+Evaluation
+- manual smoke: subscriptions page no longer shows ingestion summary card
+- manual smoke: My Feed `+` opens submit dialog and submit flow works
+- manual smoke: Not submitted status remains visible until candidate exists
+- regression smoke: publish/reject actions still work from dialog
+- docs freshness and link checks pass
+
+Completion evidence (2026-02-17)
+- Updated `src/pages/Subscriptions.tsx` to remove aggregate ingestion health card.
+- Updated `src/pages/MyFeed.tsx` to use channel-feed-style cards and `+` submission popup dialog.
+- Updated `src/pages/Search.tsx` and `src/pages/YouTubeToBlueprint.tsx` for review/banner-on defaults in manual/search paths.
+- Updated `server/index.ts` subscription auto-ingest pipeline to run review generation by default (banner still off).
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

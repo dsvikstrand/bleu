@@ -11,11 +11,13 @@ a4) [have] Auto-ingestion from followed YouTube channels is available with auto-
 a5) [have] Channel publish is an explicit second-stage lifecycle from personal feed candidates.
 a6) [have] Channel gate runtime is currently bypass-first (`EVAL_BYPASSED`) while gate-mode framework hardening is completed.
 a7) [have] Legacy pending/skipped feed rows without blueprints are hidden in `My Feed` UI to reduce migration noise.
-a8) [have] `/subscriptions` is simplified for MVP to two visible actions: add `Subscribe` and per-row `Unsubscribe`.
-a9) [have] `/subscriptions` now surfaces ingestion trust signals (healthy/delayed/error/waiting) based on polling freshness and sync errors.
+a8) [have] `/subscriptions` is simplified for MVP to two visible actions: `Add Subscription` (popup search) and per-row `Unsubscribe`.
+a9) [have] `/subscriptions` hides the aggregate ingestion-health summary box to reduce new-user confusion.
 a10) [have] Auth-only `Search` route (`/search`) now supports YouTube query discovery with one-click `Generate Blueprint` and `Subscribe Channel`.
 a11) [have] `/subscriptions` now supports auth-only YouTube channel search with popup-based subscribe flow (manual paste fallback removed in UI).
 a12) [have] Subscription rows now render channel avatar thumbnails (when available) and hide technical status/mode badges from row UI.
+a13) [have] `My Feed` blueprint rows now use channel-feed-style visual cards and open channel submission from a compact `+` popup action.
+a14) [have] Manual/search YouTube generation defaults to review+banner enabled for My Feed-bound content.
 
 ## Core Model
 b1) `Source Item`
@@ -38,6 +40,7 @@ b5) Subscription behavior (MVP simplified)
 - UI behavior is auto-only.
 - On subscribe, backend sets a checkpoint (`last_seen_published_at` / `last_seen_video_id`) without ingesting historical uploads.
 - Future uploads after checkpoint ingest directly to `my_feed_published`.
+- Auto-ingested subscription items run review generation by default; banner generation remains off in this path.
 - A persistent notice card is inserted into `My Feed` with state `subscription_notice`.
 - API compatibility note: `mode` is accepted on subscription endpoints but coerced/treated as `auto`.
 
@@ -80,9 +83,10 @@ f3) User can search YouTube from `/search` and get transient result suggestions 
 f4) User selects `Generate Blueprint` on a result to generate and save directly into `My Feed`.
 f5) User can subscribe to a result’s channel from the same search card.
 f6) On subscribe/reactivate, user gets one subscription notice card and future uploads ingest automatically into `My Feed`.
-f7) User scans, remixes, and adds insights.
-f8) Eligible items are promoted to channel feeds after gates.
-f9) Community votes/comments to surface higher-value items.
+f7) From `My Feed`, user opens `+` to submit a blueprint to channels (candidate second-step flow).
+f8) User scans, remixes, and adds insights.
+f9) Eligible items are promoted to channel feeds after gates.
+f10) Community votes/comments to surface higher-value items.
 
 ## Route and IA Snapshot
 r1) [have] Home: `/`

@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { formatRelativeShort } from '@/lib/timeFormat';
 import {
   ApiRequestError,
   createSourceSubscription,
@@ -19,7 +18,7 @@ import {
   listSourceSubscriptions,
   type SourceSubscription,
 } from '@/lib/subscriptionsApi';
-import { evaluateSubscriptionHealth, summarizeSubscriptionHealth } from '@/lib/subscriptionHealth';
+import { evaluateSubscriptionHealth } from '@/lib/subscriptionHealth';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { config } from '@/config/runtime';
 import {
@@ -271,12 +270,6 @@ export default function Subscriptions() {
     });
     return map;
   }, [activeSubscriptions, nowMs]);
-  const healthSummary = useMemo(
-    () => summarizeSubscriptionHealth(activeSubscriptions, nowMs),
-    [activeSubscriptions, nowMs],
-  );
-  const hasWidespreadDelay = healthSummary.total > 0 && healthSummary.delayedRatio >= 0.5;
-
   return (
     <PageRoot>
       <AppHeader />
@@ -392,34 +385,6 @@ export default function Subscriptions() {
             </div>
           </DialogContent>
         </Dialog>
-
-        {!subscriptionsQuery.isLoading && !subscriptionsQuery.error ? (
-          <Card className="border-border/40">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Ingestion health</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">Active {healthSummary.total}</Badge>
-                <Badge variant="secondary">Healthy {healthSummary.healthy}</Badge>
-                <Badge variant="outline">Delayed {healthSummary.delayed}</Badge>
-                <Badge variant="destructive">Errors {healthSummary.error}</Badge>
-                <Badge variant="outline">Waiting {healthSummary.neverPolled}</Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Last successful poll:{' '}
-                {healthSummary.lastSuccessfulPollAt
-                  ? `${formatRelativeShort(healthSummary.lastSuccessfulPollAt)} (${formatDateTime(healthSummary.lastSuccessfulPollAt)})`
-                  : 'Not recorded yet'}
-              </p>
-              {hasWidespreadDelay ? (
-                <p className="text-xs text-amber-700">
-                  Polling looks delayed across many subscriptions. If this persists for more than 90 minutes, check ingestion health in ops runbook.
-                </p>
-              ) : null}
-            </CardContent>
-          </Card>
-        ) : null}
 
         {subscriptionsQuery.isLoading ? (
           <div className="space-y-3">

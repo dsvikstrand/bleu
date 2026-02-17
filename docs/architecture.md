@@ -18,7 +18,7 @@
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
-  - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: channel search + subscribe + active-list `Unsubscribe` + ingestion health signals; row avatars shown when available).
+  - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
 - Backend:
   - Express server in `server/index.ts`.
   - `/api/youtube-to-blueprint` generation pipeline.
@@ -55,6 +55,7 @@
    - create one persistent notice card (`user_feed_items.state = subscription_notice`).
 3. Subscription sync after checkpoint:
    - new uploads generate immediately to `my_feed_published`.
+   - auto-ingest path enables review generation by default and keeps banner generation off.
    - subscription health state is derived in UI from `last_polled_at` + `last_sync_error` (`healthy`, `delayed`, `error`, `never_polled`).
 4. Optional user remix/insight.
 5. Channel candidate evaluation (all-gates-run default, aggregated decision).
