@@ -14,6 +14,7 @@ import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { config, getFunctionUrl } from '@/config/runtime';
 import { logMvpEvent } from '@/lib/logEvent';
 import { ensureSourceItemForYouTube, getExistingUserFeedItem, upsertUserFeedItem } from '@/lib/myFeedApi';
+import { apiFetch } from '@/lib/api';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 
@@ -130,6 +131,50 @@ function toYouTubeErrorMessage(errorCode: YouTubeToBlueprintErrorResponse['error
   }
 }
 
+async function readAnalyzeBlueprintStream(response: Response) {
+  if (!response.body) {
+    throw new Error('No response body from analysis endpoint.');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let textBuffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    textBuffer += decoder.decode(value, { stream: true });
+    let newlineIndex: number;
+    while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+      let line = textBuffer.slice(0, newlineIndex);
+      textBuffer = textBuffer.slice(newlineIndex + 1);
+
+      if (line.endsWith('\r')) line = line.slice(0, -1);
+      if (line.startsWith(':') || line.trim() === '') continue;
+      if (!line.startsWith('data: ')) continue;
+
+      const jsonStr = line.slice(6).trim();
+      if (jsonStr === '[DONE]') break;
+
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+        if (content) {
+          fullContent += content;
+        }
+      } catch {
+        // Incomplete JSON chunk; keep buffering.
+        textBuffer = line + '\n' + textBuffer;
+        break;
+      }
+    }
+  }
+
+  return fullContent.trim();
+}
+
 export default function YouTubeToBlueprint() {
   const navigate = useNavigate();
   const { session, user } = useAuth();
@@ -140,9 +185,13 @@ export default function YouTubeToBlueprint() {
   const [generateReview, setGenerateReview] = useState(true);
   const [generateBanner, setGenerateBanner] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingReview, setIsGeneratingReview] = useState(false);
+  const [isGeneratingBanner, setIsGeneratingBanner] = useState(false);
   const [stageText, setStageText] = useState('');
   const [progressValue, setProgressValue] = useState(0);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [reviewErrorText, setReviewErrorText] = useState<string | null>(null);
+  const [bannerErrorText, setBannerErrorText] = useState<string | null>(null);
   const [result, setResult] = useState<YouTubeToBlueprintSuccessResponse | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const progressResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -184,11 +233,127 @@ export default function YouTubeToBlueprint() {
     }, 1400);
   }
 
-  const canSubmit = !isGenerating && videoUrl.trim().length > 0 && urlValidation.ok;
+  const isPostProcessing = isGeneratingReview || isGeneratingBanner;
+  const canSubmit = !isGenerating && !isPostProcessing && videoUrl.trim().length > 0 && urlValidation.ok;
+
+  async function runOptionalReviewAndBanner(
+    draft: YouTubeDraftPreview,
+    runId: string,
+    options: { generateReview: boolean; generateBanner: boolean },
+  ) {
+    const tasks: Promise<void>[] = [];
+
+    if (options.generateReview) {
+      setIsGeneratingReview(true);
+      setReviewErrorText(null);
+
+      tasks.push(
+        (async () => {
+          try {
+            const streamResponse = await apiFetch<Response>('analyze-blueprint', {
+              stream: true,
+              body: {
+                title: draft.title,
+                inventoryTitle: 'YouTube transcript',
+                selectedItems: {
+                  transcript: draft.steps.map((step) => ({
+                    name: step.name,
+                    context: step.timestamp || undefined,
+                  })),
+                },
+                mixNotes: draft.notes || undefined,
+                reviewPrompt: 'Summarize quality and clarity in a concise way.',
+                reviewSections: ['Overview', 'Strengths', 'Suggestions'],
+                includeScore: true,
+              },
+            });
+
+            const summary = await readAnalyzeBlueprintStream(streamResponse);
+            setResult((current) =>
+              current
+                ? {
+                    ...current,
+                    review: {
+                      ...current.review,
+                      available: true,
+                      summary: summary || null,
+                    },
+                  }
+                : current
+            );
+
+            await logMvpEvent({
+              eventName: 'generate_ai_review',
+              userId: user?.id,
+              metadata: { source: 'youtube_mvp', run_id: runId },
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Could not generate AI review.';
+            setReviewErrorText(message);
+            toast({
+              title: 'AI review failed',
+              description: message,
+              variant: 'destructive',
+            });
+          } finally {
+            setIsGeneratingReview(false);
+          }
+        })()
+      );
+    }
+
+    if (options.generateBanner) {
+      setIsGeneratingBanner(true);
+      setBannerErrorText(null);
+
+      tasks.push(
+        (async () => {
+          try {
+            const bannerResponse = await apiFetch<{ bannerUrl?: string }>('generate-banner', {
+              body: {
+                title: draft.title,
+                inventoryTitle: 'YouTube transcript',
+                tags: draft.tags || [],
+              },
+            });
+
+            const bannerUrl = bannerResponse?.bannerUrl || null;
+            setResult((current) =>
+              current
+                ? {
+                    ...current,
+                    banner: {
+                      ...current.banner,
+                      available: true,
+                      url: bannerUrl,
+                    },
+                  }
+                : current
+            );
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Could not generate banner.';
+            setBannerErrorText(message);
+            toast({
+              title: 'Banner failed',
+              description: message,
+              variant: 'destructive',
+            });
+          } finally {
+            setIsGeneratingBanner(false);
+          }
+        })()
+      );
+    }
+
+    await Promise.allSettled(tasks);
+    setStageText('');
+  }
 
   async function submit() {
     setErrorText(null);
     setResult(null);
+    setReviewErrorText(null);
+    setBannerErrorText(null);
 
     if (!urlValidation.ok) {
       setErrorText(urlValidation.code === 'playlist'
@@ -202,10 +367,15 @@ export default function YouTubeToBlueprint() {
       return;
     }
 
+    const optionalToggles = {
+      generateReview,
+      generateBanner,
+    };
+
     const payload: YouTubeToBlueprintRequest = {
       video_url: videoUrl.trim(),
-      generate_review: generateReview,
-      generate_banner: generateBanner,
+      generate_review: false,
+      generate_banner: false,
       source: 'youtube_mvp',
     };
     setIsGenerating(true);
@@ -213,9 +383,8 @@ export default function YouTubeToBlueprint() {
       'Submitting video',
       'Fetching transcript',
       'Generating blueprint',
-      ...(payload.generate_review ? ['Generating AI review'] : []),
-      ...(payload.generate_banner ? ['Generating banner'] : []),
-      'Finalizing result',
+      'Applying quality and safety checks',
+      'Core blueprint ready',
     ]);
 
     await logMvpEvent({
@@ -256,8 +425,23 @@ export default function YouTubeToBlueprint() {
         return;
       }
 
-      setResult(json);
-      setStageText('');
+      const coreResult: YouTubeToBlueprintSuccessResponse = {
+        ...json,
+        review: {
+          available: optionalToggles.generateReview,
+          summary: null,
+        },
+        banner: {
+          available: optionalToggles.generateBanner,
+          url: null,
+        },
+      };
+      setResult(coreResult);
+      setStageText(
+        optionalToggles.generateReview || optionalToggles.generateBanner
+          ? 'Core blueprint ready. Running optional enhancements...'
+          : ''
+      );
       await logMvpEvent({
         eventName: 'youtube_success',
         userId: user?.id,
@@ -268,6 +452,10 @@ export default function YouTubeToBlueprint() {
         userId: user?.id,
         metadata: { source_type: 'youtube', run_id: json.run_id },
       });
+
+      if (optionalToggles.generateReview || optionalToggles.generateBanner) {
+        void runOptionalReviewAndBanner(coreResult.draft, coreResult.run_id, optionalToggles);
+      }
     } catch {
       await logMvpEvent({
         eventName: 'youtube_fail',
@@ -442,6 +630,15 @@ export default function YouTubeToBlueprint() {
                   <img src={result.banner.url} alt="Generated banner" className="w-full object-cover" />
                 </div>
               )}
+              {result.banner.available && !result.banner.url && (
+                <div className="rounded-md border border-border/40 p-3 text-sm text-muted-foreground">
+                  {isGeneratingBanner
+                    ? 'Generating banner...'
+                    : bannerErrorText
+                      ? `Banner generation failed: ${bannerErrorText}`
+                      : 'Banner not generated.'}
+                </div>
+              )}
 
               <div className="space-y-3">
                 {result.draft.steps.map((step, index) => (
@@ -457,6 +654,15 @@ export default function YouTubeToBlueprint() {
                 <div className="space-y-2">
                   <p className="text-sm font-semibold">AI Review</p>
                   <BlueprintAnalysisView review={result.review.summary} density="compact" />
+                </div>
+              )}
+              {result.review.available && !result.review.summary && (
+                <div className="rounded-md border border-border/40 p-3 text-sm text-muted-foreground">
+                  {isGeneratingReview
+                    ? 'Generating AI review...'
+                    : reviewErrorText
+                      ? `AI review failed: ${reviewErrorText}`
+                      : 'AI review not generated.'}
                 </div>
               )}
 
@@ -478,7 +684,7 @@ export default function YouTubeToBlueprint() {
               ) : (
                 <div className="space-y-2">
                   <div className="flex flex-wrap gap-2">
-                    <Button onClick={saveToMyFeed} disabled={isSaving}>
+                    <Button onClick={saveToMyFeed} disabled={isSaving || isPostProcessing}>
                       {isSaving ? 'Saving...' : 'Save to My Feed'}
                     </Button>
                     {config.features.channelSubmitV1 && (
@@ -488,7 +694,9 @@ export default function YouTubeToBlueprint() {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Channel publishing is handled after submit and gate checks in My Feed.
+                    {isPostProcessing
+                      ? 'Optional enhancements are still running. Save unlocks when they finish.'
+                      : 'Channel publishing is handled after submit and gate checks in My Feed.'}
                   </p>
                 </div>
               )}
