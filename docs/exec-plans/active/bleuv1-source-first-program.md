@@ -106,12 +106,13 @@ Rules:
   - UI hides legacy no-blueprint pending/skipped feed rows to keep My Feed migration-safe.
 - Subscriptions surface foundation (2026-02-17):
   - `/subscriptions` route is live behind the same auth + feature gate as `/my-feed`.
-  - page supports add subscription and read-only Active/Inactive sections.
+  - page supports add subscription plus Active/Inactive management actions.
   - My Feed now exposes a compact `Manage subscriptions` link (large subscription modal removed).
-  - row-level actions (`sync`, `deactivate`, debug simulate) are intentionally deferred.
+  - row-level actions now live: `Sync now`, `Deactivate` (confirmed), `Reactivate`.
+  - debug simulation remains operator-only and hidden from UI.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.
-2. Add row-level management actions to `/subscriptions` (deactivate/reactivate and sync visibility) when UX priority is approved.
+2. Decide on `/subscriptions` discoverability upgrade (nav item timing) after URL-only validation period.
 3. Add richer ingestion observability dashboards from `ingestion_jobs` + `mvp_events`.
 4. Keep gate behavior in `bypass` until dedicated enforcement cycle approval.

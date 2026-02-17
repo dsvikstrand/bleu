@@ -3,6 +3,16 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +23,10 @@ import { useToast } from '@/hooks/use-toast';
 import {
   ApiRequestError,
   createSourceSubscription,
+  deactivateSourceSubscription,
   listSourceSubscriptions,
+  reactivateSourceSubscription,
+  syncSourceSubscription,
   type SourceSubscription,
 } from '@/lib/subscriptionsApi';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
@@ -31,6 +44,24 @@ function formatDateTime(value: string | null) {
   return parsed.toLocaleString();
 }
 
+function getActionErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiRequestError) {
+    switch (error.errorCode) {
+      case 'NOT_FOUND':
+        return 'Subscription not found. Refresh and try again.';
+      case 'INACTIVE_SUBSCRIPTION':
+        return 'This subscription is inactive. Reactivate it first.';
+      case 'WRITE_FAILED':
+        return 'Could not update subscription. Please try again.';
+      case 'SYNC_FAILED':
+        return 'Sync failed. Please try again in a moment.';
+      default:
+        return error.message || fallback;
+    }
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function Subscriptions() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -38,6 +69,36 @@ export default function Subscriptions() {
   const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
 
   const [channelInput, setChannelInput] = useState('');
+  const [pendingRows, setPendingRows] = useState<Record<string, boolean>>({});
+  const [deactivateTarget, setDeactivateTarget] = useState<SourceSubscription | null>(null);
+
+  const invalidateSubscriptionViews = () => {
+    queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
+    queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
+  };
+
+  const isRowPending = (subscriptionId: string) => Boolean(pendingRows[subscriptionId]);
+  const markRowPending = (subscriptionId: string, isPending: boolean) => {
+    setPendingRows((previous) => {
+      if (isPending) return { ...previous, [subscriptionId]: true };
+      if (!previous[subscriptionId]) return previous;
+      const next = { ...previous };
+      delete next[subscriptionId];
+      return next;
+    });
+  };
+
+  const withRowPending = async <T,>(subscriptionId: string, operation: () => Promise<T>) => {
+    if (isRowPending(subscriptionId)) return null;
+    markRowPending(subscriptionId, true);
+    try {
+      return await operation();
+    } catch {
+      return null;
+    } finally {
+      markRowPending(subscriptionId, false);
+    }
+  };
 
   const subscriptionsQuery = useQuery({
     queryKey: ['source-subscriptions', user?.id],
@@ -54,8 +115,7 @@ export default function Subscriptions() {
     },
     onSuccess: () => {
       setChannelInput('');
-      queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
+      invalidateSubscriptionViews();
       toast({
         title: 'Subscription saved',
         description: 'You are now subscribed. New uploads will appear in your feed.',
@@ -70,6 +130,70 @@ export default function Subscriptions() {
       toast({ title: 'Subscribe failed', description, variant: 'destructive' });
     },
   });
+
+  const deactivateMutation = useMutation({
+    mutationFn: (id: string) => deactivateSourceSubscription(id),
+    onSuccess: () => {
+      invalidateSubscriptionViews();
+      toast({ title: 'Subscription deactivated.' });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Deactivate failed',
+        description: getActionErrorMessage(error, 'Could not deactivate subscription.'),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: (id: string) => reactivateSourceSubscription(id),
+    onSuccess: () => {
+      invalidateSubscriptionViews();
+      toast({ title: 'Subscription reactivated.' });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Reactivate failed',
+        description: getActionErrorMessage(error, 'Could not reactivate subscription.'),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: (id: string) => syncSourceSubscription(id),
+    onSuccess: (result) => {
+      invalidateSubscriptionViews();
+      toast({
+        title: 'Sync complete',
+        description: `Inserted ${result.inserted}, skipped ${result.skipped}, processed ${result.processed}.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Sync failed',
+        description: getActionErrorMessage(error, 'Could not sync subscription.'),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleSyncNow = (subscription: SourceSubscription) => {
+    void withRowPending(subscription.id, () => syncMutation.mutateAsync(subscription.id));
+  };
+
+  const handleReactivate = (subscription: SourceSubscription) => {
+    void withRowPending(subscription.id, () => reactivateMutation.mutateAsync(subscription.id));
+  };
+
+  const handleConfirmDeactivate = () => {
+    if (!deactivateTarget) return;
+    void withRowPending(deactivateTarget.id, async () => {
+      await deactivateMutation.mutateAsync(deactivateTarget.id);
+      setDeactivateTarget(null);
+    });
+  };
 
   const subscriptions = subscriptionsQuery.data || [];
   const activeSubscriptions = useMemo(
@@ -172,6 +296,24 @@ export default function Subscriptions() {
                       {subscription.last_sync_error ? (
                         <p className="text-xs text-red-600/90">Sync issue: {subscription.last_sync_error}</p>
                       ) : null}
+                      <div className="flex flex-wrap justify-end gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSyncNow(subscription)}
+                          disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
+                        >
+                          {isRowPending(subscription.id) ? 'Syncing...' : 'Sync now'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => setDeactivateTarget(subscription)}
+                          disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
+                        >
+                          Deactivate
+                        </Button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -211,6 +353,15 @@ export default function Subscriptions() {
                       {subscription.last_sync_error ? (
                         <p className="text-xs text-red-600/90">Sync issue: {subscription.last_sync_error}</p>
                       ) : null}
+                      <div className="flex justify-end pt-1">
+                        <Button
+                          size="sm"
+                          onClick={() => handleReactivate(subscription)}
+                          disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
+                        >
+                          {isRowPending(subscription.id) ? 'Reactivating...' : 'Reactivate'}
+                        </Button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -218,6 +369,34 @@ export default function Subscriptions() {
             </Card>
           </div>
         )}
+
+        <AlertDialog
+          open={Boolean(deactivateTarget)}
+          onOpenChange={(open) => {
+            if (!open) setDeactivateTarget(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Deactivate subscription?</AlertDialogTitle>
+              <AlertDialogDescription>
+                New uploads from this channel will stop appearing automatically until you reactivate.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={Boolean(deactivateTarget && isRowPending(deactivateTarget.id))}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDeactivate}
+                disabled={Boolean(deactivateTarget && isRowPending(deactivateTarget.id))}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Deactivate
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <AppFooter />
       </PageMain>
     </PageRoot>

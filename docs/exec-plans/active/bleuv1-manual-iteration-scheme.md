@@ -29,6 +29,7 @@ Execution mode:
 10. [have] Step 9 - Subscriptions and auto-ingestion cycle (auto new uploads + compatibility pending actions)
 11. [have] Step 10 - MVP subscription simplification (auto-only UX + no prefill + notice cards)
 12. [have] Step 11 - Subscriptions page foundation (add + read-only active/inactive)
+13. [have] Step 12 - Subscriptions management actions (sync/deactivate/reactivate)
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -229,6 +230,31 @@ Completion evidence (2026-02-17)
 - Added `src/pages/Subscriptions.tsx` with add form + read-only active/inactive sections.
 - Added protected `/subscriptions` route in `src/App.tsx` gated by `config.features.myFeedV1`.
 - Replaced My Feed header modal action with compact `Manage subscriptions` link.
+
+### Step 12 - Subscriptions management actions
+Scope
+- add row-level actions on `/subscriptions` without changing backend contracts
+- keep `/subscriptions` URL-access only (no nav item in this step)
+- require explicit confirmation for deactivate
+
+Definition of done
+- active rows support `Sync now` and `Deactivate`
+- inactive rows support `Reactivate`
+- deactivate action uses explicit confirmation dialog
+- row actions are row-local pending-safe and do not block create flow
+- action success invalidates subscriptions + My Feed queries
+
+Evaluation
+- manual smoke: deactivate moves row to inactive
+- manual smoke: reactivate moves row to active
+- manual smoke: sync shows count summary toast (`inserted/skipped/processed`)
+- regression smoke: `/my-feed` content-first behavior unchanged
+
+Completion evidence (2026-02-17)
+- Updated `src/pages/Subscriptions.tsx` with `Sync now`, `Deactivate`, `Reactivate` controls.
+- Added `AlertDialog` confirmation before deactivation.
+- Added deterministic error messaging for `NOT_FOUND`, `INACTIVE_SUBSCRIPTION`, `WRITE_FAILED`, and `SYNC_FAILED`.
+- Added `reactivateSourceSubscription` helper in `src/lib/subscriptionsApi.ts`.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary
