@@ -14,7 +14,7 @@ a7) [have] Legacy pending/skipped feed rows without blueprints are hidden in `My
 a8) [have] `/subscriptions` is simplified for MVP to two visible actions: add `Subscribe` and per-row `Unsubscribe`.
 a9) [have] `/subscriptions` now surfaces ingestion trust signals (healthy/delayed/error/waiting) based on polling freshness and sync errors.
 a10) [have] Auth-only `Search` route (`/search`) now supports YouTube query discovery with one-click `Generate Blueprint` and `Subscribe Channel`.
-a11) [have] `/subscriptions` now supports auth-only YouTube channel search so users can subscribe from channel suggestions (manual paste remains fallback).
+a11) [have] `/subscriptions` now supports auth-only YouTube channel search with popup-based subscribe flow (manual paste fallback removed in UI).
 
 ## Core Model
 b1) `Source Item`
@@ -73,7 +73,7 @@ m7) Planned mutable interfaces use explicit auth scope + idempotency mode and un
 m8) Runtime default `CHANNEL_GATES_MODE=bypass`; non-prod may run `shadow` or `enforce`.
 
 ## Primary User Flows (`bleuV1`)
-f1) User follows YouTube channels from `/subscriptions` by searching channels and clicking `Subscribe` (manual URL/channel ID/@handle fallback remains available).
+f1) User follows YouTube channels from `/subscriptions` by clicking `Add Subscription`, searching channels, and clicking `Subscribe`.
 f2) User can unsubscribe from active channels directly on `/subscriptions` (unsubscribed rows disappear from the page list).
 f3) User can search YouTube from `/search` and get transient result suggestions (not persisted yet).
 f4) User selects `Generate Blueprint` on a result to generate and save directly into `My Feed`.

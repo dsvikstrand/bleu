@@ -308,7 +308,7 @@ Completion evidence (2026-02-17)
 Scope
 - add auth-only YouTube channel search endpoint for subscriptions discovery
 - make `/subscriptions` search-first with per-result `Subscribe` action
-- keep manual channel input as fallback and preserve `Unsubscribe` + health flows
+- preserve `Unsubscribe` + ingestion health flows while moving subscribe into popup-only UX
 
 Definition of done
 - backend exposes `GET /api/youtube-channel-search` with deterministic envelope/errors
@@ -319,13 +319,13 @@ Definition of done
 Evaluation
 - unit tests pass for channel-search query validation, limit clamping, and normalization
 - manual smoke: search channels -> subscribe from result -> active subscription list updates
-- regression smoke: manual paste subscribe fallback and unsubscribe continue to work
+- regression smoke: popup flow and unsubscribe continue to work
 - docs freshness and link checks pass
 
 Completion evidence (2026-02-17)
 - Added `server/services/youtubeChannelSearch.ts` and wired `GET /api/youtube-channel-search` in `server/index.ts`.
 - Added frontend client `src/lib/youtubeChannelSearchApi.ts` and tests in `src/test/youtubeChannelSearchApi.test.ts`.
-- Updated `src/pages/Subscriptions.tsx` to support search-first subscribe UX with manual fallback input.
+- Updated `src/pages/Subscriptions.tsx` to support popup-based `Add Subscription` search UX without manual fallback input.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

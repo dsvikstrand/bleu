@@ -123,7 +123,7 @@ Rules:
 - Channel discovery for subscriptions (2026-02-17):
   - backend endpoint `GET /api/youtube-channel-search` added for relevance-ordered channel results.
   - `/subscriptions` now supports search-first channel discovery with one-click `Subscribe`.
-  - manual URL/channel-id/@handle input remains as fallback path.
+  - `Add Subscription` popup is the only in-UI subscribe entrypoint (manual fallback input removed).
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

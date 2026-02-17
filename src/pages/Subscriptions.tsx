@@ -6,6 +6,7 @@ import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
@@ -77,7 +78,7 @@ export default function Subscriptions() {
   const queryClient = useQueryClient();
   const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
 
-  const [channelInput, setChannelInput] = useState('');
+  const [isAddSubscriptionOpen, setIsAddSubscriptionOpen] = useState(false);
   const [channelSearchQuery, setChannelSearchQuery] = useState('');
   const [channelSearchSubmittedQuery, setChannelSearchSubmittedQuery] = useState('');
   const [channelSearchResults, setChannelSearchResults] = useState<YouTubeChannelSearchResult[]>([]);
@@ -89,6 +90,21 @@ export default function Subscriptions() {
   const invalidateSubscriptionViews = () => {
     queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
     queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
+  };
+
+  const resetSearchDialogState = () => {
+    setChannelSearchQuery('');
+    setChannelSearchSubmittedQuery('');
+    setChannelSearchResults([]);
+    setChannelSearchNextToken(null);
+    setChannelSearchError(null);
+  };
+
+  const handleAddSubscriptionDialogChange = (nextOpen: boolean) => {
+    setIsAddSubscriptionOpen(nextOpen);
+    if (!nextOpen) {
+      resetSearchDialogState();
+    }
   };
 
   const isRowPending = (subscriptionId: string) => Boolean(pendingRows[subscriptionId]);
@@ -148,7 +164,7 @@ export default function Subscriptions() {
     mutationFn: async (inputRaw: string) => {
       const input = inputRaw.trim();
       if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
-      if (!input) throw new Error('Enter a YouTube channel URL, channel ID, or @handle.');
+      if (!input) throw new Error('Enter a channel to subscribe.');
       return createSourceSubscription({ channelInput: input });
     },
     onSuccess: () => {
@@ -156,7 +172,7 @@ export default function Subscriptions() {
     },
     onError: (error) => {
       const description = error instanceof ApiRequestError && error.errorCode === 'INVALID_CHANNEL'
-        ? 'Could not resolve that YouTube channel. Try a valid channel URL or @handle.'
+        ? 'Could not resolve that YouTube channel. Try another result.'
         : error instanceof Error
           ? error.message
           : 'Could not create subscription.';
@@ -226,24 +242,11 @@ export default function Subscriptions() {
     setSubscribing(result.channel_id, true);
     try {
       await runSubscribe(result.channel_url || result.channel_id, 'Subscribed');
+      handleAddSubscriptionDialogChange(false);
     } catch {
       // error toast handled in mutation
     } finally {
       setSubscribing(result.channel_id, false);
-    }
-  };
-
-  const handleManualSubscribe = async () => {
-    const input = channelInput.trim();
-    if (!input) {
-      toast({ title: 'Missing channel', description: 'Enter a YouTube channel URL, channel ID, or @handle.', variant: 'destructive' });
-      return;
-    }
-    try {
-      await runSubscribe(input);
-      setChannelInput('');
-    } catch {
-      // error toast handled in mutation
     }
   };
 
@@ -278,112 +281,109 @@ export default function Subscriptions() {
             <p className="text-sm text-muted-foreground">
               Add channels here. New uploads from active subscriptions will land in My Feed automatically.
             </p>
-            <Button asChild size="sm" variant="outline" className="h-8 px-2">
-              <Link to="/my-feed">Back to My Feed</Link>
-            </Button>
-          </div>
-        </PageSection>
-
-        <Card className="border-border/40">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Find channels to subscribe</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <form onSubmit={handleChannelSearchSubmit} className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                value={channelSearchQuery}
-                onChange={(event) => setChannelSearchQuery(event.target.value)}
-                placeholder="Try: skincare, fitness, productivity"
-              />
-              <Button type="submit" size="sm" disabled={channelSearchMutation.isPending || !subscriptionsEnabled}>
-                {channelSearchMutation.isPending ? 'Searching...' : 'Search channels'}
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => handleAddSubscriptionDialogChange(true)}
+                disabled={!subscriptionsEnabled}
+              >
+                Add Subscription
               </Button>
-            </form>
-            <p className="text-xs text-muted-foreground">
-              Search results are suggestions only. Nothing changes until you click Subscribe.
-            </p>
+              <Button asChild size="sm" variant="outline" className="h-8 px-2">
+                <Link to="/my-feed">Back to My Feed</Link>
+              </Button>
+            </div>
             {!subscriptionsEnabled ? (
               <p className="text-xs text-muted-foreground">
                 Subscription APIs require `VITE_AGENTIC_BACKEND_URL`.
               </p>
             ) : null}
-            {channelSearchError ? <p className="text-sm text-destructive">{channelSearchError}</p> : null}
+          </div>
+        </PageSection>
 
-            {channelSearchResults.length > 0 ? (
-              <div className="space-y-3">
-                {channelSearchResults.map((result) => {
-                  const isSubscribing = Boolean(subscribingChannelIds[result.channel_id]);
-                  return (
-                    <div key={result.channel_id} className="rounded-md border border-border/40 p-3 space-y-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{result.channel_title}</p>
-                          <p className="text-xs text-muted-foreground line-clamp-2">
-                            {result.description || 'No channel description available.'}
-                          </p>
-                        </div>
-                        {result.thumbnail_url ? (
-                          <img
-                            src={result.thumbnail_url}
-                            alt={result.channel_title}
-                            className="h-10 w-10 rounded-md object-cover border border-border/40 shrink-0"
-                          />
-                        ) : null}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => handleSubscribeFromSearch(result)}
-                          disabled={!subscriptionsEnabled || isSubscribing || createMutation.isPending}
-                        >
-                          {isSubscribing ? 'Subscribing...' : 'Subscribe'}
-                        </Button>
-                        <Button asChild size="sm" variant="outline">
-                          <a href={result.channel_url} target="_blank" rel="noreferrer">
-                            Open on YouTube
-                          </a>
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-                {channelSearchNextToken ? (
-                  <div className="flex justify-center">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleChannelSearchLoadMore}
-                      disabled={channelSearchMutation.isPending}
-                    >
-                      {channelSearchMutation.isPending ? 'Loading...' : 'Load more'}
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="rounded-md border border-border/40 p-3 space-y-2">
-              <p className="text-xs font-medium">Manual fallback</p>
-              <p className="text-xs text-muted-foreground">
-                If search misses a channel, paste URL, channel ID, or @handle.
-              </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
+        <Dialog open={isAddSubscriptionOpen} onOpenChange={handleAddSubscriptionDialogChange}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Add Subscription</DialogTitle>
+              <DialogDescription>
+                Search YouTube channels and subscribe in one click.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <form onSubmit={handleChannelSearchSubmit} className="flex flex-col gap-2 sm:flex-row">
                 <Input
-                  value={channelInput}
-                  onChange={(event) => setChannelInput(event.target.value)}
-                  placeholder="https://www.youtube.com/@channel or @handle"
+                  value={channelSearchQuery}
+                  onChange={(event) => setChannelSearchQuery(event.target.value)}
+                  placeholder="Try: skincare, fitness, productivity"
                 />
-                <Button
-                  size="sm"
-                  onClick={handleManualSubscribe}
-                  disabled={createMutation.isPending || !subscriptionsEnabled}
-                >
-                  {createMutation.isPending ? 'Subscribing...' : 'Subscribe'}
+                <Button type="submit" size="sm" disabled={channelSearchMutation.isPending || !subscriptionsEnabled}>
+                  {channelSearchMutation.isPending ? 'Searching...' : 'Search channels'}
                 </Button>
-              </div>
+              </form>
+              <p className="text-xs text-muted-foreground">
+                Suggestions are transient. Nothing changes until you click Subscribe.
+              </p>
+              {channelSearchError ? <p className="text-sm text-destructive">{channelSearchError}</p> : null}
+
+              {channelSearchResults.length === 0 && channelSearchSubmittedQuery ? (
+                <p className="text-sm text-muted-foreground">No channels found for your query.</p>
+              ) : null}
+
+              {channelSearchResults.length > 0 ? (
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                  {channelSearchResults.map((result) => {
+                    const isSubscribing = Boolean(subscribingChannelIds[result.channel_id]);
+                    return (
+                      <div key={result.channel_id} className="rounded-md border border-border/40 p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{result.channel_title}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-2">
+                              {result.description || 'No channel description available.'}
+                            </p>
+                          </div>
+                          {result.thumbnail_url ? (
+                            <img
+                              src={result.thumbnail_url}
+                              alt={result.channel_title}
+                              className="h-10 w-10 rounded-md object-cover border border-border/40 shrink-0"
+                            />
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleSubscribeFromSearch(result)}
+                            disabled={!subscriptionsEnabled || isSubscribing || createMutation.isPending}
+                          >
+                            {isSubscribing ? 'Subscribing...' : 'Subscribe'}
+                          </Button>
+                          <Button asChild size="sm" variant="outline">
+                            <a href={result.channel_url} target="_blank" rel="noreferrer">
+                              Open on YouTube
+                            </a>
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {channelSearchNextToken ? (
+                    <div className="flex justify-center">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleChannelSearchLoadMore}
+                        disabled={channelSearchMutation.isPending}
+                      >
+                        {channelSearchMutation.isPending ? 'Loading...' : 'Load more'}
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
 
         {!subscriptionsQuery.isLoading && !subscriptionsQuery.error ? (
           <Card className="border-border/40">

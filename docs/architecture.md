@@ -47,7 +47,7 @@
 1. Ingest source item (manual URL pull or subscription sync).
    - discovery option: user can search YouTube results in `/search` before selecting a source video.
 2. Subscription create/reactivate:
-   - user opens `/subscriptions` and searches channels, then clicks subscribe (manual URL/channel ID/@handle fallback remains).
+   - user opens `/subscriptions`, launches `Add Subscription`, searches channels, then clicks subscribe.
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.
    - resolve channel id and set first-sync checkpoint only (`last_seen_published_at`, `last_seen_video_id`).
    - no historical prefill on first subscribe in MVP.
