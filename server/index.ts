@@ -149,8 +149,10 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return next();
   if (req.path === '/api/health') return next();
+  const isDebugSimulationRoute = /^\/api\/debug\/subscriptions\/[^/]+\/simulate-new-uploads$/.test(req.path);
   const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
-    || req.path === '/api/ingestion/jobs/trigger';
+    || req.path === '/api/ingestion/jobs/trigger'
+    || (debugEndpointsEnabled && isDebugSimulationRoute);
 
   if (!supabaseClient) {
     if (allowsAnonymous) return next();

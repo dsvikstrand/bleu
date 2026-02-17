@@ -203,6 +203,7 @@ Completion evidence (2026-02-18)
 - One-time cleanup removed legacy no-blueprint skipped/pending test rows.
 - `My Feed` now filters legacy no-blueprint pending/skipped rows by default.
 - Added debug-only subscription simulation endpoint to test new-upload ingestion without waiting for real channel uploads.
+- Fixed debug endpoint auth boundary so service-token-only calls can pass middleware without user bearer auth.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

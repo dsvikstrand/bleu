@@ -115,7 +115,7 @@ si5) `POST /api/source-subscriptions/:id/sync` (user sync)
 si6) `POST /api/ingestion/jobs/trigger` (service auth for cron)
 si7) `POST /api/my-feed/items/:id/accept`
 si8) `POST /api/my-feed/items/:id/skip`
-si9) debug-only endpoint (service auth + env gate): `POST /api/debug/subscriptions/:id/simulate-new-uploads` (`ENABLE_DEBUG_ENDPOINTS=true` required)
+si9) debug-only endpoint (service auth + env gate): `POST /api/debug/subscriptions/:id/simulate-new-uploads` (`ENABLE_DEBUG_ENDPOINTS=true` required, authenticated by `x-service-token`, no user bearer token required)
 
 ## Next Milestone (Hardening)
 n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.

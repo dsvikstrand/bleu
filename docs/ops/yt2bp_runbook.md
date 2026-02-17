@@ -219,6 +219,7 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/debug/subscriptions/<subscription_
 ```
 Notes:
 - endpoint returns `404` unless `ENABLE_DEBUG_ENDPOINTS=true`.
+- endpoint uses service-token auth only; do not send/require a user bearer token.
 - endpoint rewinds checkpoint for one subscription, then runs one sync cycle.
 - this can generate blueprints and consume tokens/credits.
 
