@@ -10,14 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useCreateBlueprint } from '@/hooks/useBlueprints';
-import { config, getFunctionUrl } from '@/config/runtime';
+import { config } from '@/config/runtime';
 import { logMvpEvent } from '@/lib/logEvent';
 import {
   ApiRequestError as SubscriptionApiRequestError,
   createSourceSubscription,
 } from '@/lib/subscriptionsApi';
-import { ensureSourceItemForYouTube, getExistingUserFeedItem, upsertUserFeedItem } from '@/lib/myFeedApi';
 import {
   ApiRequestError,
   searchYouTube,
@@ -26,73 +24,7 @@ import {
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
-const YOUTUBE_ENDPOINT = getFunctionUrl('youtube-to-blueprint');
 const DEFAULT_SEARCH_LIMIT = 10;
-
-type YouTubeDraftStep = {
-  name: string;
-  notes: string;
-  timestamp: string | null;
-};
-
-type YouTubeDraftPreview = {
-  title: string;
-  description: string;
-  steps: YouTubeDraftStep[];
-  notes: string | null;
-  tags: string[];
-};
-
-type YouTubeToBlueprintSuccessResponse = {
-  ok: true;
-  run_id: string;
-  draft: YouTubeDraftPreview;
-  review: { available: boolean; summary: string | null };
-  banner: { available: boolean; url: string | null };
-  meta: {
-    transcript_source: string;
-    confidence: number | null;
-    duration_ms: number;
-  };
-};
-
-type YouTubeToBlueprintErrorResponse = {
-  ok: false;
-  error_code: string;
-  message: string;
-};
-
-function toBlueprintStepsForSave(steps: YouTubeDraftStep[]) {
-  return steps.map((step, index) => ({
-    id: `yt-search-step-${index + 1}`,
-    title: step.name,
-    description: step.notes,
-    items: [],
-  }));
-}
-
-function toYouTubeErrorMessage(errorCode: string) {
-  switch (errorCode) {
-    case 'INVALID_URL':
-      return 'Could not parse that YouTube video URL.';
-    case 'NO_CAPTIONS':
-    case 'TRANSCRIPT_EMPTY':
-      return 'Transcript unavailable for this video. Try another result.';
-    case 'PROVIDER_FAIL':
-    case 'TRANSCRIPT_FETCH_FAIL':
-      return 'Transcript provider is currently unavailable. Please try again.';
-    case 'SERVICE_DISABLED':
-      return 'YouTube generation is temporarily unavailable.';
-    case 'TIMEOUT':
-      return 'This video took too long to process. Please try another result.';
-    case 'RATE_LIMITED':
-      return 'Too many requests right now. Please wait a bit and retry.';
-    case 'SAFETY_BLOCKED':
-      return 'This video content could not be converted safely.';
-    default:
-      return 'Could not complete blueprint generation. Please try another result.';
-  }
-}
 
 function getSearchErrorMessage(error: unknown) {
   if (error instanceof ApiRequestError) {
@@ -114,9 +46,8 @@ function getSearchErrorMessage(error: unknown) {
 
 export default function SearchPage() {
   const navigate = useNavigate();
-  const { user, session } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
-  const createBlueprint = useCreateBlueprint();
 
   const [queryInput, setQueryInput] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
@@ -221,7 +152,7 @@ export default function SearchPage() {
   };
 
   const handleGenerateBlueprint = async (result: YouTubeSearchResult) => {
-    if (!user || !session?.access_token || generatingVideoIds[result.video_id]) return;
+    if (!user || generatingVideoIds[result.video_id]) return;
     setGenerating(result.video_id, true);
     try {
       await logMvpEvent({
@@ -233,94 +164,18 @@ export default function SearchPage() {
           source_channel_id: result.channel_id,
         },
       });
-
-      const response = await fetch(YOUTUBE_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          video_url: result.video_url,
-          generate_review: false,
-          generate_banner: false,
-          source: 'youtube_mvp',
-        }),
+      const params = new URLSearchParams({
+        video_url: result.video_url,
+        autostart: '1',
+        generate_review: '0',
+        generate_banner: '0',
+        source: 'youtube_search',
       });
-
-      const json = (await response.json().catch(() => null)) as
-        | YouTubeToBlueprintSuccessResponse
-        | YouTubeToBlueprintErrorResponse
-        | null;
-
-      if (!response.ok || !json || !json.ok) {
-        const errorCode = !json || json.ok ? 'GENERATION_FAIL' : json.error_code;
-        throw new Error(toYouTubeErrorMessage(errorCode));
-      }
-
-      const sourceItem = await ensureSourceItemForYouTube({
-        videoUrl: result.video_url,
-        title: json.draft.title,
-        metadata: {
-          run_id: json.run_id,
-          transcript_source: json.meta.transcript_source,
-          confidence: json.meta.confidence,
-          source: 'youtube_search',
-        },
-      });
-
-      const existing = await getExistingUserFeedItem(user.id, sourceItem.id);
-      if (existing) {
-        toast({
-          title: 'Already in My Feed',
-          description: 'This source is already available in your personal feed.',
-        });
-        navigate('/my-feed');
-        return;
-      }
-
-      const created = await createBlueprint.mutateAsync({
-        inventoryId: null,
-        title: json.draft.title,
-        selectedItems: {},
-        steps: toBlueprintStepsForSave(json.draft.steps),
-        mixNotes: json.draft.notes,
-        reviewPrompt: 'youtube_search_mvp',
-        bannerUrl: json.banner.url,
-        llmReview: json.review.summary,
-        tags: json.draft.tags || [],
-        isPublic: false,
-      });
-
-      const feedItem = await upsertUserFeedItem({
-        userId: user.id,
-        sourceItemId: sourceItem.id,
-        blueprintId: created.id,
-        state: 'my_feed_published',
-      });
-
-      await logMvpEvent({
-        eventName: 'my_feed_publish_succeeded',
-        userId: user.id,
-        blueprintId: created.id,
-        metadata: {
-          run_id: json.run_id,
-          source_type: 'youtube_search',
-          source_item_id: sourceItem.id,
-          user_feed_item_id: feedItem?.id || null,
-          canonical_key: sourceItem.canonical_key,
-        },
-      });
-
-      toast({
-        title: 'Saved to My Feed',
-        description: 'Generated blueprint is now in your personal feed.',
-      });
-      navigate('/my-feed');
+      navigate(`/youtube?${params.toString()}`);
     } catch (error) {
       toast({
-        title: 'Generate failed',
-        description: error instanceof Error ? error.message : 'Could not generate blueprint.',
+        title: 'Could not open generator',
+        description: error instanceof Error ? error.message : 'Please open this result in YouTube and paste its URL manually.',
         variant: 'destructive',
       });
     } finally {
@@ -426,9 +281,9 @@ export default function SearchPage() {
                       <Button
                         size="sm"
                         onClick={() => handleGenerateBlueprint(result)}
-                        disabled={isGenerating || !user || !session?.access_token}
+                        disabled={isGenerating || !user}
                       >
-                        {isGenerating ? 'Generating...' : 'Generate Blueprint'}
+                        {isGenerating ? 'Opening...' : 'Generate Blueprint'}
                       </Button>
                       <Button
                         size="sm"

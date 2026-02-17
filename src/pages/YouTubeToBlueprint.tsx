@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Input } from '@/components/ui/input';
@@ -177,6 +177,7 @@ async function readAnalyzeBlueprintStream(response: Response) {
 
 export default function YouTubeToBlueprint() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { session, user } = useAuth();
   const { toast } = useToast();
   const createBlueprint = useCreateBlueprint();
@@ -196,8 +197,64 @@ export default function YouTubeToBlueprint() {
   const [isSaving, setIsSaving] = useState(false);
   const progressResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const phaseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasHydratedFromParamsRef = useRef(false);
+  const hasAutoStartedRef = useRef(false);
 
   const urlValidation = useMemo(() => validateYouTubeInput(videoUrl), [videoUrl]);
+  const isPostProcessing = isGeneratingReview || isGeneratingBanner;
+  const canSubmit = !isGenerating && !isPostProcessing && videoUrl.trim().length > 0 && urlValidation.ok;
+
+  useEffect(() => {
+    if (hasHydratedFromParamsRef.current) return;
+    const urlFromQuery = String(searchParams.get('video_url') || '').trim();
+    if (!urlFromQuery) {
+      hasHydratedFromParamsRef.current = true;
+      return;
+    }
+    setVideoUrl(urlFromQuery);
+
+    const reviewQuery = searchParams.get('generate_review');
+    if (reviewQuery === '0') setGenerateReview(false);
+    if (reviewQuery === '1') setGenerateReview(true);
+
+    const bannerQuery = searchParams.get('generate_banner');
+    if (bannerQuery === '0') setGenerateBanner(false);
+    if (bannerQuery === '1') setGenerateBanner(true);
+
+    hasHydratedFromParamsRef.current = true;
+  }, [searchParams]);
+
+  useEffect(() => {
+    const shouldAutostart = searchParams.get('autostart') === '1';
+    if (!shouldAutostart || hasAutoStartedRef.current) return;
+    if (!videoUrl.trim() || isGenerating || isPostProcessing) return;
+
+    if (!urlValidation.ok) {
+      hasAutoStartedRef.current = true;
+      setErrorText(urlValidation.code === 'playlist'
+        ? 'Playlist URLs are not supported in MVP. Please use a single video URL.'
+        : 'Please enter a valid YouTube single-video URL.');
+      const next = new URLSearchParams(searchParams);
+      next.delete('autostart');
+      setSearchParams(next, { replace: true });
+      return;
+    }
+
+    hasAutoStartedRef.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('autostart');
+    setSearchParams(next, { replace: true });
+    void submit();
+  }, [
+    isGenerating,
+    isPostProcessing,
+    searchParams,
+    setSearchParams,
+    urlValidation.code,
+    urlValidation.ok,
+    videoUrl,
+  ]);
+
   useEffect(() => {
     return () => {
       if (progressResetTimerRef.current) {
@@ -232,9 +289,6 @@ export default function YouTubeToBlueprint() {
       }
     }, 1400);
   }
-
-  const isPostProcessing = isGeneratingReview || isGeneratingBanner;
-  const canSubmit = !isGenerating && !isPostProcessing && videoUrl.trim().length > 0 && urlValidation.ok;
 
   async function runOptionalReviewAndBanner(
     draft: YouTubeDraftPreview,
