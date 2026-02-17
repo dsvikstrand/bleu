@@ -47,6 +47,11 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Keep insights/remixes tied to imported blueprints.
 - Maintain vote/comment utility on shared channel content.
 
+### W5 - Subscription Intake And Sync
+- Support YouTube channel subscriptions (`manual|auto`).
+- Keep manual mode pending-first and accept-driven generation.
+- Run scheduler trigger from Oracle (`/api/ingestion/jobs/trigger` with service auth).
+
 ## Acceptance Baseline Per Iteration
 1. Scope and behavior align with `docs/app/product-spec.md`.
 2. Architecture assumptions remain aligned with `docs/architecture.md`.
@@ -65,7 +70,6 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - `codex exec` orchestration scripts and role runner wrappers.
 - CI workflow implementation for evaluator/integrator automation.
 - Automated checkpoint enforcement.
-- Auto-ingestion scheduler and subscription polling.
 - Production gate enforcement (`CHANNEL_GATES_MODE=enforce`).
 
 ## Reference Material (Paused Track)

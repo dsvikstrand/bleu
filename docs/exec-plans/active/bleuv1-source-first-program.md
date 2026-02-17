@@ -93,9 +93,16 @@ Rules:
 - Data foundation is additive and adapter-ready:
   - new tables: `source_items`, `user_source_subscriptions`, `user_feed_items`, `channel_candidates`, `channel_gate_decisions`.
   - adapter abstraction introduced (`BaseAdapter`, `YouTubeAdapter`, registry), with YouTube as MVP implementation.
+  - subscription hardening extension: `ingestion_jobs` + subscription sync metadata fields.
+- Subscription and ingestion lifecycle (2026-02-18):
+  - `POST|GET|PATCH|DELETE /api/source-subscriptions` live for user-managed channel follows.
+  - `POST /api/source-subscriptions/:id/sync` live for user-initiated sync.
+  - `POST /api/ingestion/jobs/trigger` live for Oracle cron/service trigger.
+  - pending-card My Feed actions live: `POST /api/my-feed/items/:id/accept|skip`.
+  - manual mode backfills latest 5 pending cards; auto mode skips initial backfill and ingests new uploads only.
 
-## 12) Next Milestone (Hardening-First)
-1. Docs/runtime contract realignment (no drift on gate status).
-2. Primary CTA cleanup to avoid library-first onboarding.
-3. Traceability hardening (`run_id`, `source_item_id`, `user_feed_item_id`, `candidate_id`).
-4. Gate-mode framework shipped with production default still `bypass`.
+## 12) Next Milestone
+1. Validate Oracle cron reliability and alerting around ingestion failures.
+2. Tune manual pending-card UX and copy based on early user behavior.
+3. Add richer ingestion observability dashboards from `ingestion_jobs` + `mvp_events`.
+4. Keep gate behavior in `bypass` until dedicated enforcement cycle approval.

@@ -16,6 +16,7 @@
 - 2026-02-13 note: App-wide wall-to-wall layout migration (Run 1) updates YouTube page framing to a minimal document-like layout; UI-only and does not alter this contract.
 - 2026-02-17 note: dual-feed rollout moved post-generation behavior to personal-first (`/my-feed`) with channel submission as a separate candidate lifecycle; this does not alter the YT2BP request/response envelope.
 - 2026-02-17 note: optional AI review/banner are now executed as separate post-generation steps in UI (`/api/analyze-blueprint` and `/api/generate-banner`) so core YT2BP latency is lower; this does not alter the YT2BP envelope.
+- 2026-02-18 note: subscription ingestion (`/api/source-subscriptions*`, `/api/ingestion/jobs/trigger`) and pending-card accept/skip (`/api/my-feed/items/:id/accept|skip`) are separate flows and do not alter this endpoint envelope.
 
 ## Request
 ```json
@@ -90,6 +91,7 @@
 - This endpoint is responsible for source extraction + draft generation only.
 - Persisting personal feed state and channel candidate promotion happens in separate app/backend flows.
 - Channel publish/reject is intentionally out of this endpoint scope.
+- Subscription sync and manual pending-card acceptance are intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: 120s.

@@ -66,6 +66,10 @@ Required runtime variables:
 - `YT2BP_AUTH_LIMIT_PER_MIN`
 - `YT2BP_IP_LIMIT_PER_HOUR`
 - `CHANNEL_GATES_MODE` (`bypass` | `shadow` | `enforce`)
+- `SUPABASE_SERVICE_ROLE_KEY` (required for cron ingestion trigger path)
+- `INGESTION_SERVICE_TOKEN` (shared secret for `/api/ingestion/jobs/trigger`)
+- `SUBSCRIPTIONS_MANUAL_BACKFILL_LIMIT` (default `5`)
+- `INGESTION_MAX_PER_SUBSCRIPTION` (default `5`)
 
 Safe defaults:
 - `YT2BP_ENABLED=true`
@@ -75,6 +79,8 @@ Safe defaults:
 - `YT2BP_AUTH_LIMIT_PER_MIN=20`
 - `YT2BP_IP_LIMIT_PER_HOUR=30`
 - `CHANNEL_GATES_MODE=bypass`
+- `SUBSCRIPTIONS_MANUAL_BACKFILL_LIMIT=5`
+- `INGESTION_MAX_PER_SUBSCRIPTION=5`
 
 ## Failure playbooks
 
@@ -173,6 +179,52 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/channel-candidates \
 curl -sS -X POST https://bapi.vdsai.cloud/api/channel-candidates/<candidate_id>/evaluate \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json'
+```
+
+## Subscription + ingestion smoke
+Create a subscription (`manual` mode):
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"channel_input":"https://www.youtube.com/@AliAbdaal","mode":"manual"}'
+```
+
+User-triggered sync:
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions/<subscription_id>/sync \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{}'
+```
+
+Service cron trigger:
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/ingestion/jobs/trigger \
+  -H "x-service-token: $INGESTION_SERVICE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{}'
+```
+
+Pending card actions:
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/my-feed/items/<user_feed_item_id>/accept \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{}'
+```
+
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/my-feed/items/<user_feed_item_id>/skip \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{}'
+```
+
+## Oracle cron setup (every 30 minutes)
+Example cron entry:
+```bash
+*/30 * * * * curl -sS -X POST https://bapi.vdsai.cloud/api/ingestion/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-ingestion-cron.log 2>&1
 ```
 
 ## Traceability keys and expected logs

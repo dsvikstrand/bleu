@@ -20,21 +20,29 @@
 - Backend:
   - Express server in `server/index.ts`.
   - `/api/youtube-to-blueprint` generation pipeline.
+  - subscription ingestion APIs:
+    - `POST|GET|PATCH|DELETE /api/source-subscriptions`
+    - `POST /api/source-subscriptions/:id/sync`
+    - `POST /api/ingestion/jobs/trigger` (service auth)
+    - `POST /api/my-feed/items/:id/accept|skip`
   - Adapter abstraction in `server/adapters/*` (`BaseAdapter`, `YouTubeAdapter`, registry).
   - Candidate gate pipeline in `server/gates/*` (`Gate` contract + ordered all-gates-run execution).
   - Gate runtime mode switch: `CHANNEL_GATES_MODE = bypass | shadow | enforce` (default `bypass`).
 - Data:
   - Supabase is system of record for blueprints, tags, follows, likes/comments, telemetry.
-  - `bleuV1` extension: source-item canonical tables + user feed item tables.
+  - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables.
 - Eval assets:
   - Runtime policy/config under `eval/methods/v0/*`.
 - Operations:
   - Oracle VM runtime + logs-first runbook (`docs/ops/yt2bp_runbook.md`).
 
 ## 3) Core Lifecycle (`bleuV1`)
-1. Ingest source item (manual pull now, scheduled pull later).
-2. Generate imported blueprint.
-3. Publish to personal lane (`My Feed`).
+1. Ingest source item (manual URL pull or subscription sync).
+2. `manual` subscription mode:
+   - create `my_feed_pending_accept` without blueprint.
+   - user `Accept` runs generation, then `my_feed_published`.
+3. `auto` subscription mode:
+   - new uploads generate immediately to `my_feed_published`.
 4. Optional user remix/insight.
 5. Channel candidate evaluation (all-gates-run default, aggregated decision).
 6. Gate decision:
@@ -76,6 +84,7 @@ Current production behavior note:
   - Channel publish is never unconditional; it is a gated second-stage action.
 - Compatibility invariants:
   - Existing public blueprint feed and channel routes remain functional while `My Feed` is introduced.
+  - Gate runtime mode remains `CHANNEL_GATES_MODE=bypass` in production for this cycle.
 
 ## 6) Failure Modes And Recovery
 - Frequent classes (adapter/generation):

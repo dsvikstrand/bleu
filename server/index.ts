@@ -12,6 +12,12 @@ import { getTranscriptForVideo } from './transcript/getTranscript';
 import { TranscriptProviderError } from './transcript/types';
 import { getAdapterForUrl } from './adapters/registry';
 import { evaluateCandidateForChannel } from './gates';
+import {
+  fetchYouTubeFeed,
+  isNewerThanCheckpoint,
+  resolveYouTubeChannel,
+  type YouTubeFeedVideo,
+} from './services/youtubeSubscriptions';
 import type {
   BlueprintAnalysisRequest,
   BlueprintGenerationRequest,
@@ -56,6 +62,9 @@ const yt2bpAuthLimitPerMin = Number(process.env.YT2BP_AUTH_LIMIT_PER_MIN) || 20;
 const yt2bpIpLimitPerHour = Number(process.env.YT2BP_IP_LIMIT_PER_HOUR) || 30;
 const yt2bpEnabledRaw = String(process.env.YT2BP_ENABLED ?? 'true').trim().toLowerCase();
 const yt2bpEnabled = !(yt2bpEnabledRaw === 'false' || yt2bpEnabledRaw === '0' || yt2bpEnabledRaw === 'off');
+const ingestionServiceToken = String(process.env.INGESTION_SERVICE_TOKEN || '').trim();
+const manualBackfillLimit = Math.max(1, Number(process.env.SUBSCRIPTIONS_MANUAL_BACKFILL_LIMIT) || 5);
+const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX_PER_SUBSCRIPTION) || 5);
 
 function getRetryAfterSeconds(req: express.Request) {
   const resetTime = (req as express.Request & { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime;
@@ -139,7 +148,8 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return next();
   if (req.path === '/api/health') return next();
-  const allowsAnonymous = req.path === '/api/youtube-to-blueprint';
+  const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
+    || req.path === '/api/ingestion/jobs/trigger';
 
   if (!supabaseClient) {
     if (allowsAnonymous) return next();
@@ -855,6 +865,759 @@ function getAuthedSupabaseClient(authToken: string) {
     global: { headers: { Authorization: `Bearer ${authToken}` } },
   });
 }
+
+function getServiceSupabaseClient() {
+  if (!supabaseUrl) return null;
+  const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  if (!serviceRoleKey) return null;
+  return createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+}
+
+function isServiceRequestAuthorized(req: express.Request) {
+  if (!ingestionServiceToken) return false;
+  const fromHeader = String(req.header('x-service-token') || '').trim();
+  const fromBearer = String(req.header('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  return fromHeader === ingestionServiceToken || fromBearer === ingestionServiceToken;
+}
+
+function toTagSlug(raw: string) {
+  return raw
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+}
+
+async function ensureTagId(db: ReturnType<typeof createClient>, userId: string, tagSlug: string): Promise<string> {
+  const slug = toTagSlug(tagSlug);
+  if (!slug) throw new Error('INVALID_TAG');
+
+  const { data: existing } = await db.from('tags').select('id').eq('slug', slug).maybeSingle();
+  if (existing?.id) return existing.id;
+
+  const { data: created, error } = await db
+    .from('tags')
+    .insert({ slug, created_by: userId })
+    .select('id')
+    .single();
+  if (error) {
+    const { data: retry } = await db.from('tags').select('id').eq('slug', slug).maybeSingle();
+    if (retry?.id) return retry.id;
+    throw error;
+  }
+  return created.id;
+}
+
+function mapDraftStepsForBlueprint(steps: Array<{ name: string; notes: string }>) {
+  return steps.map((step, index) => ({
+    id: `yt-sub-step-${index + 1}`,
+    title: step.name,
+    description: step.notes,
+    items: [],
+  }));
+}
+
+async function upsertSourceItemFromVideo(db: ReturnType<typeof createClient>, input: {
+  video: YouTubeFeedVideo;
+  channelId: string;
+  channelTitle: string | null;
+}) {
+  const canonicalKey = `youtube:${input.video.videoId}`;
+  const { data, error } = await db
+    .from('source_items')
+    .upsert(
+      {
+        source_type: 'youtube',
+        source_native_id: input.video.videoId,
+        canonical_key: canonicalKey,
+        source_url: input.video.url,
+        title: input.video.title,
+        published_at: input.video.publishedAt,
+        ingest_status: 'ready',
+        source_channel_id: input.channelId,
+        source_channel_title: input.channelTitle,
+        thumbnail_url: input.video.thumbnailUrl,
+        metadata: {
+          provider: 'youtube_rss',
+        },
+      },
+      { onConflict: 'canonical_key' },
+    )
+    .select('id, source_url, source_native_id')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function getExistingFeedItem(db: ReturnType<typeof createClient>, userId: string, sourceItemId: string) {
+  const { data, error } = await db
+    .from('user_feed_items')
+    .select('id, state, blueprint_id')
+    .eq('user_id', userId)
+    .eq('source_item_id', sourceItemId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
+  userId: string;
+  sourceItemId: string;
+  blueprintId: string | null;
+  state: string;
+}) {
+  const { data, error } = await db
+    .from('user_feed_items')
+    .insert({
+      user_id: input.userId,
+      source_item_id: input.sourceItemId,
+      blueprint_id: input.blueprintId,
+      state: input.state,
+      last_decision_code: null,
+    })
+    .select('id')
+    .single();
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code === '23505') return null;
+    throw error;
+  }
+  return data;
+}
+
+async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, input: {
+  userId: string;
+  videoUrl: string;
+  videoId: string;
+  sourceTag: 'subscription_auto' | 'subscription_accept';
+}) {
+  const runId = `sub-${input.sourceTag}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const result = await runYouTubePipeline({
+    runId,
+    videoId: input.videoId,
+    videoUrl: input.videoUrl,
+    generateReview: false,
+    generateBanner: false,
+    authToken: '',
+  });
+
+  const { data: blueprint, error: blueprintError } = await db
+    .from('blueprints')
+    .insert({
+      title: result.draft.title,
+      creator_user_id: input.userId,
+      is_public: false,
+      steps: mapDraftStepsForBlueprint(result.draft.steps),
+      selected_items: {
+        source: input.sourceTag,
+        run_id: result.run_id,
+        video_url: input.videoUrl,
+      },
+      mix_notes: result.draft.notes || null,
+      llm_review: result.review.summary || null,
+    })
+    .select('id')
+    .single();
+  if (blueprintError) throw blueprintError;
+
+  for (const rawTag of result.draft.tags || []) {
+    const tagSlug = toTagSlug(rawTag);
+    if (!tagSlug) continue;
+    const tagId = await ensureTagId(db, input.userId, tagSlug);
+    await db
+      .from('blueprint_tags')
+      .upsert({ blueprint_id: blueprint.id, tag_id: tagId }, { onConflict: 'blueprint_id,tag_id' });
+  }
+
+  return {
+    blueprintId: blueprint.id,
+    runId: result.run_id,
+    title: result.draft.title,
+  };
+}
+
+type SyncSubscriptionResult = {
+  processed: number;
+  inserted: number;
+  skipped: number;
+  newestVideoId: string | null;
+  newestPublishedAt: string | null;
+  channelTitle: string | null;
+};
+
+async function syncSingleSubscription(db: ReturnType<typeof createClient>, subscription: {
+  id: string;
+  user_id: string;
+  mode: string;
+  source_channel_id: string;
+  last_seen_published_at: string | null;
+  last_seen_video_id: string | null;
+}, options: {
+  trigger: 'user_sync' | 'service_cron' | 'subscription_create';
+}) {
+  const mode = subscription.mode === 'auto' ? 'auto' : 'manual';
+  const feed = await fetchYouTubeFeed(subscription.source_channel_id, 20);
+  const newest = feed.videos[0] || null;
+
+  let candidates: YouTubeFeedVideo[] = [];
+  if (!subscription.last_seen_published_at) {
+    if (mode === 'manual') {
+      candidates = feed.videos.slice(0, manualBackfillLimit);
+    } else {
+      candidates = [];
+    }
+  } else {
+    candidates = feed.videos.filter((video) =>
+      isNewerThanCheckpoint(video, subscription.last_seen_published_at, subscription.last_seen_video_id),
+    );
+  }
+
+  const toProcess = candidates
+    .slice(0, ingestionMaxPerSubscription)
+    .sort((a, b) => {
+      const aTs = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+      const bTs = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+      return aTs - bTs;
+    });
+
+  let processed = 0;
+  let inserted = 0;
+  let skipped = 0;
+
+  for (const video of toProcess) {
+    processed += 1;
+    const source = await upsertSourceItemFromVideo(db, {
+      video,
+      channelId: subscription.source_channel_id,
+      channelTitle: feed.channelTitle,
+    });
+
+    const existingFeedItem = await getExistingFeedItem(db, subscription.user_id, source.id);
+    if (existingFeedItem) {
+      skipped += 1;
+      continue;
+    }
+
+    if (mode === 'manual') {
+      const pending = await insertFeedItem(db, {
+        userId: subscription.user_id,
+        sourceItemId: source.id,
+        blueprintId: null,
+        state: 'my_feed_pending_accept',
+      });
+      if (pending) inserted += 1;
+      else skipped += 1;
+      continue;
+    }
+
+    const generated = await createBlueprintFromVideo(db, {
+      userId: subscription.user_id,
+      videoUrl: source.source_url,
+      videoId: source.source_native_id,
+      sourceTag: 'subscription_auto',
+    });
+
+    const insertedItem = await insertFeedItem(db, {
+      userId: subscription.user_id,
+      sourceItemId: source.id,
+      blueprintId: generated.blueprintId,
+      state: 'my_feed_published',
+    });
+    if (insertedItem) inserted += 1;
+    else skipped += 1;
+
+    console.log('[subscription_auto_ingested]', JSON.stringify({
+      subscription_id: subscription.id,
+      user_id: subscription.user_id,
+      source_item_id: source.id,
+      blueprint_id: generated.blueprintId,
+      trigger: options.trigger,
+      run_id: generated.runId,
+    }));
+  }
+
+  await db
+    .from('user_source_subscriptions')
+    .update({
+      source_channel_title: feed.channelTitle,
+      last_polled_at: new Date().toISOString(),
+      last_seen_published_at: newest?.publishedAt || subscription.last_seen_published_at,
+      last_seen_video_id: newest?.videoId || subscription.last_seen_video_id,
+      last_sync_error: null,
+    })
+    .eq('id', subscription.id);
+
+  return {
+    processed,
+    inserted,
+    skipped,
+    newestVideoId: newest?.videoId || null,
+    newestPublishedAt: newest?.publishedAt || null,
+    channelTitle: feed.channelTitle,
+  } as SyncSubscriptionResult;
+}
+
+async function markSubscriptionSyncError(db: ReturnType<typeof createClient>, subscriptionId: string, err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  await db
+    .from('user_source_subscriptions')
+    .update({
+      last_polled_at: new Date().toISOString(),
+      last_sync_error: message.slice(0, 500),
+    })
+    .eq('id', subscriptionId);
+}
+
+app.post('/api/source-subscriptions', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const body = req.body as { channel_input?: string; mode?: string };
+  const channelInput = String(body.channel_input || '').trim();
+  const mode = String(body.mode || 'manual').trim().toLowerCase();
+  if (!channelInput || (mode !== 'manual' && mode !== 'auto')) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'channel_input and valid mode required', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  let resolved;
+  try {
+    resolved = await resolveYouTubeChannel(channelInput);
+  } catch {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_CHANNEL', message: 'Could not resolve YouTube channel', data: null });
+  }
+
+  const { data: upserted, error: upsertError } = await db
+    .from('user_source_subscriptions')
+    .upsert(
+      {
+        user_id: userId,
+        source_type: 'youtube',
+        source_channel_id: resolved.channelId,
+        source_channel_url: resolved.channelUrl,
+        source_channel_title: resolved.channelTitle,
+        mode,
+        is_active: true,
+        last_sync_error: null,
+      },
+      { onConflict: 'user_id,source_type,source_channel_id' },
+    )
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+    .single();
+  if (upsertError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: upsertError.message, data: null });
+
+  let sync: SyncSubscriptionResult | null = null;
+  try {
+    sync = await syncSingleSubscription(db, upserted, { trigger: 'subscription_create' });
+  } catch (error) {
+    await markSubscriptionSyncError(db, upserted.id, error);
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'subscription upserted',
+    data: {
+      subscription: upserted,
+      sync,
+    },
+  });
+});
+
+app.get('/api/source-subscriptions', async (_req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const { data, error } = await db
+    .from('user_source_subscriptions')
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false });
+  if (error) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'subscriptions fetched',
+    data,
+  });
+});
+
+app.patch('/api/source-subscriptions/:id', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const modeRaw = req.body?.mode;
+  const isActiveRaw = req.body?.is_active;
+  const updates: Record<string, unknown> = {};
+  if (typeof modeRaw === 'string') {
+    const mode = modeRaw.trim().toLowerCase();
+    if (mode !== 'manual' && mode !== 'auto') {
+      return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'Invalid mode', data: null });
+    }
+    updates.mode = mode;
+  }
+  if (typeof isActiveRaw === 'boolean') {
+    updates.is_active = isActiveRaw;
+  }
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'No valid fields to update', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const { data, error } = await db
+    .from('user_source_subscriptions')
+    .update(updates)
+    .eq('id', req.params.id)
+    .eq('user_id', userId)
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+    .maybeSingle();
+  if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
+  if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'subscription updated',
+    data,
+  });
+});
+
+app.delete('/api/source-subscriptions/:id', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const { data, error } = await db
+    .from('user_source_subscriptions')
+    .update({ is_active: false })
+    .eq('id', req.params.id)
+    .eq('user_id', userId)
+    .select('id')
+    .maybeSingle();
+  if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
+  if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'subscription deactivated',
+    data,
+  });
+});
+
+app.post('/api/source-subscriptions/:id/sync', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const { data: subscription, error: subscriptionError } = await db
+    .from('user_source_subscriptions')
+    .select('id, user_id, mode, source_channel_id, last_seen_published_at, last_seen_video_id, is_active')
+    .eq('id', req.params.id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (subscriptionError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: subscriptionError.message, data: null });
+  if (!subscription) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
+  if (!subscription.is_active) return res.status(400).json({ ok: false, error_code: 'INACTIVE_SUBSCRIPTION', message: 'Subscription is inactive', data: null });
+
+  const { data: job, error: jobCreateError } = await db
+    .from('ingestion_jobs')
+    .insert({
+      trigger: 'user_sync',
+      scope: 'subscription',
+      status: 'running',
+      requested_by_user_id: userId,
+      subscription_id: subscription.id,
+      started_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (jobCreateError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
+
+  try {
+    const sync = await syncSingleSubscription(db, subscription, { trigger: 'user_sync' });
+    await db.from('ingestion_jobs').update({
+      status: 'succeeded',
+      finished_at: new Date().toISOString(),
+      processed_count: sync.processed,
+      inserted_count: sync.inserted,
+      skipped_count: sync.skipped,
+      error_code: null,
+      error_message: null,
+    }).eq('id', job.id);
+
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'subscription sync complete',
+      data: {
+        job_id: job.id,
+        ...sync,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await markSubscriptionSyncError(db, subscription.id, error);
+    await db.from('ingestion_jobs').update({
+      status: 'failed',
+      finished_at: new Date().toISOString(),
+      error_code: 'SYNC_FAILED',
+      error_message: message.slice(0, 500),
+    }).eq('id', job.id);
+    return res.status(500).json({ ok: false, error_code: 'SYNC_FAILED', message, data: { job_id: job.id } });
+  }
+});
+
+app.post('/api/ingestion/jobs/trigger', async (req, res) => {
+  if (!isServiceRequestAuthorized(req)) {
+    return res.status(401).json({ ok: false, error_code: 'SERVICE_AUTH_REQUIRED', message: 'Missing or invalid service token', data: null });
+  }
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  const { data: job, error: jobCreateError } = await db
+    .from('ingestion_jobs')
+    .insert({
+      trigger: 'service_cron',
+      scope: 'all_active_subscriptions',
+      status: 'running',
+      started_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (jobCreateError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
+
+  const { data: subscriptions, error: subscriptionsError } = await db
+    .from('user_source_subscriptions')
+    .select('id, user_id, mode, source_channel_id, last_seen_published_at, last_seen_video_id, is_active')
+    .eq('is_active', true)
+    .eq('source_type', 'youtube')
+    .order('updated_at', { ascending: false });
+
+  if (subscriptionsError) {
+    await db.from('ingestion_jobs').update({
+      status: 'failed',
+      finished_at: new Date().toISOString(),
+      error_code: 'READ_FAILED',
+      error_message: subscriptionsError.message,
+    }).eq('id', job.id);
+    return res.status(500).json({ ok: false, error_code: 'READ_FAILED', message: subscriptionsError.message, data: { job_id: job.id } });
+  }
+
+  let processed = 0;
+  let inserted = 0;
+  let skipped = 0;
+  const failures: Array<{ subscription_id: string; error: string }> = [];
+
+  for (const subscription of subscriptions || []) {
+    try {
+      const sync = await syncSingleSubscription(db, subscription, { trigger: 'service_cron' });
+      processed += sync.processed;
+      inserted += sync.inserted;
+      skipped += sync.skipped;
+    } catch (error) {
+      failures.push({
+        subscription_id: subscription.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await markSubscriptionSyncError(db, subscription.id, error);
+    }
+  }
+
+  await db.from('ingestion_jobs').update({
+    status: failures.length ? 'failed' : 'succeeded',
+    finished_at: new Date().toISOString(),
+    processed_count: processed,
+    inserted_count: inserted,
+    skipped_count: skipped,
+    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
+    error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
+  }).eq('id', job.id);
+
+  return res.status(failures.length ? 207 : 200).json({
+    ok: true,
+    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
+    message: 'ingestion trigger complete',
+    data: {
+      job_id: job.id,
+      subscriptions_total: (subscriptions || []).length,
+      processed,
+      inserted,
+      skipped,
+      failures,
+    },
+  });
+});
+
+app.post('/api/my-feed/items/:id/accept', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const feedItemId = req.params.id;
+  const { data: feedItem, error: readError } = await db
+    .from('user_feed_items')
+    .select('id, user_id, source_item_id, blueprint_id, state')
+    .eq('id', feedItemId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (readError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: readError.message, data: null });
+  if (!feedItem) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Feed item not found', data: null });
+
+  if (feedItem.blueprint_id && feedItem.state === 'my_feed_published') {
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'item already accepted',
+      data: {
+        user_feed_item_id: feedItem.id,
+        blueprint_id: feedItem.blueprint_id,
+        state: feedItem.state,
+      },
+    });
+  }
+
+  if (!['my_feed_pending_accept', 'my_feed_skipped'].includes(feedItem.state)) {
+    return res.status(409).json({
+      ok: false,
+      error_code: 'INVALID_STATE',
+      message: `Cannot accept item in state ${feedItem.state}`,
+      data: null,
+    });
+  }
+
+  const { data: lockRow, error: lockError } = await db
+    .from('user_feed_items')
+    .update({ state: 'my_feed_generating', last_decision_code: null })
+    .eq('id', feedItem.id)
+    .eq('user_id', userId)
+    .eq('state', feedItem.state)
+    .select('id')
+    .maybeSingle();
+  if (lockError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: lockError.message, data: null });
+  if (!lockRow) {
+    return res.status(409).json({ ok: false, error_code: 'LOCK_FAILED', message: 'Item is being processed by another request', data: null });
+  }
+
+  const { data: sourceRow, error: sourceError } = await db
+    .from('source_items')
+    .select('id, source_url, source_native_id')
+    .eq('id', feedItem.source_item_id)
+    .maybeSingle();
+  if (sourceError || !sourceRow) {
+    await db.from('user_feed_items').update({ state: 'my_feed_pending_accept', last_decision_code: 'SOURCE_MISSING' }).eq('id', feedItem.id);
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: sourceError?.message || 'Source item missing', data: null });
+  }
+
+  try {
+    const generated = await createBlueprintFromVideo(db, {
+      userId,
+      videoUrl: sourceRow.source_url,
+      videoId: sourceRow.source_native_id,
+      sourceTag: 'subscription_accept',
+    });
+
+    await db.from('user_feed_items').update({
+      blueprint_id: generated.blueprintId,
+      state: 'my_feed_published',
+      last_decision_code: null,
+    }).eq('id', feedItem.id).eq('user_id', userId);
+
+    console.log('[my_feed_pending_accepted]', JSON.stringify({
+      user_feed_item_id: feedItem.id,
+      source_item_id: sourceRow.id,
+      blueprint_id: generated.blueprintId,
+      run_id: generated.runId,
+    }));
+
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'item accepted and generated',
+      data: {
+        user_feed_item_id: feedItem.id,
+        blueprint_id: generated.blueprintId,
+        state: 'my_feed_published',
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await db.from('user_feed_items').update({
+      state: 'my_feed_pending_accept',
+      last_decision_code: 'GENERATION_FAILED',
+    }).eq('id', feedItem.id).eq('user_id', userId);
+
+    return res.status(500).json({
+      ok: false,
+      error_code: 'GENERATION_FAILED',
+      message,
+      data: {
+        user_feed_item_id: feedItem.id,
+      },
+    });
+  }
+});
+
+app.post('/api/my-feed/items/:id/skip', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const { data, error } = await db
+    .from('user_feed_items')
+    .update({ state: 'my_feed_skipped', last_decision_code: 'SKIPPED_BY_USER' })
+    .eq('id', req.params.id)
+    .eq('user_id', userId)
+    .eq('state', 'my_feed_pending_accept')
+    .select('id, state')
+    .maybeSingle();
+  if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
+  if (!data) return res.status(409).json({ ok: false, error_code: 'INVALID_STATE', message: 'Only pending items can be skipped', data: null });
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'item skipped',
+    data: {
+      user_feed_item_id: data.id,
+      state: data.state,
+    },
+  });
+});
 
 app.post('/api/channel-candidates', async (req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;

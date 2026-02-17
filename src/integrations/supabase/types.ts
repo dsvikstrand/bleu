@@ -291,6 +291,68 @@ export type Database = {
           },
         ]
       }
+      ingestion_jobs: {
+        Row: {
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          inserted_count: number
+          processed_count: number
+          requested_by_user_id: string | null
+          scope: string
+          skipped_count: number
+          started_at: string | null
+          status: string
+          subscription_id: string | null
+          trigger: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          inserted_count?: number
+          processed_count?: number
+          requested_by_user_id?: string | null
+          scope: string
+          skipped_count?: number
+          started_at?: string | null
+          status?: string
+          subscription_id?: string | null
+          trigger: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          inserted_count?: number
+          processed_count?: number
+          requested_by_user_id?: string | null
+          scope?: string
+          skipped_count?: number
+          started_at?: string | null
+          status?: string
+          subscription_id?: string | null
+          trigger?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingestion_jobs_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "user_source_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventories: {
         Row: {
           created_at: string
@@ -690,9 +752,12 @@ export type Database = {
           ingest_status: string
           metadata: Json
           published_at: string | null
+          source_channel_id: string | null
+          source_channel_title: string | null
           source_native_id: string
           source_type: string
           source_url: string
+          thumbnail_url: string | null
           title: string
           updated_at: string
         }
@@ -703,9 +768,12 @@ export type Database = {
           ingest_status?: string
           metadata?: Json
           published_at?: string | null
+          source_channel_id?: string | null
+          source_channel_title?: string | null
           source_native_id: string
           source_type: string
           source_url: string
+          thumbnail_url?: string | null
           title: string
           updated_at?: string
         }
@@ -716,9 +784,12 @@ export type Database = {
           ingest_status?: string
           metadata?: Json
           published_at?: string | null
+          source_channel_id?: string | null
+          source_channel_title?: string | null
           source_native_id?: string
           source_type?: string
           source_url?: string
+          thumbnail_url?: string | null
           title?: string
           updated_at?: string
         }
@@ -726,7 +797,7 @@ export type Database = {
       }
       user_feed_items: {
         Row: {
-          blueprint_id: string
+          blueprint_id: string | null
           created_at: string
           id: string
           last_decision_code: string | null
@@ -737,7 +808,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          blueprint_id: string
+          blueprint_id?: string | null
           created_at?: string
           id?: string
           last_decision_code?: string | null
@@ -748,7 +819,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          blueprint_id?: string
+          blueprint_id?: string | null
           created_at?: string
           id?: string
           last_decision_code?: string | null
@@ -787,8 +858,14 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          last_polled_at: string | null
+          last_seen_published_at: string | null
+          last_seen_video_id: string | null
+          last_sync_error: string | null
           mode: string
           source_channel_id: string
+          source_channel_title: string | null
+          source_channel_url: string | null
           source_type: string
           updated_at: string
           user_id: string
@@ -797,8 +874,14 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          last_polled_at?: string | null
+          last_seen_published_at?: string | null
+          last_seen_video_id?: string | null
+          last_sync_error?: string | null
           mode?: string
           source_channel_id: string
+          source_channel_title?: string | null
+          source_channel_url?: string | null
           source_type: string
           updated_at?: string
           user_id: string
@@ -807,8 +890,14 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          last_polled_at?: string | null
+          last_seen_published_at?: string | null
+          last_seen_video_id?: string | null
+          last_sync_error?: string | null
           mode?: string
           source_channel_id?: string
+          source_channel_title?: string | null
+          source_channel_url?: string | null
           source_type?: string
           updated_at?: string
           user_id?: string

@@ -26,6 +26,7 @@ Execution mode:
 7. [have] Step 6 - Library deprecation pass (soft)
 8. [have] Step 7 - Observability baseline
 9. [have] Step 8 - Hardening cycle: docs realignment + CTA de-emphasis + traceability + gate-mode framework
+10. [have] Step 9 - Subscriptions and auto-ingestion cycle (manual pending + auto new uploads)
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -162,6 +163,23 @@ Evaluation
 - `npm run docs:link-check`
 - `npm run build`
 - manual smoke: YouTube -> My Feed -> submit -> publish/reject
+
+### Step 9 - Subscriptions and auto-ingestion
+Scope
+- add YouTube source subscriptions with `manual|auto` mode
+- add sync trigger endpoints (`user sync` and service cron trigger)
+- implement pending-card lifecycle in My Feed (`accept|skip`)
+
+Definition of done
+- manual subscriptions create pending cards without auto-generation
+- auto subscriptions ingest only new uploads (no initial backfill)
+- pending card accept generates blueprint exactly once (idempotent)
+- ingestion jobs are traceable via `ingestion_jobs` table + logs
+
+Evaluation
+- manual smoke: subscribe manual -> pending cards appear -> accept/skip works
+- manual smoke: subscribe auto -> no historical backfill -> new uploads sync to published
+- regression smoke: YouTube URL pull and channel submit/publish still work
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

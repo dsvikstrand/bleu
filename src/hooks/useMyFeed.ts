@@ -12,6 +12,8 @@ export interface MyFeedItemView {
     id: string;
     sourceUrl: string;
     title: string;
+    sourceChannelTitle: string | null;
+    thumbnailUrl: string | null;
   } | null;
   blueprint: {
     id: string;
@@ -47,13 +49,15 @@ export function useMyFeed() {
       if (feedError) throw feedError;
       if (!feedRows || feedRows.length === 0) return [] as MyFeedItemView[];
 
-      const sourceIds = [...new Set(feedRows.map((row) => row.source_item_id))];
-      const blueprintIds = [...new Set(feedRows.map((row) => row.blueprint_id))];
+      const sourceIds = [...new Set(feedRows.map((row) => row.source_item_id).filter(Boolean))] as string[];
+      const blueprintIds = [...new Set(feedRows.map((row) => row.blueprint_id).filter(Boolean))] as string[];
       const feedItemIds = feedRows.map((row) => row.id);
 
       const [{ data: sources }, { data: blueprints }, { data: candidates }] = await Promise.all([
-        supabase.from('source_items').select('id, source_url, title').in('id', sourceIds),
-        supabase.from('blueprints').select('id, title, banner_url, llm_review, is_public, steps').in('id', blueprintIds),
+        supabase.from('source_items').select('id, source_url, title, source_channel_title, thumbnail_url').in('id', sourceIds),
+        blueprintIds.length
+          ? supabase.from('blueprints').select('id, title, banner_url, llm_review, is_public, steps').in('id', blueprintIds)
+          : Promise.resolve({ data: [], error: null }),
         supabase
           .from('channel_candidates')
           .select('id, user_feed_item_id, channel_slug, status, created_at')
@@ -61,10 +65,12 @@ export function useMyFeed() {
           .order('created_at', { ascending: false }),
       ]);
 
-      const { data: tagRows } = await supabase
-        .from('blueprint_tags')
-        .select('blueprint_id, tags(slug)')
-        .in('blueprint_id', blueprintIds);
+      const { data: tagRows } = blueprintIds.length
+        ? await supabase
+          .from('blueprint_tags')
+          .select('blueprint_id, tags(slug)')
+          .in('blueprint_id', blueprintIds)
+        : { data: [] as Array<{ blueprint_id: string; tags: { slug: string } | { slug: string }[] | null }> };
 
       const tagsByBlueprint = new Map<string, string[]>();
       (tagRows || []).forEach((row) => {
@@ -107,6 +113,8 @@ export function useMyFeed() {
                 id: source.id,
                 sourceUrl: source.source_url,
                 title: source.title,
+                sourceChannelTitle: source.source_channel_title || null,
+                thumbnailUrl: source.thumbnail_url || null,
               }
             : null,
           blueprint: blueprint

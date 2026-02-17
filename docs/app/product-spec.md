@@ -7,7 +7,7 @@
 a1) [have] YouTube to Blueprint generation is live (`/youtube` + `/api/youtube-to-blueprint`).
 a2) [have] Public feed/channel/community primitives are live (`/wall`, `/channels`, `/b/:channelSlug`, likes/comments).
 a3) [have] `My Feed` personal unfiltered lane is available as `/my-feed` (feature-flagged rollout).
-a4) [todo] Auto-ingestion from followed source channels (YouTube first).
+a4) [have] Auto-ingestion from followed YouTube channels is available with subscription modes (`manual` pending cards, `auto` new uploads).
 a5) [have] Channel publish is an explicit second-stage lifecycle from personal feed candidates.
 a6) [have] Channel gate runtime is currently bypass-first (`EVAL_BYPASSED`) while gate-mode framework hardening is completed.
 
@@ -28,6 +28,10 @@ b4) Feed surfaces
 - `My Feed`: personal unfiltered lane from user pulls/subscriptions.
 - `Channel Feed`: shared lane with voting/comments and quality-controlled channel posting.
 
+b5) Subscription modes
+- `manual`: creates `my_feed_pending_accept` cards; blueprint generation happens only when user accepts.
+- `auto`: ingests new uploads after subscription checkpoint directly to `my_feed_published`.
+
 ## MVP Lifecycle Contract
 c1) Pull/ingest -> generate blueprint -> publish to `My Feed`.
 c2) Optional user remix/insight.
@@ -38,6 +42,10 @@ c5) Result:
 - fail -> remain in `My Feed` (personal-only)
 c6) Warn-path result in selected mode:
 - `channel_fit`/`quality` warn routes candidate to `candidate_pending_manual_review` before terminal publish/reject.
+c7) Subscription pending flow:
+- `manual` subscription import creates pending cards (`my_feed_pending_accept`).
+- `Accept` transitions pending -> generating -> `my_feed_published`.
+- `Skip` transitions pending -> `my_feed_skipped`.
 
 ## Product Principles
 p1) Source-first content supply (not creator-first posting).
@@ -57,8 +65,8 @@ m7) Planned mutable interfaces use explicit auth scope + idempotency mode and un
 m8) Runtime default `CHANNEL_GATES_MODE=bypass`; non-prod may run `shadow` or `enforce`.
 
 ## Primary User Flows (`bleuV1`)
-f1) User connects/follows YouTube sources (manual first, auto-ingestion later).
-f2) New media becomes blueprint items in `My Feed`.
+f1) User connects/follows YouTube channels (`manual` or `auto` mode).
+f2) New media becomes pending or published items in `My Feed` based on mode.
 f3) User scans, remixes, and adds insights.
 f4) Eligible items are promoted to channel feeds after gates.
 f5) Community votes/comments to surface higher-value items.
@@ -91,7 +99,17 @@ d1) [have] `blueprints`, `blueprint_tags`, `blueprint_likes`, `blueprint_comment
 d2) [have] `tag_follows`, `tags`, `profiles`, `mvp_events`.
 d3) [have] Source ingestion + feed tables (`source_items`, `user_source_subscriptions`, `user_feed_items`).
 d4) [have] Channel candidate + decision logs (`channel_candidates`, `channel_gate_decisions`).
-d5) [todo] Scheduled auto-ingestion loop from source subscriptions.
+d5) [have] Scheduled/user-triggered ingestion jobs + trace table (`ingestion_jobs`).
+
+## Subscription Interfaces (MVP)
+si1) `POST /api/source-subscriptions` with `{ channel_input, mode }`
+si2) `GET /api/source-subscriptions`
+si3) `PATCH /api/source-subscriptions/:id` with `{ mode, is_active }`
+si4) `DELETE /api/source-subscriptions/:id` (soft deactivate)
+si5) `POST /api/source-subscriptions/:id/sync` (user sync)
+si6) `POST /api/ingestion/jobs/trigger` (service auth for cron)
+si7) `POST /api/my-feed/items/:id/accept`
+si8) `POST /api/my-feed/items/:id/skip`
 
 ## Next Milestone (Hardening)
 n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.

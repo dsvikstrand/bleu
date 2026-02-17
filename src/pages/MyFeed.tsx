@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,8 +16,20 @@ import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
 import { getMyFeedStateLabel, type MyFeedItemState } from '@/lib/myFeedState';
 import { publishCandidate, rejectCandidate, submitCandidateAndEvaluate } from '@/lib/myFeedApi';
+import {
+  acceptMyFeedPendingItem,
+  ApiRequestError,
+  createSourceSubscription,
+  deactivateSourceSubscription,
+  listSourceSubscriptions,
+  skipMyFeedPendingItem,
+  syncSourceSubscription,
+  type SubscriptionMode,
+  updateSourceSubscription,
+} from '@/lib/subscriptionsApi';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { logMvpEvent } from '@/lib/logEvent';
+import { config } from '@/config/runtime';
 
 const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 'active' && channel.isJoinEnabled);
 
@@ -26,6 +39,17 @@ export default function MyFeed() {
   const queryClient = useQueryClient();
   const { data: items, isLoading } = useMyFeed();
   const [selectedChannels, setSelectedChannels] = useState<Record<string, string>>({});
+
+  const [newSubscriptionInput, setNewSubscriptionInput] = useState('');
+  const [newSubscriptionMode, setNewSubscriptionMode] = useState<SubscriptionMode>('manual');
+
+  const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
+
+  const subscriptionsQuery = useQuery({
+    queryKey: ['source-subscriptions', user?.id],
+    enabled: !!user && subscriptionsEnabled,
+    queryFn: () => listSourceSubscriptions(),
+  });
 
   const defaultChannelForItem = (itemId: string, tags: string[]) => {
     const picked = selectedChannels[itemId];
@@ -195,10 +219,95 @@ export default function MyFeed() {
     },
   });
 
+  const acceptMutation = useMutation({
+    mutationFn: async (itemId: string) => acceptMyFeedPendingItem(itemId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
+      toast({ title: 'Accepted', description: 'Blueprint generated and added to your feed.' });
+    },
+    onError: (error) => {
+      toast({ title: 'Accept failed', description: error instanceof Error ? error.message : 'Could not accept item.', variant: 'destructive' });
+    },
+  });
+
+  const skipMutation = useMutation({
+    mutationFn: async (itemId: string) => skipMyFeedPendingItem(itemId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
+      toast({ title: 'Skipped', description: 'Item remains skipped in My Feed.' });
+    },
+    onError: (error) => {
+      toast({ title: 'Skip failed', description: error instanceof Error ? error.message : 'Could not skip item.', variant: 'destructive' });
+    },
+  });
+
+  const createSubscriptionMutation = useMutation({
+    mutationFn: async () => {
+      if (!newSubscriptionInput.trim()) throw new Error('Enter a YouTube channel URL, channel ID, or @handle.');
+      return createSourceSubscription({ channelInput: newSubscriptionInput.trim(), mode: newSubscriptionMode });
+    },
+    onSuccess: () => {
+      setNewSubscriptionInput('');
+      queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
+      toast({ title: 'Subscription saved', description: 'Your source subscription is now active.' });
+    },
+    onError: (error) => {
+      const message = error instanceof ApiRequestError && error.errorCode === 'INVALID_CHANNEL'
+        ? 'Could not resolve that YouTube channel. Try a valid channel URL or @handle.'
+        : error instanceof Error
+          ? error.message
+          : 'Could not subscribe.';
+      toast({ title: 'Subscribe failed', description: message, variant: 'destructive' });
+    },
+  });
+
+  const updateSubscriptionMutation = useMutation({
+    mutationFn: async (input: { id: string; mode?: SubscriptionMode; isActive?: boolean }) => updateSourceSubscription(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
+      toast({ title: 'Subscription updated' });
+    },
+    onError: (error) => {
+      toast({ title: 'Update failed', description: error instanceof Error ? error.message : 'Could not update subscription.', variant: 'destructive' });
+    },
+  });
+
+  const deactivateSubscriptionMutation = useMutation({
+    mutationFn: async (id: string) => deactivateSourceSubscription(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
+      toast({ title: 'Subscription deactivated' });
+    },
+    onError: (error) => {
+      toast({ title: 'Deactivate failed', description: error instanceof Error ? error.message : 'Could not deactivate subscription.', variant: 'destructive' });
+    },
+  });
+
+  const syncSubscriptionMutation = useMutation({
+    mutationFn: async (id: string) => syncSourceSubscription(id),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
+      toast({
+        title: 'Sync complete',
+        description: `Processed ${result.processed} item(s), inserted ${result.inserted}, skipped ${result.skipped}.`,
+      });
+    },
+    onError: (error) => {
+      toast({ title: 'Sync failed', description: error instanceof Error ? error.message : 'Could not sync subscription.', variant: 'destructive' });
+    },
+  });
+
   const hasItems = (items || []).length > 0;
 
   const pendingCount = useMemo(
     () => (items || []).filter((item) => item.state === 'candidate_pending_manual_review').length,
+    [items],
+  );
+
+  const pendingAcceptCount = useMemo(
+    () => (items || []).filter((item) => item.state === 'my_feed_pending_accept').length,
     [items],
   );
 
@@ -213,6 +322,7 @@ export default function MyFeed() {
             Pulled content lands here first. You can submit selected items to channels after gates.
           </p>
           {pendingCount > 0 && <p className="text-xs text-amber-600">{pendingCount} item(s) need manual review.</p>}
+          {pendingAcceptCount > 0 && <p className="text-xs text-sky-600">{pendingAcceptCount} pending item(s) waiting for Accept.</p>}
         </PageSection>
 
         {!user ? (
@@ -224,7 +334,107 @@ export default function MyFeed() {
               </Button>
             </CardContent>
           </Card>
-        ) : isLoading ? (
+        ) : (
+          <Card className="border-border/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">YouTube subscriptions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!subscriptionsEnabled ? (
+                <p className="text-sm text-muted-foreground">
+                  Subscription APIs require `VITE_AGENTIC_BACKEND_URL`. Configure backend URL to enable channel subscriptions.
+                </p>
+              ) : (
+                <>
+                  <div className="grid gap-2 md:grid-cols-[1fr,180px,auto]">
+                    <Input
+                      value={newSubscriptionInput}
+                      onChange={(event) => setNewSubscriptionInput(event.target.value)}
+                      placeholder="YouTube channel URL, channel ID, or @handle"
+                    />
+                    <Select value={newSubscriptionMode} onValueChange={(value: SubscriptionMode) => setNewSubscriptionMode(value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manual">Manual (pending cards)</SelectItem>
+                        <SelectItem value="auto">Auto (new uploads)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      onClick={() => createSubscriptionMutation.mutate()}
+                      disabled={createSubscriptionMutation.isPending}
+                    >
+                      Subscribe
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {(subscriptionsQuery.data || []).length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No subscriptions yet.</p>
+                    ) : (
+                      (subscriptionsQuery.data || []).map((subscription) => (
+                        <div key={subscription.id} className="rounded-lg border border-border/60 p-3 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{subscription.source_channel_title || subscription.source_channel_id}</p>
+                              <p className="text-xs text-muted-foreground truncate">{subscription.source_channel_url || subscription.source_channel_id}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={subscription.is_active ? 'secondary' : 'outline'}>
+                                {subscription.is_active ? 'Active' : 'Inactive'}
+                              </Badge>
+                              <Badge variant="outline">{subscription.mode}</Badge>
+                            </div>
+                          </div>
+
+                          {subscription.last_sync_error && (
+                            <p className="text-xs text-red-600">Last sync error: {subscription.last_sync_error}</p>
+                          )}
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Select
+                              value={subscription.mode}
+                              onValueChange={(value: SubscriptionMode) => updateSubscriptionMutation.mutate({ id: subscription.id, mode: value })}
+                            >
+                              <SelectTrigger className="h-8 w-[190px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="manual">Manual mode</SelectItem>
+                                <SelectItem value="auto">Auto mode</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => syncSubscriptionMutation.mutate(subscription.id)}
+                              disabled={syncSubscriptionMutation.isPending || !subscription.is_active}
+                            >
+                              Sync now
+                            </Button>
+
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => deactivateSubscriptionMutation.mutate(subscription.id)}
+                              disabled={deactivateSubscriptionMutation.isPending || !subscription.is_active}
+                            >
+                              Deactivate
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, index) => (
               <Skeleton key={index} className="h-36 rounded-xl" />
@@ -243,131 +453,159 @@ export default function MyFeed() {
           <div className="space-y-4">
             {(items || []).map((item) => {
               const blueprint = item.blueprint;
-              if (!blueprint) return null;
+              const source = item.source;
+              const title = blueprint?.title || source?.title || 'Pending source import';
+              const subtitle = source?.sourceChannelTitle || source?.title || 'Imported source';
+              const tags = blueprint?.tags || [];
 
-              const channelSlug = defaultChannelForItem(item.id, blueprint.tags);
-              const stepCount = Array.isArray(blueprint.steps) ? blueprint.steps.length : 0;
+              const channelSlug = blueprint ? defaultChannelForItem(item.id, tags) : '';
+              const stepCount = blueprint && Array.isArray(blueprint.steps) ? blueprint.steps.length : 0;
               const canPublish = item.candidate?.status === 'passed' || item.state === 'candidate_pending_manual_review';
+              const canAccept = item.state === 'my_feed_pending_accept' || item.state === 'my_feed_skipped';
 
               return (
                 <Card key={item.id} className="border-border/50">
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 space-y-1">
-                        <p className="font-medium leading-tight">{blueprint.title}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {item.source?.title || 'Imported source'}
-                        </p>
+                        <p className="font-medium leading-tight">{title}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2">{subtitle}</p>
                       </div>
                       <Badge variant="secondary">{getMyFeedStateLabel(item.state as MyFeedItemState)}</Badge>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {blueprint.tags.slice(0, 4).map((tag) => (
-                        <Badge key={tag} variant="outline">#{tag}</Badge>
-                      ))}
-                    </div>
+                    {tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {tags.slice(0, 4).map((tag) => (
+                          <Badge key={tag} variant="outline">#{tag}</Badge>
+                        ))}
+                      </div>
+                    )}
 
                     {item.lastDecisionCode && (
                       <p className="text-xs text-muted-foreground">Reason: {item.lastDecisionCode}</p>
                     )}
 
-                    <div className="grid gap-2 sm:grid-cols-[1fr,auto]">
-                      <Select
-                        value={channelSlug}
-                        onValueChange={(value) => setSelectedChannels((prev) => ({ ...prev, [item.id]: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select channel" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CHANNEL_OPTIONS.map((channel) => (
-                            <SelectItem key={channel.slug} value={channel.slug}>
-                              {channel.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      {!item.candidate ? (
+                    {!blueprint ? (
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           size="sm"
-                          onClick={() =>
-                            submitMutation.mutate({
-                              itemId: item.id,
-                              sourceItemId: item.source?.id || null,
-                              blueprintId: blueprint.id,
-                              title: blueprint.title,
-                              llmReview: blueprint.llmReview,
-                              tags: blueprint.tags,
-                              stepCount,
-                              channelSlug,
-                            })
-                          }
-                          disabled={submitMutation.isPending}
+                          onClick={() => acceptMutation.mutate(item.id)}
+                          disabled={acceptMutation.isPending || !canAccept}
                         >
-                          Submit to Channel
+                          Accept
                         </Button>
-                      ) : (
-                        <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => skipMutation.mutate(item.id)}
+                          disabled={skipMutation.isPending || item.state !== 'my_feed_pending_accept'}
+                        >
+                          Skip
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="grid gap-2 sm:grid-cols-[1fr,auto]">
+                        <Select
+                          value={channelSlug}
+                          onValueChange={(value) => setSelectedChannels((prev) => ({ ...prev, [item.id]: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select channel" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CHANNEL_OPTIONS.map((channel) => (
+                              <SelectItem key={channel.slug} value={channel.slug}>
+                                {channel.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        {!item.candidate ? (
                           <Button
                             size="sm"
-                            variant="outline"
                             onClick={() =>
                               submitMutation.mutate({
                                 itemId: item.id,
-                                sourceItemId: item.source?.id || null,
+                                sourceItemId: source?.id || null,
                                 blueprintId: blueprint.id,
                                 title: blueprint.title,
                                 llmReview: blueprint.llmReview,
-                                tags: blueprint.tags,
+                                tags: tags,
                                 stepCount,
                                 channelSlug,
                               })
                             }
                             disabled={submitMutation.isPending}
                           >
-                            Re-evaluate
+                            Submit to Channel
                           </Button>
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              publishMutation.mutate({
-                                itemId: item.id,
-                                sourceItemId: item.source?.id || null,
-                                candidateId: item.candidate!.id,
-                                blueprintId: blueprint.id,
-                                channelSlug: item.candidate?.channelSlug || channelSlug,
-                              })
-                            }
-                            disabled={publishMutation.isPending || !canPublish}
-                          >
-                            Publish
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              rejectMutation.mutate({
-                                itemId: item.id,
-                                sourceItemId: item.source?.id || null,
-                                candidateId: item.candidate!.id,
-                                reasonCode: 'MANUAL_REJECT',
-                                blueprintId: blueprint.id,
-                                channelSlug: item.candidate?.channelSlug || channelSlug,
-                              })
-                            }
-                            disabled={rejectMutation.isPending}
-                          >
-                            Reject
-                          </Button>
-                        </div>
-                      )}
-                    </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                submitMutation.mutate({
+                                  itemId: item.id,
+                                  sourceItemId: source?.id || null,
+                                  blueprintId: blueprint.id,
+                                  title: blueprint.title,
+                                  llmReview: blueprint.llmReview,
+                                  tags: tags,
+                                  stepCount,
+                                  channelSlug,
+                                })
+                              }
+                              disabled={submitMutation.isPending}
+                            >
+                              Re-evaluate
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                publishMutation.mutate({
+                                  itemId: item.id,
+                                  sourceItemId: source?.id || null,
+                                  candidateId: item.candidate!.id,
+                                  blueprintId: blueprint.id,
+                                  channelSlug: item.candidate?.channelSlug || channelSlug,
+                                })
+                              }
+                              disabled={publishMutation.isPending || !canPublish}
+                            >
+                              Publish
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                rejectMutation.mutate({
+                                  itemId: item.id,
+                                  sourceItemId: source?.id || null,
+                                  candidateId: item.candidate!.id,
+                                  reasonCode: 'MANUAL_REJECT',
+                                  blueprintId: blueprint.id,
+                                  channelSlug: item.candidate?.channelSlug || channelSlug,
+                                })
+                              }
+                              disabled={rejectMutation.isPending}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="flex justify-between items-center text-xs text-muted-foreground">
                       <span>{item.candidate ? `Candidate: ${item.candidate.status}` : 'Not submitted yet'}</span>
-                      <Link to={`/blueprint/${blueprint.id}`} className="underline">Open blueprint</Link>
+                      {blueprint ? (
+                        <Link to={`/blueprint/${blueprint.id}`} className="underline">Open blueprint</Link>
+                      ) : source?.sourceUrl ? (
+                        <a href={source.sourceUrl} target="_blank" rel="noreferrer" className="underline">Open source</a>
+                      ) : null}
                     </div>
                   </CardContent>
                 </Card>
