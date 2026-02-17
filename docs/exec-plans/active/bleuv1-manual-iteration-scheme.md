@@ -33,6 +33,7 @@ Execution mode:
 14. [have] Step 13 - Ingestion reliability visibility (health signals + latest job endpoint)
 15. [have] Step 14 - YouTube Search-to-Blueprint (auth-only `/search` with generate + subscribe)
 16. [have] Step 15 - Subscription channel search (auth-only `/subscriptions` discovery + subscribe)
+17. [have] Step 16 - Subscription row polish (avatar enrichment + hide technical row badges)
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -326,6 +327,27 @@ Completion evidence (2026-02-17)
 - Added `server/services/youtubeChannelSearch.ts` and wired `GET /api/youtube-channel-search` in `server/index.ts`.
 - Added frontend client `src/lib/youtubeChannelSearchApi.ts` and tests in `src/test/youtubeChannelSearchApi.test.ts`.
 - Updated `src/pages/Subscriptions.tsx` to support popup-based `Add Subscription` search UX without manual fallback input.
+
+### Step 16 - Subscription row polish (avatar enrichment + hide technical row badges)
+Scope
+- enrich subscription rows with channel avatar URLs from YouTube API at read time
+- simplify row UI by removing technical badges (`Active`, `Healthy`, `auto`) from each subscription row
+
+Definition of done
+- `GET /api/source-subscriptions` includes optional `source_channel_avatar_url` per row
+- `/subscriptions` row UI shows avatar (or initials fallback) beside channel title
+- row badges for active/health/mode are hidden while unsubscribe and health details remain
+
+Evaluation
+- manual smoke: subscription rows render avatars when available and fallback initials when missing
+- manual smoke: row badges are no longer visible
+- regression smoke: unsubscribe still works and ingestion health card remains unchanged
+- docs freshness and link checks pass
+
+Completion evidence (2026-02-17)
+- Updated `server/index.ts` to enrich `GET /api/source-subscriptions` with YouTube avatar metadata (no schema changes).
+- Updated `src/lib/subscriptionsApi.ts` type contract with optional `source_channel_avatar_url`.
+- Updated `src/pages/Subscriptions.tsx` row rendering to show avatars and hide technical badges.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

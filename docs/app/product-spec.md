@@ -15,6 +15,7 @@ a8) [have] `/subscriptions` is simplified for MVP to two visible actions: add `S
 a9) [have] `/subscriptions` now surfaces ingestion trust signals (healthy/delayed/error/waiting) based on polling freshness and sync errors.
 a10) [have] Auth-only `Search` route (`/search`) now supports YouTube query discovery with one-click `Generate Blueprint` and `Subscribe Channel`.
 a11) [have] `/subscriptions` now supports auth-only YouTube channel search with popup-based subscribe flow (manual paste fallback removed in UI).
+a12) [have] Subscription rows now render channel avatar thumbnails (when available) and hide technical status/mode badges from row UI.
 
 ## Core Model
 b1) `Source Item`
@@ -131,6 +132,7 @@ si10) YouTube channel resolver accepts handle/channel URL/channel ID and uses `b
 si11) service-ops endpoint: `GET /api/ingestion/jobs/latest` (service auth; latest ingestion health snapshot)
 si12) YouTube search endpoint: `GET /api/youtube-search?q=<query>&limit=<1..25>&page_token=<optional>`
 si13) YouTube channel search endpoint: `GET /api/youtube-channel-search?q=<query>&limit=<1..25>&page_token=<optional>`
+si14) `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` per subscription row (derived from YouTube API; no schema change).
 
 ## Next Milestone (Hardening)
 n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.

@@ -211,6 +211,7 @@ Expected behavior:
 - first subscribe sets checkpoint only (no old-video prefill).
 - one `subscription_notice` feed item is inserted for this user/channel.
 - future uploads are ingested automatically.
+- subscription rows returned by `GET /api/source-subscriptions` may include `source_channel_avatar_url` (read-time enrichment from YouTube API).
 
 User-triggered sync (operator/debug path):
 ```bash

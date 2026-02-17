@@ -1023,6 +1023,69 @@ app.get('/api/youtube-channel-search', async (req, res) => {
   }
 });
 
+async function fetchYouTubeChannelAvatarMap(input: {
+  apiKey: string;
+  channelIds: string[];
+}) {
+  const apiKey = String(input.apiKey || '').trim();
+  const uniqueIds = Array.from(new Set(
+    input.channelIds
+      .map((id) => String(id || '').trim())
+      .filter(Boolean),
+  ));
+  const avatarMap = new Map<string, string | null>();
+
+  if (!apiKey || uniqueIds.length === 0) {
+    return avatarMap;
+  }
+
+  const batchSize = 50;
+  for (let offset = 0; offset < uniqueIds.length; offset += batchSize) {
+    const ids = uniqueIds.slice(offset, offset + batchSize);
+    const url = new URL('https://www.googleapis.com/youtube/v3/channels');
+    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('id', ids.join(','));
+    url.searchParams.set('key', apiKey);
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'User-Agent': 'bleuv1-youtube-channel-avatars/1.0 (+https://bapi.vdsai.cloud)',
+        Accept: 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`YouTube channels lookup failed (${response.status})`);
+    }
+
+    const json = (await response.json().catch(() => null)) as {
+      items?: Array<{
+        id?: string;
+        snippet?: {
+          thumbnails?: {
+            high?: { url?: string };
+            medium?: { url?: string };
+            default?: { url?: string };
+          };
+        };
+      }>;
+    } | null;
+    if (!json || !Array.isArray(json.items)) continue;
+
+    json.items.forEach((item) => {
+      const channelId = String(item.id || '').trim();
+      if (!channelId) return;
+      const avatarUrl =
+        item.snippet?.thumbnails?.high?.url
+        || item.snippet?.thumbnails?.medium?.url
+        || item.snippet?.thumbnails?.default?.url
+        || null;
+      avatarMap.set(channelId, avatarUrl);
+    });
+  }
+
+  return avatarMap;
+}
+
 function getAuthedSupabaseClient(authToken: string) {
   if (!supabaseUrl || !supabaseAnonKey) return null;
   return createClient(supabaseUrl, supabaseAnonKey, {
@@ -1479,11 +1542,29 @@ app.get('/api/source-subscriptions', async (_req, res) => {
     .order('updated_at', { ascending: false });
   if (error) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
 
+  const rows = Array.isArray(data) ? data : [];
+  let avatarMap = new Map<string, string | null>();
+  try {
+    avatarMap = await fetchYouTubeChannelAvatarMap({
+      apiKey: youtubeDataApiKey,
+      channelIds: rows.map((row) => String(row.source_channel_id || '')),
+    });
+  } catch (avatarError) {
+    console.log('[subscription_avatars_lookup_failed]', JSON.stringify({
+      user_id: userId,
+      error: avatarError instanceof Error ? avatarError.message : String(avatarError),
+    }));
+  }
+  const withAvatars = rows.map((row) => ({
+    ...row,
+    source_channel_avatar_url: avatarMap.get(String(row.source_channel_id || '').trim()) || null,
+  }));
+
   return res.json({
     ok: true,
     error_code: null,
     message: 'subscriptions fetched',
-    data,
+    data: withAvatars,
   });
 });
 

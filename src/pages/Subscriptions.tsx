@@ -33,6 +33,14 @@ function getChannelUrl(subscription: SourceSubscription) {
   return `https://www.youtube.com/channel/${subscription.source_channel_id}`;
 }
 
+function getChannelInitials(subscription: SourceSubscription) {
+  const raw = (subscription.source_channel_title || subscription.source_channel_id || '').trim();
+  if (!raw) return 'YT';
+  const parts = raw.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+}
+
 function formatDateTime(value: string | null) {
   if (!value) return 'Never';
   const parsed = new Date(value);
@@ -438,14 +446,22 @@ export default function Subscriptions() {
                     const health = healthBySubscriptionId.get(subscription.id) || evaluateSubscriptionHealth(subscription, nowMs);
                     return (
                       <div key={subscription.id} className="rounded-md border border-border/40 p-3 space-y-2">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <p className="text-sm font-medium">
-                            {subscription.source_channel_title || subscription.source_channel_id}
-                          </p>
-                          <div className="flex gap-2">
-                            <Badge variant="secondary">Active</Badge>
-                            <Badge variant={health.badgeVariant}>{health.label}</Badge>
-                            <Badge variant="outline">{subscription.mode}</Badge>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {subscription.source_channel_avatar_url ? (
+                              <img
+                                src={subscription.source_channel_avatar_url}
+                                alt={subscription.source_channel_title || subscription.source_channel_id}
+                                className="h-10 w-10 rounded-full object-cover border border-border/40 shrink-0"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center shrink-0">
+                                {getChannelInitials(subscription)}
+                              </div>
+                            )}
+                            <p className="text-sm font-medium truncate">
+                              {subscription.source_channel_title || subscription.source_channel_id}
+                            </p>
                           </div>
                         </div>
                         <a

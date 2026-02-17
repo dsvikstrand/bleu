@@ -18,12 +18,13 @@
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
-  - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: channel search + subscribe + active-list `Unsubscribe` + ingestion health signals).
+  - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: channel search + subscribe + active-list `Unsubscribe` + ingestion health signals; row avatars shown when available).
 - Backend:
   - Express server in `server/index.ts`.
   - `/api/youtube-to-blueprint` generation pipeline.
   - subscription ingestion APIs:
     - `POST|GET|PATCH|DELETE /api/source-subscriptions`
+      - `GET` enriches rows with optional `source_channel_avatar_url` from YouTube API (no DB write path required)
     - `POST /api/source-subscriptions/:id/sync`
     - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
     - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
