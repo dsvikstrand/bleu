@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
@@ -19,7 +19,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useMyFeed } from '@/hooks/useMyFeed';
@@ -41,6 +40,7 @@ const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 
 
 export default function MyFeed() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: items, isLoading } = useMyFeed();
@@ -289,18 +289,23 @@ export default function MyFeed() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-primary uppercase tracking-wide">My Feed</p>
-              <h1 className="text-2xl font-semibold mt-1">Your personal pulled-content lane</h1>
+              <h1 className="text-2xl font-semibold mt-1">Your personal content lane</h1>
               <p className="text-sm text-muted-foreground mt-2">
-                Pulled content lands here first. You can submit selected items to channels after gates.
+                New items appear here first. You can post selected blueprints to channels after review.
               </p>
               {pendingCount > 0 && <p className="text-xs text-amber-600">{pendingCount} item(s) need manual review.</p>}
               {pendingAcceptCount > 0 && <p className="text-xs text-sky-600">{pendingAcceptCount} pending item(s) waiting for Accept.</p>}
             </div>
 
             {user ? (
-              <Button asChild size="sm" variant="outline" className="h-8 px-2">
-                <Link to="/subscriptions">Manage subscriptions</Link>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button asChild size="sm" className="h-8 px-2">
+                  <Link to="/subscriptions?add=1">Add Subscription</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="h-8 px-2">
+                  <Link to="/subscriptions">Manage subscriptions</Link>
+                </Button>
+              </div>
             ) : null}
           </div>
         </PageSection>
@@ -351,47 +356,69 @@ export default function MyFeed() {
               const createdLabel = formatRelativeShort(item.createdAt);
 
               return (
-                <Card key={item.id} className="border-border/50">
-                  <CardContent className="p-4 space-y-3">
+                <Card
+                  key={item.id}
+                  className={`border-border/50 ${isSubscriptionNotice ? 'relative overflow-hidden' : ''} ${blueprint ? 'cursor-pointer transition-colors hover:border-border' : ''}`}
+                  onClick={
+                    blueprint
+                      ? () => navigate(`/blueprint/${blueprint.id}`)
+                      : undefined
+                  }
+                  onKeyDown={
+                    blueprint
+                      ? (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          navigate(`/blueprint/${blueprint.id}`);
+                        }
+                      }
+                      : undefined
+                  }
+                  role={blueprint ? 'button' : undefined}
+                  tabIndex={blueprint ? 0 : undefined}
+                >
+                  {isSubscriptionNotice && !!source?.channelBannerUrl && (
+                    <>
+                      <img
+                        src={source.channelBannerUrl}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover opacity-30"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/70 to-background/85" />
+                    </>
+                  )}
+                  <CardContent className={`p-4 space-y-3 ${isSubscriptionNotice ? 'relative' : ''}`}>
                     {isSubscriptionNotice ? (
                       <>
-                        <div className="relative overflow-hidden rounded-md p-3">
-                          {!!source?.channelBannerUrl && (
-                            <>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex items-start gap-3">
+                            {source?.thumbnailUrl ? (
                               <img
-                                src={source.channelBannerUrl}
-                                alt=""
-                                className="absolute inset-0 h-full w-full object-cover opacity-30"
+                                src={source.thumbnailUrl}
+                                alt={source.sourceChannelTitle || 'Channel avatar'}
+                                className="h-10 w-10 rounded-full border border-border/40 object-cover shrink-0"
                                 loading="lazy"
                               />
-                              <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/70 to-background/85" />
-                            </>
-                          )}
-                          <div className="relative flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex items-start gap-3">
-                              {source?.thumbnailUrl ? (
-                                <img
-                                  src={source.thumbnailUrl}
-                                  alt={source.sourceChannelTitle || 'Channel avatar'}
-                                  className="h-10 w-10 rounded-full border border-border/40 object-cover shrink-0"
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="h-10 w-10 rounded-full border border-border/40 bg-muted shrink-0" />
-                              )}
-                              <div className="min-w-0 space-y-1">
-                                <p className="font-medium leading-tight">{title}</p>
-                                <p className="text-xs text-muted-foreground line-clamp-2">{subtitle}</p>
-                              </div>
+                            ) : (
+                              <div className="h-10 w-10 rounded-full border border-border/40 bg-muted shrink-0" />
+                            )}
+                            <div className="min-w-0 space-y-1">
+                              <p className="font-medium leading-tight">{title}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-2">{subtitle}</p>
                             </div>
-                            <Badge variant="secondary">{getMyFeedStateLabel(item.state as MyFeedItemState)}</Badge>
                           </div>
+                          <Badge variant="secondary">{getMyFeedStateLabel(item.state as MyFeedItemState)}</Badge>
                         </div>
                         <div className="flex justify-end">
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => setUnsubscribeDialogItemId(item.id)}
+                            className="h-7 px-2 text-xs"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setUnsubscribeDialogItemId(item.id);
+                            }}
                             disabled={unsubscribeMutation.isPending}
                           >
                             Unsubscribe
@@ -430,7 +457,7 @@ export default function MyFeed() {
                       </>
                     ) : (
                       <>
-                        <div className="relative overflow-hidden p-0">
+                        <div className="relative overflow-hidden">
                           {!!blueprint.bannerUrl && (
                             <>
                               <img
@@ -451,10 +478,12 @@ export default function MyFeed() {
                                   size="sm"
                                   variant="outline"
                                   className="h-8 px-2"
-                                  onClick={() => setSubmissionDialogItemId(item.id)}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSubmissionDialogItemId(item.id);
+                                  }}
                                   title="Submit to channel"
                                 >
-                                  <Plus className="h-4 w-4" />
                                   <span>Post to Channel</span>
                                 </Button>
                               </div>
@@ -476,12 +505,12 @@ export default function MyFeed() {
                       </>
                     )}
 
-                    {!isSubscriptionNotice && (
+                    {!isSubscriptionNotice && !blueprint && (
                       <div className="flex justify-end">
-                        {blueprint ? (
-                          <Link to={`/blueprint/${blueprint.id}`} className="underline text-xs text-muted-foreground">Open blueprint</Link>
-                        ) : source?.sourceUrl ? (
-                          <a href={source.sourceUrl} target="_blank" rel="noreferrer" className="underline text-xs text-muted-foreground">Open source</a>
+                        {source?.sourceUrl ? (
+                          <a href={source.sourceUrl} target="_blank" rel="noreferrer" className="underline text-xs text-muted-foreground">
+                            Open source
+                          </a>
                         ) : null}
                       </div>
                     )}

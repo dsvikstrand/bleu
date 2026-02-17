@@ -60,6 +60,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 5 row polish adds optional channel avatars and removes technical row badges from subscription rows.
 - Step 6 UX simplification removes aggregate ingestion summary card from `/subscriptions` while keeping unsubscribe and row-level signals.
 - Step 7 My Feed notice polish adds avatar/banner notice rendering and confirm-gated unsubscribe that removes notice cards from My Feed.
+- Step 8 My Feed interaction cleanup adds simpler copy, direct `Add Subscription`, card-click blueprint opening, and compact notice-card actions.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Keep sync/deactivate and pending accept/skip endpoints as compatibility/operator paths.
 - Keep debug simulation endpoint env-gated (`ENABLE_DEBUG_ENDPOINTS`) for non-prod ingestion testing.

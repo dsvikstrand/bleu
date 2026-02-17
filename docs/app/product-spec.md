@@ -21,6 +21,8 @@ a14) [have] Manual/search YouTube generation defaults to review+banner enabled f
 a15) [have] `My Feed` subscription notice cards now support channel avatar rendering and optional profile-banner background (when available from YouTube).
 a16) [have] `My Feed` subscription notice cards now provide `Unsubscribe` with confirmation; successful unsubscribe removes the notice card.
 a17) [have] `My Feed` blueprint cards now expose explicit `Post to Channel` label on the compact submit action.
+a18) [have] `My Feed` blueprint cards now open blueprint detail by card click (dedicated `Open blueprint` link removed).
+a19) [have] `My Feed` header now includes direct `Add Subscription` shortcut in addition to `Manage subscriptions`.
 
 ## Core Model
 b1) `Source Item`
@@ -88,7 +90,7 @@ f3) User can search YouTube from `/search` and get transient result suggestions 
 f4) User selects `Generate Blueprint` on a result to generate and save directly into `My Feed`.
 f5) User can subscribe to a result’s channel from the same search card.
 f6) On subscribe/reactivate, user gets one subscription notice card and future uploads ingest automatically into `My Feed`.
-f7) From `My Feed`, user clicks `Post to Channel` (plus action) to submit a blueprint to channels (candidate second-step flow).
+f7) From `My Feed`, user clicks `Post to Channel` to submit a blueprint to channels (candidate second-step flow).
 f8) User scans, remixes, and adds insights.
 f9) Eligible items are promoted to channel feeds after gates.
 f10) Community votes/comments to surface higher-value items.

@@ -407,6 +407,32 @@ Completion evidence (2026-02-17)
 - Updated `src/lib/subscriptionsApi.ts` with channel-id-based unsubscribe helper for My Feed notice cards.
 - Updated `server/index.ts` subscription notice insert to persist avatar/banner metadata and delete notice feed row on unsubscribe.
 
+### Step 19 - My Feed interaction cleanup (copy + quick add + card-open)
+Scope
+- replace "pulled-content" header wording with simpler user-facing language
+- add direct `Add Subscription` shortcut beside `Manage subscriptions` in My Feed
+- remove plus icon glyph from `Post to Channel` control
+- make subscription notice background fill entire card and shrink unsubscribe button footprint
+- remove `Open blueprint` link and open blueprint details by clicking the blueprint card
+
+Definition of done
+- My Feed header uses non-technical copy and shows both subscription entrypoints
+- `/subscriptions?add=1` opens add-subscription dialog directly
+- `Post to Channel` button text remains but no icon is shown
+- notice-card background fills full card surface
+- blueprint cards navigate to detail on card click while action controls remain clickable
+
+Evaluation
+- manual smoke: header copy updated and both subscription buttons visible
+- manual smoke: `Add Subscription` from My Feed opens subscriptions popup
+- manual smoke: notice card background fills full card; unsubscribe appears compact
+- manual smoke: clicking blueprint card opens detail; `Post to Channel` still opens submit popup
+- docs freshness and link checks pass
+
+Completion evidence (2026-02-17)
+- Updated `src/pages/MyFeed.tsx` for copy, CTA layout, card click navigation, and notice-card visual/action refinements.
+- Updated `src/pages/Subscriptions.tsx` to auto-open add dialog when `add=1` query param is provided.
+
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary
 2. Plan with touched files and acceptance checks

@@ -1,5 +1,5 @@
-import { FormEvent, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
@@ -85,6 +85,7 @@ export default function Subscriptions() {
   const queryClient = useQueryClient();
   const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isAddSubscriptionOpen, setIsAddSubscriptionOpen] = useState(false);
   const [channelSearchQuery, setChannelSearchQuery] = useState('');
   const [channelSearchSubmittedQuery, setChannelSearchSubmittedQuery] = useState('');
@@ -113,6 +114,14 @@ export default function Subscriptions() {
       resetSearchDialogState();
     }
   };
+
+  useEffect(() => {
+    if (searchParams.get('add') !== '1') return;
+    setIsAddSubscriptionOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('add');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const isRowPending = (subscriptionId: string) => Boolean(pendingRows[subscriptionId]);
   const markRowPending = (subscriptionId: string, isPending: boolean) => {
