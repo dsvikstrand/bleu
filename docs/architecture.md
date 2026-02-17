@@ -18,6 +18,8 @@
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
+    - `My Feed` blueprint rows use channel-feed-like visual cards and expose an explicit `Post to Channel` plus action.
+    - `My Feed` subscription notices render avatar and optional banner background, with confirm-gated `Unsubscribe`.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
 - Backend:
   - Express server in `server/index.ts`.
@@ -25,6 +27,8 @@
   - subscription ingestion APIs:
     - `POST|GET|PATCH|DELETE /api/source-subscriptions`
       - `GET` enriches rows with optional `source_channel_avatar_url` from YouTube API (no DB write path required)
+      - `POST` notice insertion stores channel avatar + optional banner metadata for My Feed notice-card rendering
+      - `DELETE` deactivates subscription and removes user-scoped `subscription_notice` feed row for that channel
     - `POST /api/source-subscriptions/:id/sync`
     - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
     - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
@@ -52,7 +56,8 @@
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.
    - resolve channel id and set first-sync checkpoint only (`last_seen_published_at`, `last_seen_video_id`).
    - no historical prefill on first subscribe in MVP.
-   - create one persistent notice card (`user_feed_items.state = subscription_notice`).
+   - create one persistent notice card (`user_feed_items.state = subscription_notice`) with avatar + optional banner metadata.
+   - unsubscribe removes that user-scoped notice card while preserving other My Feed blueprint items.
 3. Subscription sync after checkpoint:
    - new uploads generate immediately to `my_feed_published`.
    - auto-ingest path enables review generation by default and keeps banner generation off.

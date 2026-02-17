@@ -18,6 +18,9 @@ a11) [have] `/subscriptions` now supports auth-only YouTube channel search with 
 a12) [have] Subscription rows now render channel avatar thumbnails (when available) and hide technical status/mode badges from row UI.
 a13) [have] `My Feed` blueprint rows now use channel-feed-style visual cards and open channel submission from a compact `+` popup action.
 a14) [have] Manual/search YouTube generation defaults to review+banner enabled for My Feed-bound content.
+a15) [have] `My Feed` subscription notice cards now support channel avatar rendering and optional profile-banner background (when available from YouTube).
+a16) [have] `My Feed` subscription notice cards now provide `Unsubscribe` with confirmation; successful unsubscribe removes the notice card.
+a17) [have] `My Feed` blueprint cards now expose explicit `Post to Channel` label on the compact submit action.
 
 ## Core Model
 b1) `Source Item`
@@ -42,6 +45,7 @@ b5) Subscription behavior (MVP simplified)
 - Future uploads after checkpoint ingest directly to `my_feed_published`.
 - Auto-ingested subscription items run review generation by default; banner generation remains off in this path.
 - A persistent notice card is inserted into `My Feed` with state `subscription_notice`.
+- Notice cards are visualized with channel avatar and optional banner background when metadata is available.
 - API compatibility note: `mode` is accepted on subscription endpoints but coerced/treated as `auto`.
 
 ## MVP Lifecycle Contract
@@ -58,6 +62,7 @@ c7) Subscription notice flow:
 - successful subscribe/reactivate inserts one persistent notice card per user/channel.
 - notice canonical key: `subscription:youtube:<channel_id>`.
 - notice cards are informational and have no Accept/Skip or channel submit controls.
+- notice cards include `Unsubscribe` with confirm; unsubscribe removes the notice card from My Feed for that user/channel.
 
 ## Product Principles
 p1) Source-first content supply (not creator-first posting).
@@ -83,7 +88,7 @@ f3) User can search YouTube from `/search` and get transient result suggestions 
 f4) User selects `Generate Blueprint` on a result to generate and save directly into `My Feed`.
 f5) User can subscribe to a result’s channel from the same search card.
 f6) On subscribe/reactivate, user gets one subscription notice card and future uploads ingest automatically into `My Feed`.
-f7) From `My Feed`, user opens `+` to submit a blueprint to channels (candidate second-step flow).
+f7) From `My Feed`, user clicks `Post to Channel` (plus action) to submit a blueprint to channels (candidate second-step flow).
 f8) User scans, remixes, and adds insights.
 f9) Eligible items are promoted to channel feeds after gates.
 f10) Community votes/comments to surface higher-value items.

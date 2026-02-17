@@ -129,8 +129,13 @@ Rules:
   - `Add Subscription` popup is the only in-UI subscribe entrypoint (manual fallback input removed).
 - My Feed publishing UX refresh (2026-02-18):
   - blueprint items now render in a channel-feed-like card style for visual consistency.
-  - submit/review/publish/reject actions moved behind a compact `+` button that opens a `Submit to Channel` popup.
+  - submit/review/publish/reject actions moved behind a compact `Post to Channel` plus button that opens a `Submit to Channel` popup.
   - card footer keeps simple status text (`Not submitted yet` or candidate status) to preserve state clarity.
+  - removed nested inner-card shell so blueprint rows render as a single visual card surface.
+- Subscription notice UX refresh (2026-02-18):
+  - notice cards now render channel avatar and optional profile-banner background metadata when available.
+  - notice cards now expose confirm-gated `Unsubscribe` and remove the user-scoped notice row after unsubscribe.
+  - `DELETE /api/source-subscriptions/:id` now cleans up user `subscription_notice` feed rows for that channel.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

@@ -1023,7 +1023,7 @@ app.get('/api/youtube-channel-search', async (req, res) => {
   }
 });
 
-async function fetchYouTubeChannelAvatarMap(input: {
+async function fetchYouTubeChannelAssetMap(input: {
   apiKey: string;
   channelIds: string[];
 }) {
@@ -1033,25 +1033,28 @@ async function fetchYouTubeChannelAvatarMap(input: {
       .map((id) => String(id || '').trim())
       .filter(Boolean),
   ));
-  const avatarMap = new Map<string, string | null>();
+  const assetMap = new Map<string, {
+    avatarUrl: string | null;
+    bannerUrl: string | null;
+  }>();
 
   if (!apiKey || uniqueIds.length === 0) {
-    return avatarMap;
+    return assetMap;
   }
 
   const batchSize = 50;
   for (let offset = 0; offset < uniqueIds.length; offset += batchSize) {
     const ids = uniqueIds.slice(offset, offset + batchSize);
     const url = new URL('https://www.googleapis.com/youtube/v3/channels');
-    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('part', 'snippet,brandingSettings');
     url.searchParams.set('id', ids.join(','));
     url.searchParams.set('key', apiKey);
 
     const response = await fetch(url.toString(), {
       headers: {
-        'User-Agent': 'bleuv1-youtube-channel-avatars/1.0 (+https://bapi.vdsai.cloud)',
-        Accept: 'application/json',
-      },
+      'User-Agent': 'bleuv1-youtube-channel-assets/1.0 (+https://bapi.vdsai.cloud)',
+      Accept: 'application/json',
+    },
     });
     if (!response.ok) {
       throw new Error(`YouTube channels lookup failed (${response.status})`);
@@ -1067,6 +1070,18 @@ async function fetchYouTubeChannelAvatarMap(input: {
             default?: { url?: string };
           };
         };
+        brandingSettings?: {
+          image?: {
+            bannerExternalUrl?: string;
+            bannerTvHighImageUrl?: string;
+            bannerTvMediumImageUrl?: string;
+            bannerTvLowImageUrl?: string;
+            bannerMobileExtraHdImageUrl?: string;
+            bannerMobileHdImageUrl?: string;
+            bannerMobileMediumHdImageUrl?: string;
+            bannerMobileLowImageUrl?: string;
+          };
+        };
       }>;
     } | null;
     if (!json || !Array.isArray(json.items)) continue;
@@ -1079,11 +1094,21 @@ async function fetchYouTubeChannelAvatarMap(input: {
         || item.snippet?.thumbnails?.medium?.url
         || item.snippet?.thumbnails?.default?.url
         || null;
-      avatarMap.set(channelId, avatarUrl);
+      const bannerUrl =
+        item.brandingSettings?.image?.bannerExternalUrl
+        || item.brandingSettings?.image?.bannerTvHighImageUrl
+        || item.brandingSettings?.image?.bannerTvMediumImageUrl
+        || item.brandingSettings?.image?.bannerTvLowImageUrl
+        || item.brandingSettings?.image?.bannerMobileExtraHdImageUrl
+        || item.brandingSettings?.image?.bannerMobileHdImageUrl
+        || item.brandingSettings?.image?.bannerMobileMediumHdImageUrl
+        || item.brandingSettings?.image?.bannerMobileLowImageUrl
+        || null;
+      assetMap.set(channelId, { avatarUrl, bannerUrl });
     });
   }
 
-  return avatarMap;
+  return assetMap;
 }
 
 function getAuthedSupabaseClient(authToken: string) {
@@ -1182,6 +1207,8 @@ async function upsertSubscriptionNoticeSourceItem(db: ReturnType<typeof createCl
   channelId: string;
   channelTitle: string | null;
   channelUrl: string | null;
+  channelAvatarUrl: string | null;
+  channelBannerUrl: string | null;
 }) {
   const safeTitle = input.channelTitle || input.channelId;
   const canonicalKey = `subscription:youtube:${input.channelId}`;
@@ -1197,9 +1224,12 @@ async function upsertSubscriptionNoticeSourceItem(db: ReturnType<typeof createCl
         ingest_status: 'ready',
         source_channel_id: input.channelId,
         source_channel_title: safeTitle,
+        thumbnail_url: input.channelAvatarUrl,
         metadata: {
           notice_kind: 'subscription_created',
           channel_title: safeTitle,
+          channel_avatar_url: input.channelAvatarUrl,
+          channel_banner_url: input.channelBannerUrl,
         },
       },
       { onConflict: 'canonical_key' },
@@ -1494,10 +1524,24 @@ app.post('/api/source-subscriptions', async (req, res) => {
 
   if (isCreateOrReactivate) {
     try {
+      let channelAvatarUrl: string | null = null;
+      let channelBannerUrl: string | null = null;
+      if (youtubeDataApiKey) {
+        const assetMap = await fetchYouTubeChannelAssetMap({
+          apiKey: youtubeDataApiKey,
+          channelIds: [resolved.channelId],
+        });
+        const assets = assetMap.get(resolved.channelId);
+        channelAvatarUrl = assets?.avatarUrl || null;
+        channelBannerUrl = assets?.bannerUrl || null;
+      }
+
       const noticeSource = await upsertSubscriptionNoticeSourceItem(db, {
         channelId: resolved.channelId,
         channelTitle: resolved.channelTitle,
         channelUrl: resolved.channelUrl,
+        channelAvatarUrl,
+        channelBannerUrl,
       });
       await insertFeedItem(db, {
         userId,
@@ -1543,9 +1587,9 @@ app.get('/api/source-subscriptions', async (_req, res) => {
   if (error) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
 
   const rows = Array.isArray(data) ? data : [];
-  let avatarMap = new Map<string, string | null>();
+  let assetMap = new Map<string, { avatarUrl: string | null; bannerUrl: string | null }>();
   try {
-    avatarMap = await fetchYouTubeChannelAvatarMap({
+    assetMap = await fetchYouTubeChannelAssetMap({
       apiKey: youtubeDataApiKey,
       channelIds: rows.map((row) => String(row.source_channel_id || '')),
     });
@@ -1557,7 +1601,7 @@ app.get('/api/source-subscriptions', async (_req, res) => {
   }
   const withAvatars = rows.map((row) => ({
     ...row,
-    source_channel_avatar_url: avatarMap.get(String(row.source_channel_id || '').trim()) || null,
+    source_channel_avatar_url: assetMap.get(String(row.source_channel_id || '').trim())?.avatarUrl || null,
   }));
 
   return res.json({
@@ -1629,10 +1673,35 @@ app.delete('/api/source-subscriptions/:id', async (req, res) => {
     .update({ is_active: false })
     .eq('id', req.params.id)
     .eq('user_id', userId)
-    .select('id')
+    .select('id, source_channel_id')
     .maybeSingle();
   if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
   if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
+
+  try {
+    const { data: noticeSource } = await db
+      .from('source_items')
+      .select('id')
+      .eq('source_type', 'subscription_notice')
+      .eq('source_native_id', data.source_channel_id)
+      .maybeSingle();
+
+    if (noticeSource?.id) {
+      await db
+        .from('user_feed_items')
+        .delete()
+        .eq('user_id', userId)
+        .eq('source_item_id', noticeSource.id)
+        .eq('state', 'subscription_notice');
+    }
+  } catch (cleanupError) {
+    console.log('[subscription_notice_cleanup_failed]', JSON.stringify({
+      user_id: userId,
+      subscription_id: data.id,
+      source_channel_id: data.source_channel_id,
+      error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+    }));
+  }
 
   return res.json({
     ok: true,

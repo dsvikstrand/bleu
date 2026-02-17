@@ -119,6 +119,21 @@ export async function deactivateSourceSubscription(id: string) {
   return response.data;
 }
 
+export async function deactivateSourceSubscriptionByChannelId(channelId: string) {
+  const normalized = String(channelId || '').trim();
+  if (!normalized) {
+    throw new ApiRequestError(400, 'Channel id is required.', 'INVALID_CHANNEL_ID');
+  }
+
+  const subscriptions = await listSourceSubscriptions();
+  const match = subscriptions.find((row) => row.source_channel_id === normalized && row.is_active);
+  if (!match) {
+    throw new ApiRequestError(404, 'Subscription not found for this channel.', 'NOT_FOUND');
+  }
+
+  return deactivateSourceSubscription(match.id);
+}
+
 export async function syncSourceSubscription(id: string) {
   const response = await apiRequest<{
     job_id: string;

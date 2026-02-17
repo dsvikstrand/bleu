@@ -10,10 +10,12 @@ export interface MyFeedItemView {
   createdAt: string;
   source: {
     id: string;
+    sourceChannelId: string | null;
     sourceUrl: string;
     title: string;
     sourceChannelTitle: string | null;
     thumbnailUrl: string | null;
+    channelBannerUrl: string | null;
   } | null;
   blueprint: {
     id: string;
@@ -61,7 +63,10 @@ export function useMyFeed() {
       const feedItemIds = filteredFeedRows.map((row) => row.id);
 
       const [{ data: sources }, { data: blueprints }, { data: candidates }] = await Promise.all([
-        supabase.from('source_items').select('id, source_url, title, source_channel_title, thumbnail_url').in('id', sourceIds),
+        supabase
+          .from('source_items')
+          .select('id, source_channel_id, source_url, title, source_channel_title, thumbnail_url, metadata')
+          .in('id', sourceIds),
         blueprintIds.length
           ? supabase.from('blueprints').select('id, title, banner_url, llm_review, is_public, steps').in('id', blueprintIds)
           : Promise.resolve({ data: [], error: null }),
@@ -118,10 +123,18 @@ export function useMyFeed() {
           source: source
             ? {
                 id: source.id,
+                sourceChannelId: source.source_channel_id || null,
                 sourceUrl: source.source_url,
                 title: source.title,
                 sourceChannelTitle: source.source_channel_title || null,
                 thumbnailUrl: source.thumbnail_url || null,
+                channelBannerUrl:
+                  source.metadata
+                  && typeof source.metadata === 'object'
+                  && source.metadata !== null
+                  && 'channel_banner_url' in source.metadata
+                    ? String((source.metadata as Record<string, unknown>).channel_banner_url || '') || null
+                    : null,
               }
             : null,
           blueprint: blueprint

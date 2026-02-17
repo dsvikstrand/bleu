@@ -378,6 +378,35 @@ Completion evidence (2026-02-17)
 - Updated `src/pages/Search.tsx` and `src/pages/YouTubeToBlueprint.tsx` for review/banner-on defaults in manual/search paths.
 - Updated `server/index.ts` subscription auto-ingest pipeline to run review generation by default (banner still off).
 
+### Step 18 - My Feed notice/card UX cleanup (single-box + post-label + unsubscribe confirm)
+Scope
+- remove nested "box inside box" look from `My Feed` blueprint cards while preserving channel-feed-style visuals
+- label compact submit action as `Post to Channel`
+- enrich subscription notice cards with channel avatar + optional profile-banner background
+- replace notice-card link action with confirm-gated `Unsubscribe`
+- on unsubscribe, remove the user-scoped `subscription_notice` card from `My Feed`
+
+Definition of done
+- My Feed blueprint cards render as a single visual container (no nested bordered shell)
+- submit control clearly communicates intent with `Post to Channel`
+- subscription notice cards show channel avatar (and banner when available)
+- notice-card `Unsubscribe` requires confirmation
+- successful unsubscribe removes that notice card from My Feed
+
+Evaluation
+- manual smoke: blueprint rows in My Feed no longer appear double-nested
+- manual smoke: `Post to Channel` opens existing submit popup flow
+- manual smoke: subscription notice shows avatar and optional background image
+- manual smoke: unsubscribe confirm works and notice disappears after success
+- regression smoke: candidate submit/publish/reject flow still works
+- docs freshness and link checks pass
+
+Completion evidence (2026-02-17)
+- Updated `src/pages/MyFeed.tsx` for single-box blueprint card layout, labeled submit action, and notice-card unsubscribe confirmation.
+- Updated `src/hooks/useMyFeed.ts` to load notice metadata (`source_channel_id`, `thumbnail_url`, `metadata.channel_banner_url`).
+- Updated `src/lib/subscriptionsApi.ts` with channel-id-based unsubscribe helper for My Feed notice cards.
+- Updated `server/index.ts` subscription notice insert to persist avatar/banner metadata and delete notice feed row on unsubscribe.
+
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary
 2. Plan with touched files and acceptance checks

@@ -7,6 +7,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus } from 'lucide-react';
@@ -20,6 +30,7 @@ import { getMyFeedStateLabel, type MyFeedItemState } from '@/lib/myFeedState';
 import { publishCandidate, rejectCandidate, submitCandidateAndEvaluate } from '@/lib/myFeedApi';
 import {
   acceptMyFeedPendingItem,
+  deactivateSourceSubscriptionByChannelId,
   skipMyFeedPendingItem,
 } from '@/lib/subscriptionsApi';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
@@ -35,6 +46,7 @@ export default function MyFeed() {
   const { data: items, isLoading } = useMyFeed();
   const [selectedChannels, setSelectedChannels] = useState<Record<string, string>>({});
   const [submissionDialogItemId, setSubmissionDialogItemId] = useState<string | null>(null);
+  const [unsubscribeDialogItemId, setUnsubscribeDialogItemId] = useState<string | null>(null);
 
   const defaultChannelForItem = (itemId: string, tags: string[]) => {
     const picked = selectedChannels[itemId];
@@ -229,6 +241,25 @@ export default function MyFeed() {
     },
   });
 
+  const unsubscribeMutation = useMutation({
+    mutationFn: async (channelId: string) => {
+      return deactivateSourceSubscriptionByChannelId(channelId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
+      setUnsubscribeDialogItemId(null);
+      toast({ title: 'Unsubscribed', description: 'Subscription removed from your feed.' });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Unsubscribe failed',
+        description: error instanceof Error ? error.message : 'Could not unsubscribe.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const hasItems = (items || []).length > 0;
 
   const pendingCount = useMemo(
@@ -244,6 +275,10 @@ export default function MyFeed() {
   const submissionDialogItem = useMemo(
     () => (items || []).find((item) => item.id === submissionDialogItemId) || null,
     [items, submissionDialogItemId],
+  );
+  const unsubscribeDialogItem = useMemo(
+    () => (items || []).find((item) => item.id === unsubscribeDialogItemId) || null,
+    [items, unsubscribeDialogItemId],
   );
 
   return (
@@ -320,19 +355,47 @@ export default function MyFeed() {
                   <CardContent className="p-4 space-y-3">
                     {isSubscriptionNotice ? (
                       <>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 space-y-1">
-                            <p className="font-medium leading-tight">{title}</p>
-                            <p className="text-xs text-muted-foreground line-clamp-2">{subtitle}</p>
+                        <div className="relative overflow-hidden rounded-md p-3">
+                          {!!source?.channelBannerUrl && (
+                            <>
+                              <img
+                                src={source.channelBannerUrl}
+                                alt=""
+                                className="absolute inset-0 h-full w-full object-cover opacity-30"
+                                loading="lazy"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/70 to-background/85" />
+                            </>
+                          )}
+                          <div className="relative flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex items-start gap-3">
+                              {source?.thumbnailUrl ? (
+                                <img
+                                  src={source.thumbnailUrl}
+                                  alt={source.sourceChannelTitle || 'Channel avatar'}
+                                  className="h-10 w-10 rounded-full border border-border/40 object-cover shrink-0"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="h-10 w-10 rounded-full border border-border/40 bg-muted shrink-0" />
+                              )}
+                              <div className="min-w-0 space-y-1">
+                                <p className="font-medium leading-tight">{title}</p>
+                                <p className="text-xs text-muted-foreground line-clamp-2">{subtitle}</p>
+                              </div>
+                            </div>
+                            <Badge variant="secondary">{getMyFeedStateLabel(item.state as MyFeedItemState)}</Badge>
                           </div>
-                          <Badge variant="secondary">{getMyFeedStateLabel(item.state as MyFeedItemState)}</Badge>
                         </div>
                         <div className="flex justify-end">
-                          {source?.sourceUrl ? (
-                            <a href={source.sourceUrl} target="_blank" rel="noreferrer" className="text-xs underline text-muted-foreground">
-                              Open channel
-                            </a>
-                          ) : null}
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => setUnsubscribeDialogItemId(item.id)}
+                            disabled={unsubscribeMutation.isPending}
+                          >
+                            Unsubscribe
+                          </Button>
                         </div>
                       </>
                     ) : !blueprint ? (
@@ -367,7 +430,7 @@ export default function MyFeed() {
                       </>
                     ) : (
                       <>
-                        <div className="relative overflow-hidden rounded-md border border-border/40 p-3">
+                        <div className="relative overflow-hidden p-0">
                           {!!blueprint.bannerUrl && (
                             <>
                               <img
@@ -385,13 +448,14 @@ export default function MyFeed() {
                               <div className="flex items-center gap-2">
                                 <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
                                 <Button
-                                  size="icon"
+                                  size="sm"
                                   variant="outline"
-                                  className="h-7 w-7"
+                                  className="h-8 px-2"
                                   onClick={() => setSubmissionDialogItemId(item.id)}
                                   title="Submit to channel"
                                 >
                                   <Plus className="h-4 w-4" />
+                                  <span>Post to Channel</span>
                                 </Button>
                               </div>
                             </div>
@@ -556,6 +620,39 @@ export default function MyFeed() {
                 )}
               </DialogContent>
             </Dialog>
+
+            <AlertDialog
+              open={!!unsubscribeDialogItem}
+              onOpenChange={(open) => {
+                if (!open) setUnsubscribeDialogItemId(null);
+              }}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Unsubscribe from this channel?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will stop new uploads from appearing and remove this subscription notice from My Feed.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={unsubscribeMutation.isPending}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={
+                      unsubscribeMutation.isPending
+                      || !unsubscribeDialogItem?.source?.sourceChannelId
+                    }
+                    onClick={(event) => {
+                      event.preventDefault();
+                      const channelId = unsubscribeDialogItem?.source?.sourceChannelId;
+                      if (!channelId) return;
+                      unsubscribeMutation.mutate(channelId);
+                    }}
+                  >
+                    {unsubscribeMutation.isPending ? 'Unsubscribing...' : 'Unsubscribe'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         )}
         <AppFooter />
