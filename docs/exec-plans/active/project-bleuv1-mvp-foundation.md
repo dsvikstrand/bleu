@@ -48,8 +48,10 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Maintain vote/comment utility on shared channel content.
 
 ### W5 - Subscription Intake And Sync
-- Support YouTube channel subscriptions (`manual|auto`).
-- Keep manual mode pending-first and accept-driven generation.
+- Support YouTube channel subscriptions with auto-only MVP UX.
+- First subscribe sets checkpoint only (new-uploads-only, no historical prefill).
+- Insert persistent `subscription_notice` item in My Feed per subscribed channel.
+- Keep sync/deactivate and pending accept/skip endpoints as compatibility/operator paths.
 - Run scheduler trigger from Oracle (`/api/ingestion/jobs/trigger` with service auth).
 
 ## Acceptance Baseline Per Iteration

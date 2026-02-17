@@ -63,7 +63,6 @@ const yt2bpIpLimitPerHour = Number(process.env.YT2BP_IP_LIMIT_PER_HOUR) || 30;
 const yt2bpEnabledRaw = String(process.env.YT2BP_ENABLED ?? 'true').trim().toLowerCase();
 const yt2bpEnabled = !(yt2bpEnabledRaw === 'false' || yt2bpEnabledRaw === '0' || yt2bpEnabledRaw === 'off');
 const ingestionServiceToken = String(process.env.INGESTION_SERVICE_TOKEN || '').trim();
-const manualBackfillLimit = Math.max(1, Number(process.env.SUBSCRIPTIONS_MANUAL_BACKFILL_LIMIT) || 5);
 const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX_PER_SUBSCRIPTION) || 5);
 
 function getRetryAfterSeconds(req: express.Request) {
@@ -950,6 +949,38 @@ async function upsertSourceItemFromVideo(db: ReturnType<typeof createClient>, in
   return data;
 }
 
+async function upsertSubscriptionNoticeSourceItem(db: ReturnType<typeof createClient>, input: {
+  channelId: string;
+  channelTitle: string | null;
+  channelUrl: string | null;
+}) {
+  const safeTitle = input.channelTitle || input.channelId;
+  const canonicalKey = `subscription:youtube:${input.channelId}`;
+  const { data, error } = await db
+    .from('source_items')
+    .upsert(
+      {
+        source_type: 'subscription_notice',
+        source_native_id: input.channelId,
+        canonical_key: canonicalKey,
+        source_url: input.channelUrl || `https://www.youtube.com/channel/${input.channelId}`,
+        title: `You are now subscribing to ${safeTitle}`,
+        ingest_status: 'ready',
+        source_channel_id: input.channelId,
+        source_channel_title: safeTitle,
+        metadata: {
+          notice_kind: 'subscription_created',
+          channel_title: safeTitle,
+        },
+      },
+      { onConflict: 'canonical_key' },
+    )
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 async function getExistingFeedItem(db: ReturnType<typeof createClient>, userId: string, sourceItemId: string) {
   const { data, error } = await db
     .from('user_feed_items')
@@ -1056,22 +1087,35 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
 }, options: {
   trigger: 'user_sync' | 'service_cron' | 'subscription_create';
 }) {
-  const mode = subscription.mode === 'auto' ? 'auto' : 'manual';
   const feed = await fetchYouTubeFeed(subscription.source_channel_id, 20);
   const newest = feed.videos[0] || null;
 
-  let candidates: YouTubeFeedVideo[] = [];
   if (!subscription.last_seen_published_at) {
-    if (mode === 'manual') {
-      candidates = feed.videos.slice(0, manualBackfillLimit);
-    } else {
-      candidates = [];
-    }
-  } else {
-    candidates = feed.videos.filter((video) =>
-      isNewerThanCheckpoint(video, subscription.last_seen_published_at, subscription.last_seen_video_id),
-    );
+    await db
+      .from('user_source_subscriptions')
+      .update({
+        source_channel_title: feed.channelTitle,
+        last_polled_at: new Date().toISOString(),
+        last_seen_published_at: newest?.publishedAt || null,
+        last_seen_video_id: newest?.videoId || null,
+        last_sync_error: null,
+      })
+      .eq('id', subscription.id);
+
+    return {
+      processed: 0,
+      inserted: 0,
+      skipped: 0,
+      newestVideoId: newest?.videoId || null,
+      newestPublishedAt: newest?.publishedAt || null,
+      channelTitle: feed.channelTitle,
+    } as SyncSubscriptionResult;
   }
+
+  let candidates: YouTubeFeedVideo[] = [];
+  candidates = feed.videos.filter((video) =>
+    isNewerThanCheckpoint(video, subscription.last_seen_published_at, subscription.last_seen_video_id),
+  );
 
   const toProcess = candidates
     .slice(0, ingestionMaxPerSubscription)
@@ -1096,18 +1140,6 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
     const existingFeedItem = await getExistingFeedItem(db, subscription.user_id, source.id);
     if (existingFeedItem) {
       skipped += 1;
-      continue;
-    }
-
-    if (mode === 'manual') {
-      const pending = await insertFeedItem(db, {
-        userId: subscription.user_id,
-        sourceItemId: source.id,
-        blueprintId: null,
-        state: 'my_feed_pending_accept',
-      });
-      if (pending) inserted += 1;
-      else skipped += 1;
       continue;
     }
 
@@ -1178,9 +1210,8 @@ app.post('/api/source-subscriptions', async (req, res) => {
 
   const body = req.body as { channel_input?: string; mode?: string };
   const channelInput = String(body.channel_input || '').trim();
-  const mode = String(body.mode || 'manual').trim().toLowerCase();
-  if (!channelInput || (mode !== 'manual' && mode !== 'auto')) {
-    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'channel_input and valid mode required', data: null });
+  if (!channelInput) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'channel_input required', data: null });
   }
 
   const db = getAuthedSupabaseClient(authToken);
@@ -1193,6 +1224,15 @@ app.post('/api/source-subscriptions', async (req, res) => {
     return res.status(400).json({ ok: false, error_code: 'INVALID_CHANNEL', message: 'Could not resolve YouTube channel', data: null });
   }
 
+  const { data: existingSub } = await db
+    .from('user_source_subscriptions')
+    .select('id, is_active')
+    .eq('user_id', userId)
+    .eq('source_type', 'youtube')
+    .eq('source_channel_id', resolved.channelId)
+    .maybeSingle();
+  const isCreateOrReactivate = !existingSub || !existingSub.is_active;
+
   const { data: upserted, error: upsertError } = await db
     .from('user_source_subscriptions')
     .upsert(
@@ -1202,7 +1242,7 @@ app.post('/api/source-subscriptions', async (req, res) => {
         source_channel_id: resolved.channelId,
         source_channel_url: resolved.channelUrl,
         source_channel_title: resolved.channelTitle,
-        mode,
+        mode: 'auto',
         is_active: true,
         last_sync_error: null,
       },
@@ -1217,6 +1257,28 @@ app.post('/api/source-subscriptions', async (req, res) => {
     sync = await syncSingleSubscription(db, upserted, { trigger: 'subscription_create' });
   } catch (error) {
     await markSubscriptionSyncError(db, upserted.id, error);
+  }
+
+  if (isCreateOrReactivate) {
+    try {
+      const noticeSource = await upsertSubscriptionNoticeSourceItem(db, {
+        channelId: resolved.channelId,
+        channelTitle: resolved.channelTitle,
+        channelUrl: resolved.channelUrl,
+      });
+      await insertFeedItem(db, {
+        userId,
+        sourceItemId: noticeSource.id,
+        blueprintId: null,
+        state: 'subscription_notice',
+      });
+    } catch (noticeError) {
+      console.log('[subscription_notice_insert_failed]', JSON.stringify({
+        user_id: userId,
+        source_channel_id: resolved.channelId,
+        error: noticeError instanceof Error ? noticeError.message : String(noticeError),
+      }));
+    }
   }
 
   return res.json({
@@ -1270,7 +1332,8 @@ app.patch('/api/source-subscriptions/:id', async (req, res) => {
     if (mode !== 'manual' && mode !== 'auto') {
       return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'Invalid mode', data: null });
     }
-    updates.mode = mode;
+    // MVP simplification: mode is accepted for compatibility but coerced to auto.
+    updates.mode = 'auto';
   }
   if (typeof isActiveRaw === 'boolean') {
     updates.is_active = isActiveRaw;

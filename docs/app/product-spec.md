@@ -7,7 +7,7 @@
 a1) [have] YouTube to Blueprint generation is live (`/youtube` + `/api/youtube-to-blueprint`).
 a2) [have] Public feed/channel/community primitives are live (`/wall`, `/channels`, `/b/:channelSlug`, likes/comments).
 a3) [have] `My Feed` personal unfiltered lane is available as `/my-feed` (feature-flagged rollout).
-a4) [have] Auto-ingestion from followed YouTube channels is available with subscription modes (`manual` pending cards, `auto` new uploads).
+a4) [have] Auto-ingestion from followed YouTube channels is available with auto-only UX and new-uploads-only behavior (no initial old-video prefill).
 a5) [have] Channel publish is an explicit second-stage lifecycle from personal feed candidates.
 a6) [have] Channel gate runtime is currently bypass-first (`EVAL_BYPASSED`) while gate-mode framework hardening is completed.
 
@@ -28,9 +28,12 @@ b4) Feed surfaces
 - `My Feed`: personal unfiltered lane from user pulls/subscriptions.
 - `Channel Feed`: shared lane with voting/comments and quality-controlled channel posting.
 
-b5) Subscription modes
-- `manual`: creates `my_feed_pending_accept` cards; blueprint generation happens only when user accepts.
-- `auto`: ingests new uploads after subscription checkpoint directly to `my_feed_published`.
+b5) Subscription behavior (MVP simplified)
+- UI behavior is auto-only.
+- On subscribe, backend sets a checkpoint (`last_seen_published_at` / `last_seen_video_id`) without ingesting historical uploads.
+- Future uploads after checkpoint ingest directly to `my_feed_published`.
+- A persistent notice card is inserted into `My Feed` with state `subscription_notice`.
+- API compatibility note: `mode` is accepted on subscription endpoints but coerced/treated as `auto`.
 
 ## MVP Lifecycle Contract
 c1) Pull/ingest -> generate blueprint -> publish to `My Feed`.
@@ -42,10 +45,10 @@ c5) Result:
 - fail -> remain in `My Feed` (personal-only)
 c6) Warn-path result in selected mode:
 - `channel_fit`/`quality` warn routes candidate to `candidate_pending_manual_review` before terminal publish/reject.
-c7) Subscription pending flow:
-- `manual` subscription import creates pending cards (`my_feed_pending_accept`).
-- `Accept` transitions pending -> generating -> `my_feed_published`.
-- `Skip` transitions pending -> `my_feed_skipped`.
+c7) Subscription notice flow:
+- successful subscribe/reactivate inserts one persistent notice card per user/channel.
+- notice canonical key: `subscription:youtube:<channel_id>`.
+- notice cards are informational and have no Accept/Skip or channel submit controls.
 
 ## Product Principles
 p1) Source-first content supply (not creator-first posting).
@@ -65,8 +68,8 @@ m7) Planned mutable interfaces use explicit auth scope + idempotency mode and un
 m8) Runtime default `CHANNEL_GATES_MODE=bypass`; non-prod may run `shadow` or `enforce`.
 
 ## Primary User Flows (`bleuV1`)
-f1) User connects/follows YouTube channels (`manual` or `auto` mode).
-f2) New media becomes pending or published items in `My Feed` based on mode.
+f1) User follows YouTube channels via Add Subscription modal (channel URL/channel ID/@handle).
+f2) On subscribe, user gets one subscription notice card and future uploads ingest automatically into `My Feed`.
 f3) User scans, remixes, and adds insights.
 f4) Eligible items are promoted to channel feeds after gates.
 f5) Community votes/comments to surface higher-value items.
@@ -91,6 +94,7 @@ s1) In scope
 
 s2) Out of scope
 - Multi-adapter rollout in same MVP cut.
+- Dedicated `/subscriptions` management page (deferred; compatibility endpoints stay available).
 - Fully open free-form blog/social posting model.
 - Full moderation platform for user-generated channels.
 
@@ -102,9 +106,9 @@ d4) [have] Channel candidate + decision logs (`channel_candidates`, `channel_gat
 d5) [have] Scheduled/user-triggered ingestion jobs + trace table (`ingestion_jobs`).
 
 ## Subscription Interfaces (MVP)
-si1) `POST /api/source-subscriptions` with `{ channel_input, mode }`
+si1) `POST /api/source-subscriptions` with `{ channel_input, mode? }` (`mode` accepted but ignored/coerced to `auto` in MVP path)
 si2) `GET /api/source-subscriptions`
-si3) `PATCH /api/source-subscriptions/:id` with `{ mode, is_active }`
+si3) `PATCH /api/source-subscriptions/:id` with `{ mode?, is_active? }` (`mode` accepted for compatibility and coerced to `auto`)
 si4) `DELETE /api/source-subscriptions/:id` (soft deactivate)
 si5) `POST /api/source-subscriptions/:id/sync` (user sync)
 si6) `POST /api/ingestion/jobs/trigger` (service auth for cron)

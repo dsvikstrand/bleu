@@ -26,7 +26,8 @@ Execution mode:
 7. [have] Step 6 - Library deprecation pass (soft)
 8. [have] Step 7 - Observability baseline
 9. [have] Step 8 - Hardening cycle: docs realignment + CTA de-emphasis + traceability + gate-mode framework
-10. [have] Step 9 - Subscriptions and auto-ingestion cycle (manual pending + auto new uploads)
+10. [have] Step 9 - Subscriptions and auto-ingestion cycle (auto new uploads + compatibility pending actions)
+11. [have] Step 10 - MVP subscription simplification (auto-only UX + no prefill + notice cards)
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -166,20 +167,37 @@ Evaluation
 
 ### Step 9 - Subscriptions and auto-ingestion
 Scope
-- add YouTube source subscriptions with `manual|auto` mode
+- add YouTube source subscriptions and ingestion sync loop
 - add sync trigger endpoints (`user sync` and service cron trigger)
-- implement pending-card lifecycle in My Feed (`accept|skip`)
+- keep pending-card lifecycle endpoints in compatibility scope (`accept|skip`)
 
 Definition of done
-- manual subscriptions create pending cards without auto-generation
-- auto subscriptions ingest only new uploads (no initial backfill)
-- pending card accept generates blueprint exactly once (idempotent)
+- subscriptions ingest only new uploads after checkpoint
+- first subscribe establishes checkpoint and avoids old-video prefill
+- compatibility pending card accept remains idempotent when legacy pending items exist
 - ingestion jobs are traceable via `ingestion_jobs` table + logs
 
 Evaluation
-- manual smoke: subscribe manual -> pending cards appear -> accept/skip works
-- manual smoke: subscribe auto -> no historical backfill -> new uploads sync to published
+- manual smoke: subscribe -> checkpoint set with no backfill
+- manual smoke: future uploads sync to published
 - regression smoke: YouTube URL pull and channel submit/publish still work
+
+### Step 10 - MVP subscription simplification
+Scope
+- simplify My Feed subscription UX to one action: `Add Subscription`
+- remove inline subscription management controls from My Feed
+- add persistent informational notice card per subscribed channel
+
+Definition of done
+- My Feed no longer shows inline mode/sync/deactivate controls
+- Add Subscription opens floating dialog with channel input only
+- successful subscribe creates one `subscription_notice` feed card per user/channel
+- legacy `manual` subscription rows are migrated to `auto`
+
+Evaluation
+- manual smoke: subscribe once -> one notice card appears
+- manual smoke: repeat subscribe -> no duplicate notice cards
+- regression smoke: channel submit/publish flow still works
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

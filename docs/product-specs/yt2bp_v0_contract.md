@@ -17,6 +17,7 @@
 - 2026-02-17 note: dual-feed rollout moved post-generation behavior to personal-first (`/my-feed`) with channel submission as a separate candidate lifecycle; this does not alter the YT2BP request/response envelope.
 - 2026-02-17 note: optional AI review/banner are now executed as separate post-generation steps in UI (`/api/analyze-blueprint` and `/api/generate-banner`) so core YT2BP latency is lower; this does not alter the YT2BP envelope.
 - 2026-02-18 note: subscription ingestion (`/api/source-subscriptions*`, `/api/ingestion/jobs/trigger`) and pending-card accept/skip (`/api/my-feed/items/:id/accept|skip`) are separate flows and do not alter this endpoint envelope.
+- 2026-02-18 note: subscription create path now uses auto-only behavior (incoming `mode` is compatibility-only and treated as `auto`); first subscribe sets checkpoint and inserts a `subscription_notice` feed card. This remains outside this endpoint envelope.
 
 ## Request
 ```json

@@ -6,7 +6,7 @@
   - Personal unfiltered feed (`My Feed`) as primary lane.
   - Channel feeds as shared lanes with gated promotion.
 - Current adapter baseline:
-  - YouTube adapter is production-ready for manual generation.
+  - YouTube adapter is production-ready for direct URL generation and subscription ingestion.
 - Non-goals in current MVP:
   - No broad multi-adapter rollout in the first cut.
   - No fully open standalone free-form posting model.
@@ -38,10 +38,11 @@
 
 ## 3) Core Lifecycle (`bleuV1`)
 1. Ingest source item (manual URL pull or subscription sync).
-2. `manual` subscription mode:
-   - create `my_feed_pending_accept` without blueprint.
-   - user `Accept` runs generation, then `my_feed_published`.
-3. `auto` subscription mode:
+2. Subscription create/reactivate:
+   - resolve channel id and set first-sync checkpoint only (`last_seen_published_at`, `last_seen_video_id`).
+   - no historical prefill on first subscribe in MVP.
+   - create one persistent notice card (`user_feed_items.state = subscription_notice`).
+3. Subscription sync after checkpoint:
    - new uploads generate immediately to `my_feed_published`.
 4. Optional user remix/insight.
 5. Channel candidate evaluation (all-gates-run default, aggregated decision).
@@ -84,6 +85,7 @@ Current production behavior note:
   - Channel publish is never unconditional; it is a gated second-stage action.
 - Compatibility invariants:
   - Existing public blueprint feed and channel routes remain functional while `My Feed` is introduced.
+  - Legacy pending-card endpoints (`/api/my-feed/items/:id/accept|skip`) remain available for compatibility/operator flows.
   - Gate runtime mode remains `CHANNEL_GATES_MODE=bypass` in production for this cycle.
 
 ## 6) Failure Modes And Recovery

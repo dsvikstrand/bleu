@@ -80,7 +80,7 @@ export async function listSourceSubscriptions() {
   return response.data;
 }
 
-export async function createSourceSubscription(input: { channelInput: string; mode: SubscriptionMode }) {
+export async function createSourceSubscription(input: { channelInput: string; mode?: SubscriptionMode }) {
   const response = await apiRequest<{
     subscription: SourceSubscription;
     sync: {
@@ -95,7 +95,7 @@ export async function createSourceSubscription(input: { channelInput: string; mo
     method: 'POST',
     body: JSON.stringify({
       channel_input: input.channelInput,
-      mode: input.mode,
+      mode: input.mode || 'auto',
     }),
   });
 

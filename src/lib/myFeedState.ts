@@ -1,4 +1,5 @@
 export type MyFeedItemState =
+  | 'subscription_notice'
   | 'my_feed_pending_accept'
   | 'my_feed_generating'
   | 'my_feed_published'
@@ -10,6 +11,8 @@ export type MyFeedItemState =
 
 export function getMyFeedStateLabel(state: MyFeedItemState) {
   switch (state) {
+    case 'subscription_notice':
+      return 'Subscription';
     case 'my_feed_pending_accept':
       return 'Pending';
     case 'my_feed_generating':

@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useMyFeed } from '@/hooks/useMyFeed';
@@ -20,12 +21,7 @@ import {
   acceptMyFeedPendingItem,
   ApiRequestError,
   createSourceSubscription,
-  deactivateSourceSubscription,
-  listSourceSubscriptions,
   skipMyFeedPendingItem,
-  syncSourceSubscription,
-  type SubscriptionMode,
-  updateSourceSubscription,
 } from '@/lib/subscriptionsApi';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { logMvpEvent } from '@/lib/logEvent';
@@ -40,16 +36,10 @@ export default function MyFeed() {
   const { data: items, isLoading } = useMyFeed();
   const [selectedChannels, setSelectedChannels] = useState<Record<string, string>>({});
 
+  const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false);
   const [newSubscriptionInput, setNewSubscriptionInput] = useState('');
-  const [newSubscriptionMode, setNewSubscriptionMode] = useState<SubscriptionMode>('manual');
 
   const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
-
-  const subscriptionsQuery = useQuery({
-    queryKey: ['source-subscriptions', user?.id],
-    enabled: !!user && subscriptionsEnabled,
-    queryFn: () => listSourceSubscriptions(),
-  });
 
   const defaultChannelForItem = (itemId: string, tags: string[]) => {
     const picked = selectedChannels[itemId];
@@ -244,13 +234,13 @@ export default function MyFeed() {
   const createSubscriptionMutation = useMutation({
     mutationFn: async () => {
       if (!newSubscriptionInput.trim()) throw new Error('Enter a YouTube channel URL, channel ID, or @handle.');
-      return createSourceSubscription({ channelInput: newSubscriptionInput.trim(), mode: newSubscriptionMode });
+      return createSourceSubscription({ channelInput: newSubscriptionInput.trim() });
     },
     onSuccess: () => {
       setNewSubscriptionInput('');
-      queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
+      setSubscriptionModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
-      toast({ title: 'Subscription saved', description: 'Your source subscription is now active.' });
+      toast({ title: 'Subscription saved', description: 'You are now subscribed. New uploads will appear in your feed.' });
     },
     onError: (error) => {
       const message = error instanceof ApiRequestError && error.errorCode === 'INVALID_CHANNEL'
@@ -259,43 +249,6 @@ export default function MyFeed() {
           ? error.message
           : 'Could not subscribe.';
       toast({ title: 'Subscribe failed', description: message, variant: 'destructive' });
-    },
-  });
-
-  const updateSubscriptionMutation = useMutation({
-    mutationFn: async (input: { id: string; mode?: SubscriptionMode; isActive?: boolean }) => updateSourceSubscription(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
-      toast({ title: 'Subscription updated' });
-    },
-    onError: (error) => {
-      toast({ title: 'Update failed', description: error instanceof Error ? error.message : 'Could not update subscription.', variant: 'destructive' });
-    },
-  });
-
-  const deactivateSubscriptionMutation = useMutation({
-    mutationFn: async (id: string) => deactivateSourceSubscription(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
-      toast({ title: 'Subscription deactivated' });
-    },
-    onError: (error) => {
-      toast({ title: 'Deactivate failed', description: error instanceof Error ? error.message : 'Could not deactivate subscription.', variant: 'destructive' });
-    },
-  });
-
-  const syncSubscriptionMutation = useMutation({
-    mutationFn: async (id: string) => syncSourceSubscription(id),
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
-      toast({
-        title: 'Sync complete',
-        description: `Processed ${result.processed} item(s), inserted ${result.inserted}, skipped ${result.skipped}.`,
-      });
-    },
-    onError: (error) => {
-      toast({ title: 'Sync failed', description: error instanceof Error ? error.message : 'Could not sync subscription.', variant: 'destructive' });
     },
   });
 
@@ -316,14 +269,69 @@ export default function MyFeed() {
       <AppHeader />
       <PageMain className="space-y-6">
         <PageSection>
-          <p className="text-sm font-semibold text-primary uppercase tracking-wide">My Feed</p>
-          <h1 className="text-2xl font-semibold mt-1">Your personal pulled-content lane</h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            Pulled content lands here first. You can submit selected items to channels after gates.
-          </p>
-          {pendingCount > 0 && <p className="text-xs text-amber-600">{pendingCount} item(s) need manual review.</p>}
-          {pendingAcceptCount > 0 && <p className="text-xs text-sky-600">{pendingAcceptCount} pending item(s) waiting for Accept.</p>}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-primary uppercase tracking-wide">My Feed</p>
+              <h1 className="text-2xl font-semibold mt-1">Your personal pulled-content lane</h1>
+              <p className="text-sm text-muted-foreground mt-2">
+                Pulled content lands here first. You can submit selected items to channels after gates.
+              </p>
+              {pendingCount > 0 && <p className="text-xs text-amber-600">{pendingCount} item(s) need manual review.</p>}
+              {pendingAcceptCount > 0 && <p className="text-xs text-sky-600">{pendingAcceptCount} pending item(s) waiting for Accept.</p>}
+            </div>
+
+            {user ? (
+              <Button
+                size="sm"
+                onClick={() => setSubscriptionModalOpen(true)}
+                disabled={!subscriptionsEnabled}
+              >
+                Add Subscription
+              </Button>
+            ) : null}
+          </div>
+
+          {user && !subscriptionsEnabled ? (
+            <p className="text-xs text-muted-foreground mt-2">
+              Subscription APIs require `VITE_AGENTIC_BACKEND_URL`. Configure backend URL to enable channel subscriptions.
+            </p>
+          ) : null}
         </PageSection>
+
+        <Dialog open={subscriptionModalOpen} onOpenChange={setSubscriptionModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add YouTube Subscription</DialogTitle>
+              <DialogDescription>
+                Subscribe once. We will only pull new uploads from this channel.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <Input
+                value={newSubscriptionInput}
+                onChange={(event) => setNewSubscriptionInput(event.target.value)}
+                placeholder="YouTube channel URL, channel ID, or @handle"
+              />
+
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setSubscriptionModalOpen(false)}
+                  disabled={createSubscriptionMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => createSubscriptionMutation.mutate()}
+                  disabled={createSubscriptionMutation.isPending || !subscriptionsEnabled}
+                >
+                  Subscribe
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {!user ? (
           <Card className="border-border/40">
@@ -334,107 +342,7 @@ export default function MyFeed() {
               </Button>
             </CardContent>
           </Card>
-        ) : (
-          <Card className="border-border/40">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">YouTube subscriptions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!subscriptionsEnabled ? (
-                <p className="text-sm text-muted-foreground">
-                  Subscription APIs require `VITE_AGENTIC_BACKEND_URL`. Configure backend URL to enable channel subscriptions.
-                </p>
-              ) : (
-                <>
-                  <div className="grid gap-2 md:grid-cols-[1fr,180px,auto]">
-                    <Input
-                      value={newSubscriptionInput}
-                      onChange={(event) => setNewSubscriptionInput(event.target.value)}
-                      placeholder="YouTube channel URL, channel ID, or @handle"
-                    />
-                    <Select value={newSubscriptionMode} onValueChange={(value: SubscriptionMode) => setNewSubscriptionMode(value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Mode" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="manual">Manual (pending cards)</SelectItem>
-                        <SelectItem value="auto">Auto (new uploads)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      onClick={() => createSubscriptionMutation.mutate()}
-                      disabled={createSubscriptionMutation.isPending}
-                    >
-                      Subscribe
-                    </Button>
-                  </div>
-
-                  <div className="space-y-2">
-                    {(subscriptionsQuery.data || []).length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No subscriptions yet.</p>
-                    ) : (
-                      (subscriptionsQuery.data || []).map((subscription) => (
-                        <div key={subscription.id} className="rounded-lg border border-border/60 p-3 space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">{subscription.source_channel_title || subscription.source_channel_id}</p>
-                              <p className="text-xs text-muted-foreground truncate">{subscription.source_channel_url || subscription.source_channel_id}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Badge variant={subscription.is_active ? 'secondary' : 'outline'}>
-                                {subscription.is_active ? 'Active' : 'Inactive'}
-                              </Badge>
-                              <Badge variant="outline">{subscription.mode}</Badge>
-                            </div>
-                          </div>
-
-                          {subscription.last_sync_error && (
-                            <p className="text-xs text-red-600">Last sync error: {subscription.last_sync_error}</p>
-                          )}
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Select
-                              value={subscription.mode}
-                              onValueChange={(value: SubscriptionMode) => updateSubscriptionMutation.mutate({ id: subscription.id, mode: value })}
-                            >
-                              <SelectTrigger className="h-8 w-[190px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="manual">Manual mode</SelectItem>
-                                <SelectItem value="auto">Auto mode</SelectItem>
-                              </SelectContent>
-                            </Select>
-
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => syncSubscriptionMutation.mutate(subscription.id)}
-                              disabled={syncSubscriptionMutation.isPending || !subscription.is_active}
-                            >
-                              Sync now
-                            </Button>
-
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => deactivateSubscriptionMutation.mutate(subscription.id)}
-                              disabled={deactivateSubscriptionMutation.isPending || !subscription.is_active}
-                            >
-                              Deactivate
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {isLoading ? (
+        ) : isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, index) => (
               <Skeleton key={index} className="h-36 rounded-xl" />
@@ -454,8 +362,13 @@ export default function MyFeed() {
             {(items || []).map((item) => {
               const blueprint = item.blueprint;
               const source = item.source;
-              const title = blueprint?.title || source?.title || 'Pending source import';
-              const subtitle = source?.sourceChannelTitle || source?.title || 'Imported source';
+              const isSubscriptionNotice = item.state === 'subscription_notice';
+              const title = isSubscriptionNotice
+                ? (source?.title || 'You are now subscribed')
+                : (blueprint?.title || source?.title || 'Pending source import');
+              const subtitle = isSubscriptionNotice
+                ? 'New uploads from this channel will appear automatically.'
+                : (source?.sourceChannelTitle || source?.title || 'Imported source');
               const tags = blueprint?.tags || [];
 
               const channelSlug = blueprint ? defaultChannelForItem(item.id, tags) : '';
@@ -474,7 +387,7 @@ export default function MyFeed() {
                       <Badge variant="secondary">{getMyFeedStateLabel(item.state as MyFeedItemState)}</Badge>
                     </div>
 
-                    {tags.length > 0 && (
+                    {!isSubscriptionNotice && tags.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {tags.slice(0, 4).map((tag) => (
                           <Badge key={tag} variant="outline">#{tag}</Badge>
@@ -482,11 +395,19 @@ export default function MyFeed() {
                       </div>
                     )}
 
-                    {item.lastDecisionCode && (
+                    {!isSubscriptionNotice && item.lastDecisionCode && (
                       <p className="text-xs text-muted-foreground">Reason: {item.lastDecisionCode}</p>
                     )}
 
-                    {!blueprint ? (
+                    {isSubscriptionNotice ? (
+                      <div className="flex justify-end">
+                        {source?.sourceUrl ? (
+                          <a href={source.sourceUrl} target="_blank" rel="noreferrer" className="text-xs underline text-muted-foreground">
+                            Open channel
+                          </a>
+                        ) : null}
+                      </div>
+                    ) : !blueprint ? (
                       <div className="flex flex-wrap gap-2">
                         <Button
                           size="sm"
@@ -532,7 +453,7 @@ export default function MyFeed() {
                                 blueprintId: blueprint.id,
                                 title: blueprint.title,
                                 llmReview: blueprint.llmReview,
-                                tags: tags,
+                                tags,
                                 stepCount,
                                 channelSlug,
                               })
@@ -553,7 +474,7 @@ export default function MyFeed() {
                                   blueprintId: blueprint.id,
                                   title: blueprint.title,
                                   llmReview: blueprint.llmReview,
-                                  tags: tags,
+                                  tags,
                                   stepCount,
                                   channelSlug,
                                 })
@@ -599,14 +520,16 @@ export default function MyFeed() {
                       </div>
                     )}
 
-                    <div className="flex justify-between items-center text-xs text-muted-foreground">
-                      <span>{item.candidate ? `Candidate: ${item.candidate.status}` : 'Not submitted yet'}</span>
-                      {blueprint ? (
-                        <Link to={`/blueprint/${blueprint.id}`} className="underline">Open blueprint</Link>
-                      ) : source?.sourceUrl ? (
-                        <a href={source.sourceUrl} target="_blank" rel="noreferrer" className="underline">Open source</a>
-                      ) : null}
-                    </div>
+                    {!isSubscriptionNotice && (
+                      <div className="flex justify-between items-center text-xs text-muted-foreground">
+                        <span>{item.candidate ? `Candidate: ${item.candidate.status}` : 'Not submitted yet'}</span>
+                        {blueprint ? (
+                          <Link to={`/blueprint/${blueprint.id}`} className="underline">Open blueprint</Link>
+                        ) : source?.sourceUrl ? (
+                          <a href={source.sourceUrl} target="_blank" rel="noreferrer" className="underline">Open source</a>
+                        ) : null}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );

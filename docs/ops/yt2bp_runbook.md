@@ -68,7 +68,6 @@ Required runtime variables:
 - `CHANNEL_GATES_MODE` (`bypass` | `shadow` | `enforce`)
 - `SUPABASE_SERVICE_ROLE_KEY` (required for cron ingestion trigger path)
 - `INGESTION_SERVICE_TOKEN` (shared secret for `/api/ingestion/jobs/trigger`)
-- `SUBSCRIPTIONS_MANUAL_BACKFILL_LIMIT` (default `5`)
 - `INGESTION_MAX_PER_SUBSCRIPTION` (default `5`)
 
 Safe defaults:
@@ -79,7 +78,6 @@ Safe defaults:
 - `YT2BP_AUTH_LIMIT_PER_MIN=20`
 - `YT2BP_IP_LIMIT_PER_HOUR=30`
 - `CHANNEL_GATES_MODE=bypass`
-- `SUBSCRIPTIONS_MANUAL_BACKFILL_LIMIT=5`
 - `INGESTION_MAX_PER_SUBSCRIPTION=5`
 
 ## Failure playbooks
@@ -182,15 +180,19 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/channel-candidates/<candidate_id>/
 ```
 
 ## Subscription + ingestion smoke
-Create a subscription (`manual` mode):
+Create a subscription (MVP auto-only behavior):
 ```bash
 curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
-  --data '{"channel_input":"https://www.youtube.com/@AliAbdaal","mode":"manual"}'
+  --data '{"channel_input":"https://www.youtube.com/@AliAbdaal"}'
 ```
+Expected behavior:
+- first subscribe sets checkpoint only (no old-video prefill).
+- one `subscription_notice` feed item is inserted for this user/channel.
+- future uploads are ingested automatically.
 
-User-triggered sync:
+User-triggered sync (operator/debug path):
 ```bash
 curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions/<subscription_id>/sync \
   -H "Authorization: Bearer $TOKEN" \
@@ -206,7 +208,7 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/ingestion/jobs/trigger \
   --data '{}'
 ```
 
-Pending card actions:
+Pending card actions (compatibility path for legacy pending items):
 ```bash
 curl -sS -X POST https://bapi.vdsai.cloud/api/my-feed/items/<user_feed_item_id>/accept \
   -H "Authorization: Bearer $TOKEN" \

@@ -99,10 +99,12 @@ Rules:
   - `POST /api/source-subscriptions/:id/sync` live for user-initiated sync.
   - `POST /api/ingestion/jobs/trigger` live for Oracle cron/service trigger.
   - pending-card My Feed actions live: `POST /api/my-feed/items/:id/accept|skip`.
-  - manual mode backfills latest 5 pending cards; auto mode skips initial backfill and ingests new uploads only.
+  - MVP UX is auto-only; create/reactivate sets checkpoint and skips initial old-video prefill.
+  - successful create/reactivate inserts one persistent `subscription_notice` feed card per user/channel.
+  - future uploads after checkpoint ingest directly into `my_feed_published`.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.
-2. Tune manual pending-card UX and copy based on early user behavior.
+2. Build dedicated `/subscriptions` management page (deferred from My Feed).
 3. Add richer ingestion observability dashboards from `ingestion_jobs` + `mvp_events`.
 4. Keep gate behavior in `bypass` until dedicated enforcement cycle approval.
