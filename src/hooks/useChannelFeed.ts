@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
-import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
+import { matchesChannelByTags, resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
 
 export type ChannelFeedTab = 'top' | 'recent';
 
@@ -56,8 +56,14 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
       const tagsByBlueprintId = new Map<string, string[]>();
       (tagRows || []).forEach((row) => {
         const list = tagsByBlueprintId.get(row.blueprint_id) || [];
-        if (row.tags && typeof row.tags === 'object' && 'slug' in row.tags) {
-          list.push((row.tags as { slug: string }).slug);
+        if (Array.isArray(row.tags)) {
+          row.tags.forEach((tag) => {
+            if (tag && typeof tag === 'object' && 'slug' in tag) {
+              list.push(String((tag as { slug: string }).slug));
+            }
+          });
+        } else if (row.tags && typeof row.tags === 'object' && 'slug' in row.tags) {
+          list.push(String((row.tags as { slug: string }).slug));
         }
         tagsByBlueprintId.set(row.blueprint_id, list);
       });
@@ -77,7 +83,7 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
         };
       });
 
-      return hydrated.filter((row) => row.primaryChannelSlug === channelSlug);
+      return hydrated.filter((row) => matchesChannelByTags(channelSlug, row.tags));
     },
     staleTime: 30_000,
   });

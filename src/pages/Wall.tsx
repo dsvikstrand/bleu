@@ -18,7 +18,7 @@ import type { Json } from '@/integrations/supabase/types';
 import { buildFeedSummary } from '@/lib/feedPreview';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
-import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
+import { matchesChannelByTags, resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { normalizeTag } from '@/lib/tagging';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { logOncePerSession, logP3Event } from '@/lib/telemetry';
@@ -192,8 +192,7 @@ export default function Wall() {
 
       if (isSpecificChannelScope && scopedChannel) {
         return hydrated.filter((post) => {
-          const primaryChannelSlug = resolvePrimaryChannelFromTags(post.tags.map((tag) => tag.slug));
-          return primaryChannelSlug === scopedChannel.slug;
+          return matchesChannelByTags(scopedChannel.slug, post.tags.map((tag) => tag.slug));
         });
       }
 

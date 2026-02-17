@@ -56,3 +56,22 @@ export function resolveChannelLabelForBlueprint(
 ): string {
   return `b/${resolvePrimaryChannelFromTags(tagSlugs, catalog)}`;
 }
+
+export function matchesChannelByTags(
+  channelSlug: string,
+  tagSlugs: string[],
+  catalog: ChannelCatalogEntry[] = CHANNELS_CATALOG,
+): boolean {
+  if (!channelSlug) return false;
+  if (!tagSlugs || tagSlugs.length === 0) return false;
+
+  const normalizedTags = [...new Set(tagSlugs.map((tag) => normalizeTagSlug(tag)).filter(Boolean))];
+  if (normalizedTags.length === 0) return false;
+
+  const channel = catalog.find((entry) => entry.slug === channelSlug);
+  if (channel && normalizedTags.includes(channel.tagSlug)) {
+    return true;
+  }
+
+  return resolvePrimaryChannelFromTags(normalizedTags, catalog) === channelSlug;
+}

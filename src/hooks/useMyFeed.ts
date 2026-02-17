@@ -69,8 +69,14 @@ export function useMyFeed() {
       const tagsByBlueprint = new Map<string, string[]>();
       (tagRows || []).forEach((row) => {
         const list = tagsByBlueprint.get(row.blueprint_id) || [];
-        if (row.tags && typeof row.tags === 'object' && 'slug' in row.tags) {
-          list.push((row.tags as { slug: string }).slug);
+        if (Array.isArray(row.tags)) {
+          row.tags.forEach((tag) => {
+            if (tag && typeof tag === 'object' && 'slug' in tag) {
+              list.push(String((tag as { slug: string }).slug));
+            }
+          });
+        } else if (row.tags && typeof row.tags === 'object' && 'slug' in row.tags) {
+          list.push(String((row.tags as { slug: string }).slug));
         }
         tagsByBlueprint.set(row.blueprint_id, list);
       });

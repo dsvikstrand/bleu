@@ -129,6 +129,8 @@ export default function MyFeed() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] });
+      queryClient.invalidateQueries({ queryKey: ['channel-feed-base'] });
+      queryClient.invalidateQueries({ queryKey: ['channel-feed-comments'] });
       toast({ title: 'Published', description: 'Item is now live in channel feed.' });
     },
     onError: (error) => {
