@@ -28,6 +28,7 @@ Execution mode:
 9. [have] Step 8 - Hardening cycle: docs realignment + CTA de-emphasis + traceability + gate-mode framework
 10. [have] Step 9 - Subscriptions and auto-ingestion cycle (auto new uploads + compatibility pending actions)
 11. [have] Step 10 - MVP subscription simplification (auto-only UX + no prefill + notice cards)
+12. [have] Step 11 - Subscriptions page foundation (add + read-only active/inactive)
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -205,6 +206,29 @@ Completion evidence (2026-02-18)
 - Added debug-only subscription simulation endpoint to test new-upload ingestion without waiting for real channel uploads.
 - Fixed debug endpoint auth boundary so service-token-only calls can pass middleware without user bearer auth.
 - Fixed YouTube handle resolver edge case by adding `browseId` fallback parsing (prevents false `INVALID_CHANNEL` on some handles).
+
+### Step 11 - Subscriptions page foundation
+Scope
+- add first-class `/subscriptions` page for subscription creation and visibility
+- keep subscription list read-only (active/inactive sections)
+- keep My Feed content-first by moving management surface out of My Feed
+
+Definition of done
+- `/subscriptions` route exists behind same auth + feature gate as `/my-feed`
+- page supports create subscription + read-only active/inactive listing
+- My Feed header exposes only compact `Manage subscriptions` entrypoint
+- no row-level actions (`sync`, `deactivate`, debug simulate`) in this step
+
+Evaluation
+- manual smoke: open `/subscriptions` while signed in
+- manual smoke: subscribe and verify row appears in Active list
+- manual smoke: My Feed shows compact management link and no large subscription modal
+- regression smoke: notice card still appears in My Feed after subscribe
+
+Completion evidence (2026-02-17)
+- Added `src/pages/Subscriptions.tsx` with add form + read-only active/inactive sections.
+- Added protected `/subscriptions` route in `src/App.tsx` gated by `config.features.myFeedV1`.
+- Replaced My Feed header modal action with compact `Manage subscriptions` link.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

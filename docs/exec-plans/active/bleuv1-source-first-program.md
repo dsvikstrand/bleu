@@ -104,9 +104,14 @@ Rules:
   - successful create/reactivate inserts one persistent `subscription_notice` feed card per user/channel.
   - future uploads after checkpoint ingest directly into `my_feed_published`.
   - UI hides legacy no-blueprint pending/skipped feed rows to keep My Feed migration-safe.
+- Subscriptions surface foundation (2026-02-17):
+  - `/subscriptions` route is live behind the same auth + feature gate as `/my-feed`.
+  - page supports add subscription and read-only Active/Inactive sections.
+  - My Feed now exposes a compact `Manage subscriptions` link (large subscription modal removed).
+  - row-level actions (`sync`, `deactivate`, debug simulate) are intentionally deferred.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.
-2. Build dedicated `/subscriptions` management page (deferred from My Feed).
+2. Add row-level management actions to `/subscriptions` (deactivate/reactivate and sync visibility) when UX priority is approved.
 3. Add richer ingestion observability dashboards from `ingestion_jobs` + `mvp_events`.
 4. Keep gate behavior in `bypass` until dedicated enforcement cycle approval.

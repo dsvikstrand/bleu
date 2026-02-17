@@ -6,10 +6,8 @@ import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useMyFeed } from '@/hooks/useMyFeed';
@@ -19,13 +17,10 @@ import { getMyFeedStateLabel, type MyFeedItemState } from '@/lib/myFeedState';
 import { publishCandidate, rejectCandidate, submitCandidateAndEvaluate } from '@/lib/myFeedApi';
 import {
   acceptMyFeedPendingItem,
-  ApiRequestError,
-  createSourceSubscription,
   skipMyFeedPendingItem,
 } from '@/lib/subscriptionsApi';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { logMvpEvent } from '@/lib/logEvent';
-import { config } from '@/config/runtime';
 
 const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 'active' && channel.isJoinEnabled);
 
@@ -35,11 +30,6 @@ export default function MyFeed() {
   const queryClient = useQueryClient();
   const { data: items, isLoading } = useMyFeed();
   const [selectedChannels, setSelectedChannels] = useState<Record<string, string>>({});
-
-  const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false);
-  const [newSubscriptionInput, setNewSubscriptionInput] = useState('');
-
-  const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
 
   const defaultChannelForItem = (itemId: string, tags: string[]) => {
     const picked = selectedChannels[itemId];
@@ -231,27 +221,6 @@ export default function MyFeed() {
     },
   });
 
-  const createSubscriptionMutation = useMutation({
-    mutationFn: async () => {
-      if (!newSubscriptionInput.trim()) throw new Error('Enter a YouTube channel URL, channel ID, or @handle.');
-      return createSourceSubscription({ channelInput: newSubscriptionInput.trim() });
-    },
-    onSuccess: () => {
-      setNewSubscriptionInput('');
-      setSubscriptionModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
-      toast({ title: 'Subscription saved', description: 'You are now subscribed. New uploads will appear in your feed.' });
-    },
-    onError: (error) => {
-      const message = error instanceof ApiRequestError && error.errorCode === 'INVALID_CHANNEL'
-        ? 'Could not resolve that YouTube channel. Try a valid channel URL or @handle.'
-        : error instanceof Error
-          ? error.message
-          : 'Could not subscribe.';
-      toast({ title: 'Subscribe failed', description: message, variant: 'destructive' });
-    },
-  });
-
   const hasItems = (items || []).length > 0;
 
   const pendingCount = useMemo(
@@ -281,57 +250,12 @@ export default function MyFeed() {
             </div>
 
             {user ? (
-              <Button
-                size="sm"
-                onClick={() => setSubscriptionModalOpen(true)}
-                disabled={!subscriptionsEnabled}
-              >
-                Add Subscription
+              <Button asChild size="sm" variant="outline" className="h-8 px-2">
+                <Link to="/subscriptions">Manage subscriptions</Link>
               </Button>
             ) : null}
           </div>
-
-          {user && !subscriptionsEnabled ? (
-            <p className="text-xs text-muted-foreground mt-2">
-              Subscription APIs require `VITE_AGENTIC_BACKEND_URL`. Configure backend URL to enable channel subscriptions.
-            </p>
-          ) : null}
         </PageSection>
-
-        <Dialog open={subscriptionModalOpen} onOpenChange={setSubscriptionModalOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add YouTube Subscription</DialogTitle>
-              <DialogDescription>
-                Subscribe once. We will only pull new uploads from this channel.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-3">
-              <Input
-                value={newSubscriptionInput}
-                onChange={(event) => setNewSubscriptionInput(event.target.value)}
-                placeholder="YouTube channel URL, channel ID, or @handle"
-              />
-
-              <div className="flex items-center justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setSubscriptionModalOpen(false)}
-                  disabled={createSubscriptionMutation.isPending}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => createSubscriptionMutation.mutate()}
-                  disabled={createSubscriptionMutation.isPending || !subscriptionsEnabled}
-                >
-                  Subscribe
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
 
         {!user ? (
           <Card className="border-border/40">

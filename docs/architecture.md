@@ -17,6 +17,7 @@
   - React + Vite app (`src/pages/*`).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
+  - Subscription management surface in `src/pages/Subscriptions.tsx` (Step 1: add + read-only active/inactive sections).
 - Backend:
   - Express server in `server/index.ts`.
   - `/api/youtube-to-blueprint` generation pipeline.
@@ -41,6 +42,7 @@
 ## 3) Core Lifecycle (`bleuV1`)
 1. Ingest source item (manual URL pull or subscription sync).
 2. Subscription create/reactivate:
+   - user opens `/subscriptions` and submits channel URL/channel ID/@handle.
    - resolve channel id and set first-sync checkpoint only (`last_seen_published_at`, `last_seen_video_id`).
    - no historical prefill on first subscribe in MVP.
    - create one persistent notice card (`user_feed_items.state = subscription_notice`).

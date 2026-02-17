@@ -69,7 +69,7 @@ m7) Planned mutable interfaces use explicit auth scope + idempotency mode and un
 m8) Runtime default `CHANNEL_GATES_MODE=bypass`; non-prod may run `shadow` or `enforce`.
 
 ## Primary User Flows (`bleuV1`)
-f1) User follows YouTube channels via Add Subscription modal (channel URL/channel ID/@handle).
+f1) User follows YouTube channels from `/subscriptions` (channel URL/channel ID/@handle).
 f2) On subscribe, user gets one subscription notice card and future uploads ingest automatically into `My Feed`.
 f3) User scans, remixes, and adds insights.
 f4) Eligible items are promoted to channel feeds after gates.
@@ -84,7 +84,8 @@ r5) [have] Channel page: `/b/:channelSlug`
 r6) [have] YouTube adapter page (manual v0): `/youtube`
 r7) [have] Blueprint detail: `/blueprint/:blueprintId`
 r8) [have] My Feed first-class route: `/my-feed`
-r9) [have] Compatibility redirects: `/tags` -> `/channels`, `/blueprints` -> `/wall`
+r9) [have] Subscriptions route: `/subscriptions` (URL-accessible in Step 1; nav wiring deferred)
+r10) [have] Compatibility redirects: `/tags` -> `/channels`, `/blueprints` -> `/wall`
 
 ## Scope Boundaries (MVP)
 s1) In scope
@@ -95,7 +96,7 @@ s1) In scope
 
 s2) Out of scope
 - Multi-adapter rollout in same MVP cut.
-- Dedicated `/subscriptions` management page (deferred; compatibility endpoints stay available).
+- Subscription row actions in UI (`sync`, `deactivate`, debug simulation) remain deferred.
 - Fully open free-form blog/social posting model.
 - Full moderation platform for user-generated channels.
 

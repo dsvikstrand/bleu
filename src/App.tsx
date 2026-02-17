@@ -14,6 +14,7 @@ import Channels from "./pages/Channels";
 import ChannelPage from "./pages/ChannelPage";
 import PostDetail from "./pages/PostDetail";
 import MyFeed from "./pages/MyFeed";
+import Subscriptions from "./pages/Subscriptions";
 import Inventory from "./pages/Inventory";
 import InventoryCreate from "./pages/InventoryCreate";
 import InventoryDetail from "./pages/InventoryDetail";
@@ -44,6 +45,9 @@ const App = () => (
             <Route path="/b/:channelSlug" element={<ChannelPage />} />
             {config.features.myFeedV1 && (
               <Route path="/my-feed" element={<RequireAuth><MyFeed /></RequireAuth>} />
+            )}
+            {config.features.myFeedV1 && (
+              <Route path="/subscriptions" element={<RequireAuth><Subscriptions /></RequireAuth>} />
             )}
             <Route path="/wall" element={<Wall />} />
             <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
