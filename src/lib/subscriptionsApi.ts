@@ -118,10 +118,6 @@ export async function deactivateSourceSubscription(id: string) {
   return response.data;
 }
 
-export async function reactivateSourceSubscription(id: string) {
-  return updateSourceSubscription({ id, isActive: true });
-}
-
 export async function syncSourceSubscription(id: string) {
   const response = await apiRequest<{
     job_id: string;

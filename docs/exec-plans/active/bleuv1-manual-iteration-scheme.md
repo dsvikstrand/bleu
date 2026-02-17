@@ -29,7 +29,7 @@ Execution mode:
 10. [have] Step 9 - Subscriptions and auto-ingestion cycle (auto new uploads + compatibility pending actions)
 11. [have] Step 10 - MVP subscription simplification (auto-only UX + no prefill + notice cards)
 12. [have] Step 11 - Subscriptions page foundation (add + read-only active/inactive)
-13. [have] Step 12 - Subscriptions management actions (sync/deactivate/reactivate)
+13. [have] Step 12 - Subscriptions management simplification (subscribe/unsubscribe only)
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -233,28 +233,25 @@ Completion evidence (2026-02-17)
 
 ### Step 12 - Subscriptions management actions
 Scope
-- add row-level actions on `/subscriptions` without changing backend contracts
+- simplify `/subscriptions` to one management action (`Unsubscribe`) without changing backend contracts
 - keep `/subscriptions` URL-access only (no nav item in this step)
-- require explicit confirmation for deactivate
+- keep page focused on active subscriptions only
 
 Definition of done
-- active rows support `Sync now` and `Deactivate`
-- inactive rows support `Reactivate`
-- deactivate action uses explicit confirmation dialog
+- active rows support `Unsubscribe`
+- inactive rows are not displayed in UI list
 - row actions are row-local pending-safe and do not block create flow
 - action success invalidates subscriptions + My Feed queries
 
 Evaluation
-- manual smoke: deactivate moves row to inactive
-- manual smoke: reactivate moves row to active
-- manual smoke: sync shows count summary toast (`inserted/skipped/processed`)
+- manual smoke: unsubscribe removes row from visible list
+- manual smoke: re-subscribing same channel restores active row without duplication
 - regression smoke: `/my-feed` content-first behavior unchanged
 
 Completion evidence (2026-02-17)
-- Updated `src/pages/Subscriptions.tsx` with `Sync now`, `Deactivate`, `Reactivate` controls.
-- Added `AlertDialog` confirmation before deactivation.
-- Added deterministic error messaging for `NOT_FOUND`, `INACTIVE_SUBSCRIPTION`, `WRITE_FAILED`, and `SYNC_FAILED`.
-- Added `reactivateSourceSubscription` helper in `src/lib/subscriptionsApi.ts`.
+- Updated `src/pages/Subscriptions.tsx` to show active subscriptions only with `Unsubscribe` as the sole row action.
+- Removed sync/reactivate controls and inactive-section UI from `/subscriptions`.
+- Kept backend contracts unchanged (`DELETE` remains soft deactivate; re-subscribe reactivates existing rows).
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

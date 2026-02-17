@@ -11,7 +11,7 @@ a4) [have] Auto-ingestion from followed YouTube channels is available with auto-
 a5) [have] Channel publish is an explicit second-stage lifecycle from personal feed candidates.
 a6) [have] Channel gate runtime is currently bypass-first (`EVAL_BYPASSED`) while gate-mode framework hardening is completed.
 a7) [have] Legacy pending/skipped feed rows without blueprints are hidden in `My Feed` UI to reduce migration noise.
-a8) [have] `/subscriptions` supports user management actions (`Sync now`, `Deactivate`, `Reactivate`) with explicit deactivate confirmation.
+a8) [have] `/subscriptions` is simplified for MVP to two visible actions: add `Subscribe` and per-row `Unsubscribe`.
 
 ## Core Model
 b1) `Source Item`
@@ -71,7 +71,7 @@ m8) Runtime default `CHANNEL_GATES_MODE=bypass`; non-prod may run `shadow` or `e
 
 ## Primary User Flows (`bleuV1`)
 f1) User follows YouTube channels from `/subscriptions` (channel URL/channel ID/@handle).
-f2) User can sync, deactivate, and reactivate subscriptions from `/subscriptions`.
+f2) User can unsubscribe from active channels directly on `/subscriptions` (unsubscribed rows disappear from the page list).
 f3) On subscribe/reactivate, user gets one subscription notice card and future uploads ingest automatically into `My Feed`.
 f4) User scans, remixes, and adds insights.
 f5) Eligible items are promoted to channel feeds after gates.
@@ -98,6 +98,7 @@ s1) In scope
 
 s2) Out of scope
 - Multi-adapter rollout in same MVP cut.
+- Sync/reactivate user controls in `/subscriptions` are deferred (future “sync specific videos” flow).
 - Debug simulation UI exposure remains deferred (operator-only endpoint stays hidden from user UI).
 - Fully open free-form blog/social posting model.
 - Full moderation platform for user-generated channels.
