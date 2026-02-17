@@ -8,7 +8,8 @@ a1) [have] YouTube to Blueprint generation is live (`/youtube` + `/api/youtube-t
 a2) [have] Public feed/channel/community primitives are live (`/wall`, `/channels`, `/b/:channelSlug`, likes/comments).
 a3) [have] `My Feed` personal unfiltered lane is available as `/my-feed` (feature-flagged rollout).
 a4) [todo] Auto-ingestion from followed source channels (YouTube first).
-a5) [todo] Channel publish as explicit second-stage lifecycle from personal feed candidates.
+a5) [have] Channel publish is an explicit second-stage lifecycle from personal feed candidates.
+a6) [have] Channel gate runtime is currently bypass-first (`EVAL_BYPASSED`) while gate-mode framework hardening is completed.
 
 ## Core Model
 b1) `Source Item`
@@ -31,7 +32,7 @@ b4) Feed surfaces
 c1) Pull/ingest -> generate blueprint -> publish to `My Feed`.
 c2) Optional user remix/insight.
 c3) Candidate to channel publish.
-c4) Channel gates run (`channel_fit`, `quality`, `safety`, `pii`).
+c4) Channel gate contract remains (`channel_fit`, `quality`, `safety`, `pii`) with production default mode currently `bypass`.
 c5) Result:
 - pass -> publish to channel feed
 - fail -> remain in `My Feed` (personal-only)
@@ -53,6 +54,7 @@ m4) User contribution default: insights/remixes attached to imported blueprints 
 m5) Low-confidence channel candidates default action: blocked from channel, retained in My Feed.
 m6) Evaluator default mode: all-gates-run with aggregated decision evidence.
 m7) Planned mutable interfaces use explicit auth scope + idempotency mode and unified response envelope.
+m8) Runtime default `CHANNEL_GATES_MODE=bypass`; non-prod may run `shadow` or `enforce`.
 
 ## Primary User Flows (`bleuV1`)
 f1) User connects/follows YouTube sources (manual first, auto-ingestion later).
@@ -87,8 +89,14 @@ s2) Out of scope
 ## Data Surfaces (Current + Direction)
 d1) [have] `blueprints`, `blueprint_tags`, `blueprint_likes`, `blueprint_comments`.
 d2) [have] `tag_follows`, `tags`, `profiles`, `mvp_events`.
-d3) [todo] Source ingestion tables (canonical source items, user-source subscriptions, per-user feed items).
-d4) [todo] Channel gate decision logs for explainability and metrics.
+d3) [have] Source ingestion + feed tables (`source_items`, `user_source_subscriptions`, `user_feed_items`).
+d4) [have] Channel candidate + decision logs (`channel_candidates`, `channel_gate_decisions`).
+d5) [todo] Scheduled auto-ingestion loop from source subscriptions.
+
+## Next Milestone (Hardening)
+n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.
+n2) Add `shadow` mode diagnostics without changing publish eligibility.
+n3) Reserve `enforce` mode for non-prod verification until dedicated rollout approval.
 
 ## Key References
 k1) Architecture: `docs/architecture.md`

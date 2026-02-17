@@ -27,6 +27,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 3. Channel promotion default mode is selected/manual approve.
 4. User value-add is insight/remix on imported blueprints; no standalone free-form post model in MVP core.
 5. Low-confidence channel candidates are blocked from channel and retained in My Feed.
+6. Current production gate runtime mode is `CHANNEL_GATES_MODE=bypass` until enforcement rollout is explicitly approved.
 
 ## Current Workstreams
 ### W1 - My Feed As First-Class Surface
@@ -35,11 +36,12 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 
 ### W2 - Channel Candidate Gating
 - Keep promotion as explicit second step from My Feed.
-- Preserve quality/safety/channel-fit constraints.
+- Preserve quality/safety/channel-fit constraints while production mode remains bypass-first.
 
 ### W3 - YouTube Pull And Caching
 - Keep YouTube-first ingestion flow stable.
 - Reuse generated artifacts for duplicate pulls when canonical source id matches.
+- Keep optional review/banner enhancement as separate post-generation steps to reduce core latency bottlenecks.
 
 ### W4 - Community Value Layer
 - Keep insights/remixes tied to imported blueprints.
@@ -63,6 +65,8 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - `codex exec` orchestration scripts and role runner wrappers.
 - CI workflow implementation for evaluator/integrator automation.
 - Automated checkpoint enforcement.
+- Auto-ingestion scheduler and subscription polling.
+- Production gate enforcement (`CHANNEL_GATES_MODE=enforce`).
 
 ## Reference Material (Paused Track)
 - `docs/agentic/README.md`

@@ -22,6 +22,7 @@
   - `/api/youtube-to-blueprint` generation pipeline.
   - Adapter abstraction in `server/adapters/*` (`BaseAdapter`, `YouTubeAdapter`, registry).
   - Candidate gate pipeline in `server/gates/*` (`Gate` contract + ordered all-gates-run execution).
+  - Gate runtime mode switch: `CHANNEL_GATES_MODE = bypass | shadow | enforce` (default `bypass`).
 - Data:
   - Supabase is system of record for blueprints, tags, follows, likes/comments, telemetry.
   - `bleuV1` extension: source-item canonical tables + user feed item tables.
@@ -41,6 +42,9 @@
    - warn in selected mode (`channel_fit`/`quality`) -> `candidate_pending_manual_review`
    - fail/block -> remain personal-only
 
+Current production behavior note:
+- Gate contract exists, but evaluation outcome is currently bypassed in production mode (`EVAL_BYPASSED`) until hardening rollout completes.
+
 ## 4) Contracts And Policy Surfaces
 - API contract (adapter v0):
   - `docs/product-specs/yt2bp_v0_contract.md`
@@ -54,6 +58,10 @@
   - `pii_leakage_v0`
 - `bleuV1` gate expansion:
   - channel-fit gate for channel promotion decisions
+- runtime gate mode:
+  - `bypass`: force publish-eligible status, reason `EVAL_BYPASSED`
+  - `shadow`: compute and persist real decisions, keep publish-eligible status
+  - `enforce`: apply real pass/warn/block routing
 - executable interface hardening:
   - unified API envelope for planned endpoints
   - user/service auth split for mutable operations
@@ -75,6 +83,7 @@
     `GENERATION_FAIL`, `SAFETY_BLOCKED`, `PII_BLOCKED`.
 - `bleuV1` distribution classes:
   - `CHANNEL_FIT_BLOCKED`, `QUALITY_BLOCKED`, `DUPLICATE_INGEST`.
+  - `EVAL_BYPASSED` (expected in bypass mode).
 - Recovery authority:
   - Logs-first triage in `docs/ops/yt2bp_runbook.md`.
   - Feature/env toggles for fast rollback.

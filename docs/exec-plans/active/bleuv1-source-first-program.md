@@ -40,6 +40,7 @@ Rules:
 - `My Feed` is allowed to be broader/noisier.
 - Channel feeds must pass channel-fit + quality + safety + PII gates.
 - Gate failures stay personal-only.
+- Current runtime default is `CHANNEL_GATES_MODE=bypass`; enforced routing is deferred.
 
 ## 6) Execution Defaults (Lock)
 1. Channel promotion default mode: `selected` (manual approve path).
@@ -86,6 +87,15 @@ Rules:
   - evaluate path: `POST /api/channel-candidates/:id/evaluate`
   - outcomes route to `candidate_submitted | candidate_pending_manual_review | channel_rejected`.
   - terminal moderation actions exist: publish/reject endpoints.
+- Gate runtime state:
+  - production default is bypass (`EVAL_BYPASSED`) while hardening completes.
+  - gate-mode framework target: `bypass | shadow | enforce` with `bypass` as default.
 - Data foundation is additive and adapter-ready:
   - new tables: `source_items`, `user_source_subscriptions`, `user_feed_items`, `channel_candidates`, `channel_gate_decisions`.
   - adapter abstraction introduced (`BaseAdapter`, `YouTubeAdapter`, registry), with YouTube as MVP implementation.
+
+## 12) Next Milestone (Hardening-First)
+1. Docs/runtime contract realignment (no drift on gate status).
+2. Primary CTA cleanup to avoid library-first onboarding.
+3. Traceability hardening (`run_id`, `source_item_id`, `user_feed_item_id`, `candidate_id`).
+4. Gate-mode framework shipped with production default still `bypass`.

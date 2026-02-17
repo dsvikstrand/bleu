@@ -281,7 +281,10 @@ export default function Explore() {
 
             {groupedResults.inventories.length > 0 && (
               <section>
-                <h2 className="text-sm font-medium text-muted-foreground mb-3">Libraries</h2>
+                <h2 className="text-sm font-medium text-muted-foreground mb-1">Legacy Libraries</h2>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Compatibility surface. Primary MVP journey is YouTube pull to My Feed, then channel submit.
+                </p>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {groupedResults.inventories.map((r) => (
                     <ExploreResultCard

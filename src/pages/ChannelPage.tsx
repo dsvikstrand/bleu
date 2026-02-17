@@ -18,7 +18,7 @@ import { formatRelativeShort } from '@/lib/timeFormat';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { bucketJoinError, logP3Event } from '@/lib/telemetry';
 import { CreateBlueprintFlowModal } from '@/components/create/CreateBlueprintFlowModal';
-import { isPostableChannelSlug } from '@/lib/channelPostContext';
+import { buildUrlWithChannel, isPostableChannelSlug } from '@/lib/channelPostContext';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
 export default function ChannelPage() {
@@ -282,8 +282,18 @@ export default function ChannelPage() {
                   Failed to load channel feed. Please refresh and try again.
                 </div>
               ) : posts.length === 0 ? (
-                <div className="border border-border/40 px-3 py-3 text-sm text-muted-foreground">
-                  No blueprints found for this channel yet.
+                <div className="border border-border/40 px-3 py-3 text-sm text-muted-foreground space-y-3">
+                  <p>No blueprints found for this channel yet.</p>
+                  <div className="flex gap-2">
+                    <Button asChild size="sm">
+                      <Link to={buildUrlWithChannel('/youtube', channel.slug, { intent: 'post' })}>
+                        Pull from YouTube
+                      </Link>
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/channels">Explore Channels</Link>
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="divide-y divide-border/40 border-y border-border/40">

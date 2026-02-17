@@ -148,6 +148,7 @@ export default function InventoryDetail() {
         ) : inventory ? (
           <>
             <PageSection className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary">Legacy Library Surface</p>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h1 className="text-2xl font-semibold leading-tight">{inventory.title}</h1>
@@ -272,10 +273,13 @@ export default function InventoryDetail() {
                         : `/inventory/${inventory.id}/build${location.search || ''}`
                     }
                   >
-                    <Button>Create Blueprint</Button>
+                    <Button variant="outline">Use legacy builder</Button>
                   </Link>
                   <Link to={postChannel ? buildUrlWithChannel('/inventory', postChannel.slug, { intent: 'post' }) : '/inventory'}>
                     <Button variant="outline">Back to Library</Button>
+                  </Link>
+                  <Link to={postChannel ? buildUrlWithChannel('/youtube', postChannel.slug, { intent: 'post' }) : '/youtube'}>
+                    <Button>Primary: YouTube path</Button>
                   </Link>
                 </div>
             </section>

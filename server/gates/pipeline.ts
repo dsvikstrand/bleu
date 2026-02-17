@@ -1,9 +1,9 @@
-import type { CandidateContext, CandidateGateDecision, Gate } from './types';
+import type { CandidateContext, CandidateEvaluationResult, CandidateGateDecision, Gate } from './types';
 
 export class GatePipeline {
   constructor(private readonly gates: Gate[]) {}
 
-  evaluate(context: CandidateContext) {
+  evaluate(context: CandidateContext): Omit<CandidateEvaluationResult, 'mode'> {
     const decisions: CandidateGateDecision[] = this.gates.map((gate) => gate.evaluate(context));
 
     const hasBlock = decisions.some((decision) => decision.outcome === 'block');

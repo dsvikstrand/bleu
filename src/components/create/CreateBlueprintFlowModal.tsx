@@ -190,12 +190,12 @@ export function CreateBlueprintFlowModal({ open, onOpenChange, presetChannelSlug
           <div className="grid gap-2 sm:grid-cols-2">
             <Card className="p-4 flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <Layers className="h-4 w-4 text-muted-foreground" />
-                <div className="text-sm font-semibold">Library</div>
+                <Youtube className="h-4 w-4 text-muted-foreground" />
+                <div className="text-sm font-semibold">YouTube</div>
               </div>
-              <div className="text-xs text-muted-foreground">Build from scratch or use a library.</div>
+              <div className="text-xs text-muted-foreground">Primary MVP path: generate from a YouTube video.</div>
               <Button
-                onClick={() => goToSource('library')}
+                onClick={() => goToSource('youtube')}
                 className="mt-2"
                 disabled={!selectedChannelSlug}
               >
@@ -205,13 +205,14 @@ export function CreateBlueprintFlowModal({ open, onOpenChange, presetChannelSlug
 
             <Card className="p-4 flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <Youtube className="h-4 w-4 text-muted-foreground" />
-                <div className="text-sm font-semibold">YouTube</div>
+                <Layers className="h-4 w-4 text-muted-foreground" />
+                <div className="text-sm font-semibold">Legacy library path</div>
               </div>
-              <div className="text-xs text-muted-foreground">Generate a blueprint from a YouTube video.</div>
+              <div className="text-xs text-muted-foreground">Compatibility-only flow for existing library surfaces.</div>
               <Button
-                onClick={() => goToSource('youtube')}
+                onClick={() => goToSource('library')}
                 className="mt-2"
+                variant="outline"
                 disabled={!selectedChannelSlug}
               >
                 Continue

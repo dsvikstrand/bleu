@@ -634,8 +634,8 @@ export default function Wall() {
                     
                     {!isForYouScope && (
                       <div className="flex gap-2">
-                        <Link to="/inventory">
-                          <Button>Create Blueprint</Button>
+                        <Link to="/youtube">
+                          <Button>Pull from YouTube</Button>
                         </Link>
                         <Link to="/channels">
                           <Button variant="outline">Explore Channels</Button>

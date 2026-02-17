@@ -1,18 +1,64 @@
-import type { CandidateContext } from './types';
+import { ChannelFitGate, PiiGate, QualityGate, SafetyGate } from './builtins';
+import { GatePipeline } from './pipeline';
+import type { CandidateContext, CandidateEvaluationResult, GateMode } from './types';
 
-export function evaluateCandidateForChannel(context: CandidateContext) {
-  void context;
+const pipeline = new GatePipeline([
+  new ChannelFitGate(),
+  new QualityGate(),
+  new SafetyGate(),
+  new PiiGate(),
+]);
+
+function getGateMode(): GateMode {
+  const raw = String(process.env.CHANNEL_GATES_MODE || 'bypass').trim().toLowerCase();
+  if (raw === 'shadow') return 'shadow';
+  if (raw === 'enforce') return 'enforce';
+  return 'bypass';
+}
+
+function buildBypassResult(): CandidateEvaluationResult {
   const methodVersion = 'gate-bypass-v1';
   return {
     decisions: [
-      { gate_id: 'channel_fit' as const, outcome: 'pass' as const, reason_code: 'EVAL_BYPASSED', score: 1, method_version: methodVersion },
-      { gate_id: 'quality' as const, outcome: 'pass' as const, reason_code: 'EVAL_BYPASSED', score: 1, method_version: methodVersion },
-      { gate_id: 'safety' as const, outcome: 'pass' as const, reason_code: 'EVAL_BYPASSED', score: 1, method_version: methodVersion },
-      { gate_id: 'pii' as const, outcome: 'pass' as const, reason_code: 'EVAL_BYPASSED', score: 1, method_version: methodVersion },
+      { gate_id: 'channel_fit', outcome: 'pass', reason_code: 'EVAL_BYPASSED', score: 1, method_version: methodVersion },
+      { gate_id: 'quality', outcome: 'pass', reason_code: 'EVAL_BYPASSED', score: 1, method_version: methodVersion },
+      { gate_id: 'safety', outcome: 'pass', reason_code: 'EVAL_BYPASSED', score: 1, method_version: methodVersion },
+      { gate_id: 'pii', outcome: 'pass', reason_code: 'EVAL_BYPASSED', score: 1, method_version: methodVersion },
     ],
-    aggregate: 'pass' as const,
-    candidateStatus: 'passed' as const,
-    feedState: 'candidate_submitted' as const,
+    aggregate: 'pass',
+    candidateStatus: 'passed',
+    feedState: 'candidate_submitted',
     reasonCode: 'EVAL_BYPASSED',
+    mode: 'bypass',
+    diagnosticAggregate: 'pass',
+    diagnosticReasonCode: 'EVAL_BYPASSED',
+  };
+}
+
+export function evaluateCandidateForChannel(context: CandidateContext): CandidateEvaluationResult {
+  const mode = getGateMode();
+  if (mode === 'bypass') {
+    return buildBypassResult();
+  }
+
+  const evaluated = pipeline.evaluate(context);
+  if (mode === 'enforce') {
+    return {
+      ...evaluated,
+      mode,
+      diagnosticAggregate: evaluated.aggregate,
+      diagnosticReasonCode: evaluated.reasonCode,
+    };
+  }
+
+  return {
+    decisions: evaluated.decisions,
+    aggregate: 'pass',
+    candidateStatus: 'passed',
+    feedState: 'candidate_submitted',
+    reasonCode: evaluated.aggregate === 'pass' ? 'ALL_GATES_PASS' : `SHADOW_${evaluated.reasonCode}`,
+    mode,
+    diagnosticAggregate: evaluated.aggregate,
+    diagnosticReasonCode: evaluated.reasonCode,
   };
 }

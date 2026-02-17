@@ -1005,12 +1005,16 @@ app.post('/api/channel-candidates/:id/evaluate', async (req, res) => {
     aggregate: evaluation.aggregate,
     reason_code: evaluation.reasonCode,
     execution_mode: 'all_gates_run',
+    gate_mode: evaluation.mode,
+    diagnostic_aggregate: evaluation.diagnosticAggregate || null,
+    diagnostic_reason_code: evaluation.diagnosticReasonCode || null,
   }));
   if (evaluation.candidateStatus === 'pending_manual_review') {
     console.log('[candidate_manual_review_pending]', JSON.stringify({
       candidate_id: candidate.id,
       channel_slug: candidate.channel_slug,
       reason_code: evaluation.reasonCode,
+      gate_mode: evaluation.mode,
     }));
   }
 
@@ -1026,6 +1030,9 @@ app.post('/api/channel-candidates/:id/evaluate', async (req, res) => {
     },
     meta: {
       execution_mode: 'all_gates_run',
+      gate_mode: evaluation.mode,
+      diagnostic_aggregate: evaluation.diagnosticAggregate || null,
+      diagnostic_reason_code: evaluation.diagnosticReasonCode || null,
     },
   });
 });
@@ -1084,6 +1091,14 @@ app.post('/api/channel-candidates/:id/publish', async (req, res) => {
   await db.from('channel_candidates').update({ status: 'published' }).eq('id', candidate.id);
   await db.from('user_feed_items').update({ state: 'channel_published', last_decision_code: 'ALL_GATES_PASS' }).eq('id', candidate.user_feed_item_id);
 
+  console.log('[candidate_published]', JSON.stringify({
+    candidate_id: candidate.id,
+    user_feed_item_id: candidate.user_feed_item_id,
+    blueprint_id: feedItem.blueprint_id,
+    channel_slug: candidate.channel_slug,
+    reason_code: 'ALL_GATES_PASS',
+  }));
+
   return res.json({
     ok: true,
     error_code: null,
@@ -1110,13 +1125,27 @@ app.post('/api/channel-candidates/:id/reject', async (req, res) => {
 
   const { data: candidate, error: candidateError } = await db
     .from('channel_candidates')
-    .select('id, user_feed_item_id')
+    .select('id, user_feed_item_id, channel_slug')
     .eq('id', candidateId)
     .maybeSingle();
   if (candidateError || !candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: candidateError?.message || 'Candidate not found', data: null });
 
+  const { data: feedItem } = await db
+    .from('user_feed_items')
+    .select('blueprint_id')
+    .eq('id', candidate.user_feed_item_id)
+    .maybeSingle();
+
   await db.from('channel_candidates').update({ status: 'rejected' }).eq('id', candidate.id);
   await db.from('user_feed_items').update({ state: 'channel_rejected', last_decision_code: reasonCode }).eq('id', candidate.user_feed_item_id);
+
+  console.log('[candidate_rejected]', JSON.stringify({
+    candidate_id: candidate.id,
+    user_feed_item_id: candidate.user_feed_item_id,
+    blueprint_id: feedItem?.blueprint_id || null,
+    channel_slug: candidate.channel_slug,
+    reason_code: reasonCode,
+  }));
 
   return res.json({
     ok: true,

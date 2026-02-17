@@ -21,6 +21,8 @@ a17) [have] 2026-02-13 UI note: Channel-scoped `+ Create` flow gates public publ
 a18) [have] 2026-02-13 UI note: App-wide wall-to-wall layout migration (Run 1) updates the YouTube page framing to a minimal document-like layout (no ambient blobs/gradients, tighter gutters); frontend-only and does not change YT2BP API/runtime contract.
 a19) [have] 2026-02-17 flow update: generated YouTube drafts are saved to `My Feed` first (`my_feed_published`), then optionally promoted via channel candidate flow.
 a20) [have] 2026-02-17 backend update: channel-candidate lifecycle endpoints and gate decision persistence are available for second-step channel publication.
+a21) [have] 2026-02-17 UX update: optional AI review and banner run as separate post-generation steps (core draft completes first).
+a22) [have] 2026-02-17 gating note: production channel-gate runtime is currently bypass-first (`EVAL_BYPASSED`) pending enforcement rollout.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract
@@ -143,6 +145,7 @@ d3) [have] No source customization and no edit-mode branch in v1.
 d4) [have] Same-page preview is implemented.
 d5) [have] Logged-out users can preview and are prompted to log in to publish.
 d6) [have] Channel posting is now a second-step candidate submission from `My Feed` (idempotent submit + gated evaluation).
+d7) [have] Optional review/banner are now independent post-steps and no longer block core draft completion.
 
 ### Step 2 - Build the Core Pipeline (URL -> Blueprint)
 e1) [have] Transcript ingestion is behind one adapter:
@@ -193,6 +196,7 @@ h5) [have] Draft generation produces valid blueprint payload.
 h6) [have] Structural + safety + PII gates run before publish.
 h7) [have] Telemetry events and failure reasons are logged.
 h8) [have] Pilot run completed and reviewed against thresholds.
+h9) [have] Current production channel-gate mode is bypass-first; enforcement is explicitly deferred.
 
 ## Pilot Summary (2026-02-12)
 i1) Outcomes

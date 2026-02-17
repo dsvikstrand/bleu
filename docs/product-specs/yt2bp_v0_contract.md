@@ -15,6 +15,7 @@
 - 2026-02-13 note: Channel-scoped `+ Create` flow routes to `/youtube?channel=<slug>&intent=post` and blocks public publish unless channel is valid and joined; this is UI/product behavior and does not alter this endpoint contract.
 - 2026-02-13 note: App-wide wall-to-wall layout migration (Run 1) updates YouTube page framing to a minimal document-like layout; UI-only and does not alter this contract.
 - 2026-02-17 note: dual-feed rollout moved post-generation behavior to personal-first (`/my-feed`) with channel submission as a separate candidate lifecycle; this does not alter the YT2BP request/response envelope.
+- 2026-02-17 note: optional AI review/banner are now executed as separate post-generation steps in UI (`/api/analyze-blueprint` and `/api/generate-banner`) so core YT2BP latency is lower; this does not alter the YT2BP envelope.
 
 ## Request
 ```json
@@ -83,6 +84,7 @@
 - `YT2BP_ANON_LIMIT_PER_MIN`
 - `YT2BP_AUTH_LIMIT_PER_MIN`
 - `YT2BP_IP_LIMIT_PER_HOUR`
+- `CHANNEL_GATES_MODE` (`bypass|shadow|enforce`) for channel-candidate evaluation path outside this endpoint.
 
 ## Integration contract (bleuV1)
 - This endpoint is responsible for source extraction + draft generation only.

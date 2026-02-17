@@ -21,10 +21,11 @@ Execution mode:
 2. [have] Step 1 - Source adapter foundation (`BaseAdapter` + `YouTubeAdapter`)
 3. [have] Step 2 - My Feed as pulled-content lane
 4. [have] Step 3 - Submit flow (`My Feed` -> channel candidate)
-5. [have] Step 4 - Gate pipeline (pluggable gates)
+5. [have] Step 4 - Gate pipeline contract (runtime currently bypass default)
 6. [have] Step 5 - Channel publish/reject outcomes
 7. [have] Step 6 - Library deprecation pass (soft)
-8. [have] Step 7 - Observability and hardening
+8. [have] Step 7 - Observability baseline
+9. [have] Step 8 - Hardening cycle: docs realignment + CTA de-emphasis + traceability + gate-mode framework
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -142,6 +143,25 @@ Completion evidence (2026-02-17)
   - `channel_publish_succeeded`
   - `channel_publish_rejected`
 - Backend evaluate endpoint emits deterministic gate-result and manual-review log markers with reason codes.
+
+### Step 8 - Hardening cycle (gate bypass retained)
+Scope
+- align docs with runtime reality (bypass-first gate mode)
+- remove library-first CTAs from top-level flow
+- improve end-to-end traceability keys
+- introduce gate-mode framework (`bypass|shadow|enforce`) without changing prod behavior
+
+Definition of done
+- active docs do not claim enforced gates are running in production
+- primary CTAs route through YouTube/My Feed path
+- publish/reject actions emit structured logs with trace IDs
+- default gate mode remains bypass and matches frontend fallback semantics
+
+Evaluation
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+- `npm run build`
+- manual smoke: YouTube -> My Feed -> submit -> publish/reject
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

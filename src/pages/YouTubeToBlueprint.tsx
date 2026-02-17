@@ -246,6 +246,11 @@ export default function YouTubeToBlueprint() {
     if (options.generateReview) {
       setIsGeneratingReview(true);
       setReviewErrorText(null);
+      void logMvpEvent({
+        eventName: 'youtube_review_started',
+        userId: user?.id,
+        metadata: { source: 'youtube_mvp', run_id: runId },
+      });
 
       tasks.push(
         (async () => {
@@ -283,12 +288,22 @@ export default function YouTubeToBlueprint() {
             );
 
             await logMvpEvent({
-              eventName: 'generate_ai_review',
+              eventName: 'youtube_review_succeeded',
               userId: user?.id,
               metadata: { source: 'youtube_mvp', run_id: runId },
             });
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Could not generate AI review.';
+            await logMvpEvent({
+              eventName: 'youtube_review_failed',
+              userId: user?.id,
+              metadata: {
+                source: 'youtube_mvp',
+                run_id: runId,
+                reason_code: 'REVIEW_REQUEST_FAILED',
+                error_message: message,
+              },
+            });
             setReviewErrorText(message);
             toast({
               title: 'AI review failed',
@@ -305,6 +320,11 @@ export default function YouTubeToBlueprint() {
     if (options.generateBanner) {
       setIsGeneratingBanner(true);
       setBannerErrorText(null);
+      void logMvpEvent({
+        eventName: 'youtube_banner_started',
+        userId: user?.id,
+        metadata: { source: 'youtube_mvp', run_id: runId },
+      });
 
       tasks.push(
         (async () => {
@@ -318,6 +338,11 @@ export default function YouTubeToBlueprint() {
             });
 
             const bannerUrl = bannerResponse?.bannerUrl || null;
+            await logMvpEvent({
+              eventName: 'youtube_banner_succeeded',
+              userId: user?.id,
+              metadata: { source: 'youtube_mvp', run_id: runId },
+            });
             setResult((current) =>
               current
                 ? {
@@ -332,6 +357,16 @@ export default function YouTubeToBlueprint() {
             );
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Could not generate banner.';
+            await logMvpEvent({
+              eventName: 'youtube_banner_failed',
+              userId: user?.id,
+              metadata: {
+                source: 'youtube_mvp',
+                run_id: runId,
+                reason_code: 'BANNER_REQUEST_FAILED',
+                error_message: message,
+              },
+            });
             setBannerErrorText(message);
             toast({
               title: 'Banner failed',
@@ -395,7 +430,7 @@ export default function YouTubeToBlueprint() {
     await logMvpEvent({
       eventName: 'source_pull_requested',
       userId: user?.id,
-      metadata: { source_type: 'youtube', source: 'youtube_mvp' },
+      metadata: { source_type: 'youtube', source: 'youtube_mvp', run_id: null },
     });
 
     try {
@@ -517,7 +552,7 @@ export default function YouTubeToBlueprint() {
         isPublic: false,
       });
 
-      await upsertUserFeedItem({
+      const feedItem = await upsertUserFeedItem({
         userId: user.id,
         sourceItemId: sourceItem.id,
         blueprintId: created.id,
@@ -529,7 +564,10 @@ export default function YouTubeToBlueprint() {
         userId: user.id,
         blueprintId: created.id,
         metadata: {
+          run_id: result.run_id,
           source_type: 'youtube',
+          source_item_id: sourceItem.id,
+          user_feed_item_id: feedItem?.id || null,
           canonical_key: sourceItem.canonical_key,
         },
       });

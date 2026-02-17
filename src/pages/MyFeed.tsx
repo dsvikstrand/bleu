@@ -36,6 +36,7 @@ export default function MyFeed() {
   const submitMutation = useMutation({
     mutationFn: async (input: {
       itemId: string;
+      sourceItemId: string | null;
       blueprintId: string;
       title: string;
       llmReview: string | null;
@@ -60,6 +61,8 @@ export default function MyFeed() {
         userId: user.id,
         blueprintId: input.blueprintId,
         metadata: {
+          user_feed_item_id: input.itemId,
+          source_item_id: input.sourceItemId,
           candidate_id: result.candidateId,
           channel_slug: input.channelSlug,
           status: result.status,
@@ -72,6 +75,8 @@ export default function MyFeed() {
         userId: user.id,
         blueprintId: input.blueprintId,
         metadata: {
+          user_feed_item_id: input.itemId,
+          source_item_id: input.sourceItemId,
           candidate_id: result.candidateId,
           channel_slug: input.channelSlug,
           aggregate: result.status === 'passed' ? 'pass' : result.status === 'pending_manual_review' ? 'warn' : 'block',
@@ -85,6 +90,8 @@ export default function MyFeed() {
           userId: user.id,
           blueprintId: input.blueprintId,
           metadata: {
+            user_feed_item_id: input.itemId,
+            source_item_id: input.sourceItemId,
             candidate_id: result.candidateId,
             channel_slug: input.channelSlug,
             reason_code: result.reasonCode,
@@ -110,7 +117,13 @@ export default function MyFeed() {
   });
 
   const publishMutation = useMutation({
-    mutationFn: async (input: { itemId: string; candidateId: string; blueprintId: string; channelSlug: string }) => {
+    mutationFn: async (input: {
+      itemId: string;
+      sourceItemId: string | null;
+      candidateId: string;
+      blueprintId: string;
+      channelSlug: string;
+    }) => {
       if (!user) throw new Error('Sign in required.');
       await publishCandidate({
         userId: user.id,
@@ -123,7 +136,13 @@ export default function MyFeed() {
         eventName: 'channel_publish_succeeded',
         userId: user.id,
         blueprintId: input.blueprintId,
-        metadata: { channel_slug: input.channelSlug },
+        metadata: {
+          user_feed_item_id: input.itemId,
+          source_item_id: input.sourceItemId,
+          candidate_id: input.candidateId,
+          channel_slug: input.channelSlug,
+          reason_code: 'ALL_GATES_PASS',
+        },
       });
     },
     onSuccess: () => {
@@ -139,7 +158,14 @@ export default function MyFeed() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: async (input: { itemId: string; candidateId: string; reasonCode: string; blueprintId: string }) => {
+    mutationFn: async (input: {
+      itemId: string;
+      sourceItemId: string | null;
+      candidateId: string;
+      reasonCode: string;
+      blueprintId: string;
+      channelSlug: string;
+    }) => {
       if (!user) throw new Error('Sign in required.');
       await rejectCandidate({
         userId: user.id,
@@ -151,7 +177,13 @@ export default function MyFeed() {
         eventName: 'channel_publish_rejected',
         userId: user.id,
         blueprintId: input.blueprintId,
-        metadata: { reason_code: input.reasonCode },
+        metadata: {
+          user_feed_item_id: input.itemId,
+          source_item_id: input.sourceItemId,
+          candidate_id: input.candidateId,
+          channel_slug: input.channelSlug,
+          reason_code: input.reasonCode,
+        },
       });
     },
     onSuccess: () => {
@@ -263,6 +295,7 @@ export default function MyFeed() {
                           onClick={() =>
                             submitMutation.mutate({
                               itemId: item.id,
+                              sourceItemId: item.source?.id || null,
                               blueprintId: blueprint.id,
                               title: blueprint.title,
                               llmReview: blueprint.llmReview,
@@ -283,6 +316,7 @@ export default function MyFeed() {
                             onClick={() =>
                               submitMutation.mutate({
                                 itemId: item.id,
+                                sourceItemId: item.source?.id || null,
                                 blueprintId: blueprint.id,
                                 title: blueprint.title,
                                 llmReview: blueprint.llmReview,
@@ -300,9 +334,10 @@ export default function MyFeed() {
                             onClick={() =>
                               publishMutation.mutate({
                                 itemId: item.id,
+                                sourceItemId: item.source?.id || null,
                                 candidateId: item.candidate!.id,
                                 blueprintId: blueprint.id,
-                                channelSlug,
+                                channelSlug: item.candidate?.channelSlug || channelSlug,
                               })
                             }
                             disabled={publishMutation.isPending || !canPublish}
@@ -315,9 +350,11 @@ export default function MyFeed() {
                             onClick={() =>
                               rejectMutation.mutate({
                                 itemId: item.id,
+                                sourceItemId: item.source?.id || null,
                                 candidateId: item.candidate!.id,
                                 reasonCode: 'MANUAL_REJECT',
                                 blueprintId: blueprint.id,
+                                channelSlug: item.candidate?.channelSlug || channelSlug,
                               })
                             }
                             disabled={rejectMutation.isPending}

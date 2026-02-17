@@ -115,10 +115,10 @@ export default function Inventory() {
         <PageSection>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-primary uppercase tracking-wide">Library</p>
-              <h1 className="text-2xl font-semibold tracking-tight">Pick a library, then build your blueprint</h1>
+              <p className="text-sm font-semibold text-primary uppercase tracking-wide">Legacy Library</p>
+              <h1 className="text-2xl font-semibold tracking-tight">Compatibility library surface</h1>
               <p className="text-sm text-muted-foreground">
-                Browse collections of items, open one, then start shaping your routine step by step.
+                This flow is retained for compatibility. Primary MVP journey is YouTube pull to My Feed, then channel submit.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -153,9 +153,8 @@ export default function Inventory() {
           {showLibraryInfo && (
             <div className="border border-border/40 p-4 text-sm text-muted-foreground leading-relaxed">
               <p>
-                Think of a Library as a curated list of items you can use to build a routine. It is the ingredient shelf
-                for a blueprint. Each library is organized into categories so you can scan quickly. You do not have to
-                use everything; it is a toolbox, not a checklist.
+                Libraries remain available for older workflows, but `bleuV1` primary path is source-first via YouTube
+                into My Feed. Use this area only if you need the legacy build-from-library flow.
               </p>
             </div>
           )}
