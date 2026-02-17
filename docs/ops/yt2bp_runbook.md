@@ -68,6 +68,7 @@ Required runtime variables:
 - `CHANNEL_GATES_MODE` (`bypass` | `shadow` | `enforce`)
 - `SUPABASE_SERVICE_ROLE_KEY` (required for cron ingestion trigger path)
 - `INGESTION_SERVICE_TOKEN` (shared secret for `/api/ingestion/jobs/trigger`)
+- `ENABLE_DEBUG_ENDPOINTS` (`false` by default; must be `true` to enable debug simulation endpoint)
 - `INGESTION_MAX_PER_SUBSCRIPTION` (default `5`)
 
 Safe defaults:
@@ -78,6 +79,7 @@ Safe defaults:
 - `YT2BP_AUTH_LIMIT_PER_MIN=20`
 - `YT2BP_IP_LIMIT_PER_HOUR=30`
 - `CHANNEL_GATES_MODE=bypass`
+- `ENABLE_DEBUG_ENDPOINTS=false`
 - `INGESTION_MAX_PER_SUBSCRIPTION=5`
 
 ## Failure playbooks
@@ -207,6 +209,18 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/ingestion/jobs/trigger \
   -H 'Content-Type: application/json' \
   --data '{}'
 ```
+
+Debug simulation trigger (single subscription, non-prod only):
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/debug/subscriptions/<subscription_id>/simulate-new-uploads \
+  -H "x-service-token: $INGESTION_SERVICE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"rewind_days":30}'
+```
+Notes:
+- endpoint returns `404` unless `ENABLE_DEBUG_ENDPOINTS=true`.
+- endpoint rewinds checkpoint for one subscription, then runs one sync cycle.
+- this can generate blueprints and consume tokens/credits.
 
 Pending card actions (compatibility path for legacy pending items):
 ```bash

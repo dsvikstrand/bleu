@@ -24,6 +24,7 @@
     - `POST|GET|PATCH|DELETE /api/source-subscriptions`
     - `POST /api/source-subscriptions/:id/sync`
     - `POST /api/ingestion/jobs/trigger` (service auth)
+    - `POST /api/debug/subscriptions/:id/simulate-new-uploads` (debug-only, service auth + `ENABLE_DEBUG_ENDPOINTS=true`)
     - `POST /api/my-feed/items/:id/accept|skip`
   - Adapter abstraction in `server/adapters/*` (`BaseAdapter`, `YouTubeAdapter`, registry).
   - Candidate gate pipeline in `server/gates/*` (`Gate` contract + ordered all-gates-run execution).

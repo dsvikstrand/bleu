@@ -53,6 +53,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - First subscribe sets checkpoint only (new-uploads-only, no historical prefill).
 - Insert persistent `subscription_notice` item in My Feed per subscribed channel.
 - Keep sync/deactivate and pending accept/skip endpoints as compatibility/operator paths.
+- Keep debug simulation endpoint env-gated (`ENABLE_DEBUG_ENDPOINTS`) for non-prod ingestion testing.
 - Run scheduler trigger from Oracle (`/api/ingestion/jobs/trigger` with service auth).
 
 ## Acceptance Baseline Per Iteration

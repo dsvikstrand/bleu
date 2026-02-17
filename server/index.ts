@@ -64,6 +64,8 @@ const yt2bpEnabledRaw = String(process.env.YT2BP_ENABLED ?? 'true').trim().toLow
 const yt2bpEnabled = !(yt2bpEnabledRaw === 'false' || yt2bpEnabledRaw === '0' || yt2bpEnabledRaw === 'off');
 const ingestionServiceToken = String(process.env.INGESTION_SERVICE_TOKEN || '').trim();
 const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX_PER_SUBSCRIPTION) || 5);
+const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
+const debugEndpointsEnabled = debugEndpointsEnabledRaw === 'true' || debugEndpointsEnabledRaw === '1' || debugEndpointsEnabledRaw === 'on';
 
 function getRetryAfterSeconds(req: express.Request) {
   const resetTime = (req as express.Request & { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime;
@@ -1085,7 +1087,7 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
   last_seen_published_at: string | null;
   last_seen_video_id: string | null;
 }, options: {
-  trigger: 'user_sync' | 'service_cron' | 'subscription_create';
+  trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation';
 }) {
   const feed = await fetchYouTubeFeed(subscription.source_channel_id, 20);
   const newest = feed.videos[0] || null;
@@ -1189,6 +1191,10 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
     channelTitle: feed.channelTitle,
   } as SyncSubscriptionResult;
 }
+
+const DebugSimulateSubscriptionRequestSchema = z.object({
+  rewind_days: z.coerce.number().int().min(1).max(365).optional(),
+});
 
 async function markSubscriptionSyncError(db: ReturnType<typeof createClient>, subscriptionId: string, err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
@@ -1538,6 +1544,112 @@ app.post('/api/ingestion/jobs/trigger', async (req, res) => {
       failures,
     },
   });
+});
+
+app.post('/api/debug/subscriptions/:id/simulate-new-uploads', async (req, res) => {
+  if (!debugEndpointsEnabled) {
+    return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Not found', data: null });
+  }
+  if (!isServiceRequestAuthorized(req)) {
+    return res.status(401).json({ ok: false, error_code: 'SERVICE_AUTH_REQUIRED', message: 'Missing or invalid service token', data: null });
+  }
+
+  const parsed = DebugSimulateSubscriptionRequestSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_INPUT',
+      message: 'Invalid request payload',
+      data: null,
+    });
+  }
+  const rewindDays = parsed.data.rewind_days || 30;
+
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  const { data: subscription, error: subscriptionError } = await db
+    .from('user_source_subscriptions')
+    .select('id, user_id, mode, source_channel_id, last_seen_published_at, last_seen_video_id, is_active')
+    .eq('id', req.params.id)
+    .maybeSingle();
+
+  if (subscriptionError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: subscriptionError.message, data: null });
+  if (!subscription) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
+  if (!subscription.is_active) return res.status(400).json({ ok: false, error_code: 'INACTIVE_SUBSCRIPTION', message: 'Subscription is inactive', data: null });
+
+  const rewoundToIso = new Date(Date.now() - rewindDays * 24 * 60 * 60 * 1000).toISOString();
+
+  const { error: rewindError } = await db
+    .from('user_source_subscriptions')
+    .update({
+      last_seen_published_at: rewoundToIso,
+      last_seen_video_id: null,
+      last_sync_error: null,
+    })
+    .eq('id', subscription.id);
+
+  if (rewindError) {
+    return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: rewindError.message, data: null });
+  }
+
+  const { data: job, error: jobCreateError } = await db
+    .from('ingestion_jobs')
+    .insert({
+      trigger: 'debug_simulation',
+      scope: 'subscription_debug',
+      status: 'running',
+      subscription_id: subscription.id,
+      started_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (jobCreateError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
+
+  try {
+    const sync = await syncSingleSubscription(
+      db,
+      {
+        ...subscription,
+        last_seen_published_at: rewoundToIso,
+        last_seen_video_id: null,
+      },
+      { trigger: 'debug_simulation' },
+    );
+
+    await db.from('ingestion_jobs').update({
+      status: 'succeeded',
+      finished_at: new Date().toISOString(),
+      processed_count: sync.processed,
+      inserted_count: sync.inserted,
+      skipped_count: sync.skipped,
+      error_code: null,
+      error_message: null,
+    }).eq('id', job.id);
+
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'subscription debug simulation complete',
+      data: {
+        job_id: job.id,
+        subscription_id: subscription.id,
+        rewind_days: rewindDays,
+        checkpoint_rewound_to: rewoundToIso,
+        ...sync,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await markSubscriptionSyncError(db, subscription.id, error);
+    await db.from('ingestion_jobs').update({
+      status: 'failed',
+      finished_at: new Date().toISOString(),
+      error_code: 'SYNC_FAILED',
+      error_message: message.slice(0, 500),
+    }).eq('id', job.id);
+    return res.status(500).json({ ok: false, error_code: 'SYNC_FAILED', message, data: { job_id: job.id } });
+  }
 });
 
 app.post('/api/my-feed/items/:id/accept', async (req, res) => {

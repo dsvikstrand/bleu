@@ -98,6 +98,7 @@ Rules:
   - `POST|GET|PATCH|DELETE /api/source-subscriptions` live for user-managed channel follows.
   - `POST /api/source-subscriptions/:id/sync` live for user-initiated sync.
   - `POST /api/ingestion/jobs/trigger` live for Oracle cron/service trigger.
+  - debug simulation endpoint available behind env gate: `POST /api/debug/subscriptions/:id/simulate-new-uploads`.
   - pending-card My Feed actions live: `POST /api/my-feed/items/:id/accept|skip`.
   - MVP UX is auto-only; create/reactivate sets checkpoint and skips initial old-video prefill.
   - successful create/reactivate inserts one persistent `subscription_notice` feed card per user/channel.
