@@ -14,6 +14,7 @@ a7) [have] Legacy pending/skipped feed rows without blueprints are hidden in `My
 a8) [have] `/subscriptions` is simplified for MVP to two visible actions: add `Subscribe` and per-row `Unsubscribe`.
 a9) [have] `/subscriptions` now surfaces ingestion trust signals (healthy/delayed/error/waiting) based on polling freshness and sync errors.
 a10) [have] Auth-only `Search` route (`/search`) now supports YouTube query discovery with one-click `Generate Blueprint` and `Subscribe Channel`.
+a11) [have] `/subscriptions` now supports auth-only YouTube channel search so users can subscribe from channel suggestions (manual paste remains fallback).
 
 ## Core Model
 b1) `Source Item`
@@ -72,7 +73,7 @@ m7) Planned mutable interfaces use explicit auth scope + idempotency mode and un
 m8) Runtime default `CHANNEL_GATES_MODE=bypass`; non-prod may run `shadow` or `enforce`.
 
 ## Primary User Flows (`bleuV1`)
-f1) User follows YouTube channels from `/subscriptions` (channel URL/channel ID/@handle).
+f1) User follows YouTube channels from `/subscriptions` by searching channels and clicking `Subscribe` (manual URL/channel ID/@handle fallback remains available).
 f2) User can unsubscribe from active channels directly on `/subscriptions` (unsubscribed rows disappear from the page list).
 f3) User can search YouTube from `/search` and get transient result suggestions (not persisted yet).
 f4) User selects `Generate Blueprint` on a result to generate and save directly into `My Feed`.
@@ -129,6 +130,7 @@ si9) debug-only endpoint (service auth + env gate): `POST /api/debug/subscriptio
 si10) YouTube channel resolver accepts handle/channel URL/channel ID and uses `browseId` fallback parsing for handle pages where `channelId` is absent.
 si11) service-ops endpoint: `GET /api/ingestion/jobs/latest` (service auth; latest ingestion health snapshot)
 si12) YouTube search endpoint: `GET /api/youtube-search?q=<query>&limit=<1..25>&page_token=<optional>`
+si13) YouTube channel search endpoint: `GET /api/youtube-channel-search?q=<query>&limit=<1..25>&page_token=<optional>`
 
 ## Next Milestone (Hardening)
 n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.

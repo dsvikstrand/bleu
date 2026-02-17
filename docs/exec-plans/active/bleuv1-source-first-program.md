@@ -106,7 +106,7 @@ Rules:
   - UI hides legacy no-blueprint pending/skipped feed rows to keep My Feed migration-safe.
 - Subscriptions surface foundation (2026-02-17):
   - `/subscriptions` route is live behind the same auth + feature gate as `/my-feed`.
-  - page supports add subscription plus active-list `Unsubscribe` for MVP simplicity.
+  - page supports channel search + subscribe, plus active-list `Unsubscribe` for MVP simplicity.
   - My Feed now exposes a compact `Manage subscriptions` link (large subscription modal removed).
   - row-level action now simplified to `Unsubscribe`; sync/reactivate UI is deferred.
   - debug simulation remains operator-only and hidden from UI.
@@ -120,6 +120,10 @@ Rules:
   - search results are transient and not persisted to My Feed until explicit `Generate Blueprint`.
   - each result card supports `Generate Blueprint`, `Subscribe Channel`, and `Open on YouTube`.
   - environment requirement added: `YOUTUBE_DATA_API_KEY`.
+- Channel discovery for subscriptions (2026-02-17):
+  - backend endpoint `GET /api/youtube-channel-search` added for relevance-ordered channel results.
+  - `/subscriptions` now supports search-first channel discovery with one-click `Subscribe`.
+  - manual URL/channel-id/@handle input remains as fallback path.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

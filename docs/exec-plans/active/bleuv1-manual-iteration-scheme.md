@@ -32,6 +32,7 @@ Execution mode:
 13. [have] Step 12 - Subscriptions management simplification (subscribe/unsubscribe only)
 14. [have] Step 13 - Ingestion reliability visibility (health signals + latest job endpoint)
 15. [have] Step 14 - YouTube Search-to-Blueprint (auth-only `/search` with generate + subscribe)
+16. [have] Step 15 - Subscription channel search (auth-only `/subscriptions` discovery + subscribe)
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -302,6 +303,29 @@ Completion evidence (2026-02-17)
 - Added frontend API client `src/lib/youtubeSearchApi.ts` and tests in `src/test/youtubeSearchApi.test.ts`.
 - Added Search UI route/page (`src/pages/Search.tsx`) and nav item in `src/components/shared/AppNavigation.tsx`.
 - Documented `YOUTUBE_DATA_API_KEY` requirement and additive endpoint contract updates.
+
+### Step 15 - Subscription channel search (minimal, subscribe-first)
+Scope
+- add auth-only YouTube channel search endpoint for subscriptions discovery
+- make `/subscriptions` search-first with per-result `Subscribe` action
+- keep manual channel input as fallback and preserve `Unsubscribe` + health flows
+
+Definition of done
+- backend exposes `GET /api/youtube-channel-search` with deterministic envelope/errors
+- `/subscriptions` supports channel query and renders transient result cards
+- users can subscribe from a channel result idempotently
+- existing unsubscribe and ingestion health surfaces remain intact
+
+Evaluation
+- unit tests pass for channel-search query validation, limit clamping, and normalization
+- manual smoke: search channels -> subscribe from result -> active subscription list updates
+- regression smoke: manual paste subscribe fallback and unsubscribe continue to work
+- docs freshness and link checks pass
+
+Completion evidence (2026-02-17)
+- Added `server/services/youtubeChannelSearch.ts` and wired `GET /api/youtube-channel-search` in `server/index.ts`.
+- Added frontend client `src/lib/youtubeChannelSearchApi.ts` and tests in `src/test/youtubeChannelSearchApi.test.ts`.
+- Updated `src/pages/Subscriptions.tsx` to support search-first subscribe UX with manual fallback input.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

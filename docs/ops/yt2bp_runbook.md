@@ -194,6 +194,12 @@ curl -sS "https://bapi.vdsai.cloud/api/youtube-search?q=skincare%202026%20best&l
   -H "Authorization: Bearer $TOKEN"
 ```
 
+YouTube channel search smoke (auth required):
+```bash
+curl -sS "https://bapi.vdsai.cloud/api/youtube-channel-search?q=skincare%20doctor&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 Create a subscription (MVP auto-only behavior):
 ```bash
 curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions \

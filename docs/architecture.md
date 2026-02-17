@@ -18,7 +18,7 @@
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
-  - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: add + active-list `Unsubscribe` + ingestion health signals).
+  - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: channel search + subscribe + active-list `Unsubscribe` + ingestion health signals).
 - Backend:
   - Express server in `server/index.ts`.
   - `/api/youtube-to-blueprint` generation pipeline.
@@ -26,6 +26,7 @@
     - `POST|GET|PATCH|DELETE /api/source-subscriptions`
     - `POST /api/source-subscriptions/:id/sync`
     - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
+    - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
     - `POST /api/ingestion/jobs/trigger` (service auth)
     - `GET /api/ingestion/jobs/latest` (service auth, latest job snapshot)
     - `POST /api/debug/subscriptions/:id/simulate-new-uploads` (debug-only, service auth + `ENABLE_DEBUG_ENDPOINTS=true`; middleware allows service-token access without bearer user auth)
@@ -46,7 +47,7 @@
 1. Ingest source item (manual URL pull or subscription sync).
    - discovery option: user can search YouTube results in `/search` before selecting a source video.
 2. Subscription create/reactivate:
-   - user opens `/subscriptions` and submits channel URL/channel ID/@handle.
+   - user opens `/subscriptions` and searches channels, then clicks subscribe (manual URL/channel ID/@handle fallback remains).
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.
    - resolve channel id and set first-sync checkpoint only (`last_seen_published_at`, `last_seen_video_id`).
    - no historical prefill on first subscribe in MVP.

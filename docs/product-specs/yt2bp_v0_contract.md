@@ -22,6 +22,7 @@
 - 2026-02-18 note: YouTube subscription channel resolution now includes `browseId` fallback parsing for handle pages where direct `channelId` metadata is unavailable.
 - 2026-02-17 note: ingestion reliability visibility adds service-auth endpoint `GET /api/ingestion/jobs/latest`; this is an ops path and does not alter the YT2BP envelope.
 - 2026-02-17 note: auth-only YouTube discovery endpoint `GET /api/youtube-search` is additive and does not alter the YT2BP envelope.
+- 2026-02-17 note: auth-only YouTube channel discovery endpoint `GET /api/youtube-channel-search` is additive and does not alter the YT2BP envelope.
 
 ## Request
 ```json
@@ -99,6 +100,7 @@
 - Subscription sync and manual pending-card acceptance are intentionally outside this endpoint contract.
 - Ingestion health polling (`/api/ingestion/jobs/latest`) is intentionally outside this endpoint contract.
 - YouTube query discovery (`/api/youtube-search`) is intentionally outside this endpoint contract.
+- YouTube channel discovery (`/api/youtube-channel-search`) is intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: 120s.
