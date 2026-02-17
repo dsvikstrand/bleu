@@ -76,6 +76,10 @@ function extractChannelIdFromHtml(html: string): string | null {
   const fromMeta = parseFirst(html, /<meta[^>]*itemprop=["']channelId["'][^>]*content=["'](UC[a-zA-Z0-9_-]{20,})["']/i);
   if (fromMeta && CHANNEL_ID_RE.test(fromMeta)) return fromMeta;
 
+  // Some handle pages expose only browseId in bootstrap payload.
+  const fromBrowseId = parseFirst(html, /"browseId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/i);
+  if (fromBrowseId && CHANNEL_ID_RE.test(fromBrowseId)) return fromBrowseId;
+
   return null;
 }
 

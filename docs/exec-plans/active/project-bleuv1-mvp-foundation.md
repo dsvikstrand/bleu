@@ -55,6 +55,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Keep sync/deactivate and pending accept/skip endpoints as compatibility/operator paths.
 - Keep debug simulation endpoint env-gated (`ENABLE_DEBUG_ENDPOINTS`) for non-prod ingestion testing.
 - Debug simulation auth contract: `x-service-token` only (no user bearer required).
+- Handle resolution hardening: parse YouTube `browseId` fallback for handle URLs that omit explicit `channelId` metadata.
 - Run scheduler trigger from Oracle (`/api/ingestion/jobs/trigger` with service auth).
 
 ## Acceptance Baseline Per Iteration

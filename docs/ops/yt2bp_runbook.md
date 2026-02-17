@@ -223,6 +223,9 @@ Notes:
 - endpoint rewinds checkpoint for one subscription, then runs one sync cycle.
 - this can generate blueprints and consume tokens/credits.
 
+Subscription input note:
+- Handle URLs may resolve via `browseId` fallback parsing when direct `channelId` metadata is absent in YouTube page HTML.
+
 Pending card actions (compatibility path for legacy pending items):
 ```bash
 curl -sS -X POST https://bapi.vdsai.cloud/api/my-feed/items/<user_feed_item_id>/accept \

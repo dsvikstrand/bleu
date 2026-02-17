@@ -19,6 +19,7 @@
 - 2026-02-18 note: subscription ingestion (`/api/source-subscriptions*`, `/api/ingestion/jobs/trigger`) and pending-card accept/skip (`/api/my-feed/items/:id/accept|skip`) are separate flows and do not alter this endpoint envelope.
 - 2026-02-18 note: subscription create path now uses auto-only behavior (incoming `mode` is compatibility-only and treated as `auto`); first subscribe sets checkpoint and inserts a `subscription_notice` feed card. This remains outside this endpoint envelope.
 - 2026-02-18 note: debug simulation endpoint (`/api/debug/subscriptions/:id/simulate-new-uploads`) is env-gated (`ENABLE_DEBUG_ENDPOINTS`) and service-auth only (`x-service-token`, no user bearer required); this also remains outside the YT2BP envelope.
+- 2026-02-18 note: YouTube subscription channel resolution now includes `browseId` fallback parsing for handle pages where direct `channelId` metadata is unavailable.
 
 ## Request
 ```json

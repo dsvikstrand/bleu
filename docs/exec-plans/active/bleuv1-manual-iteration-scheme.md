@@ -204,6 +204,7 @@ Completion evidence (2026-02-18)
 - `My Feed` now filters legacy no-blueprint pending/skipped rows by default.
 - Added debug-only subscription simulation endpoint to test new-upload ingestion without waiting for real channel uploads.
 - Fixed debug endpoint auth boundary so service-token-only calls can pass middleware without user bearer auth.
+- Fixed YouTube handle resolver edge case by adding `browseId` fallback parsing (prevents false `INVALID_CHANNEL` on some handles).
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

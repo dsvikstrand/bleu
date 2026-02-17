@@ -27,6 +27,7 @@
     - `POST /api/debug/subscriptions/:id/simulate-new-uploads` (debug-only, service auth + `ENABLE_DEBUG_ENDPOINTS=true`; middleware allows service-token access without bearer user auth)
     - `POST /api/my-feed/items/:id/accept|skip`
   - Adapter abstraction in `server/adapters/*` (`BaseAdapter`, `YouTubeAdapter`, registry).
+  - Subscription resolver in `server/services/youtubeSubscriptions.ts` supports `browseId` fallback extraction for YouTube handle pages.
   - Candidate gate pipeline in `server/gates/*` (`Gate` contract + ordered all-gates-run execution).
   - Gate runtime mode switch: `CHANNEL_GATES_MODE = bypass | shadow | enforce` (default `bypass`).
 - Data:
