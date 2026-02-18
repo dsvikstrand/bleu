@@ -17,8 +17,9 @@
 ## 2) Runtime Topology
 - Frontend:
   - React + Vite app (`src/pages/*`).
-  - Signed-in primary nav uses `Home / Search / Channels / Explore`.
-  - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked`; `/my-feed` remains direct-access compatible.
+  - Signed-in primary nav uses `Home / Channels / Explore`.
+  - Header `Create` action (next to profile menu) routes to `/search` for search/create discovery.
+  - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked / Subscriptions` (subscriptions tab owner-only); `/my-feed` remains direct-access compatible.
   - Profile visibility default is public for new accounts (`profiles.is_public=true` by default).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
     - `/youtube` runs a core-first request (`generate_review=false`, `generate_banner=false`) and executes optional review/banner as async post-steps.
@@ -34,6 +35,7 @@
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
     - active subscription rows are copy-light; avatar is the channel-open link target.
     - includes manual `Refresh` popup flow: scan new subscription videos, select items, and start async background generation.
+  - User menu includes a direct `Subscriptions` shortcut to `/subscriptions`; profile tab keeps a lightweight owner-only list with `Unsubscribe`.
 - Backend:
   - Express server in `server/index.ts`.
   - `/api/youtube-to-blueprint` generation pipeline.

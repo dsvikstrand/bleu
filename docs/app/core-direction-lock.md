@@ -15,13 +15,15 @@ Status: `canonical`
 7. Feed/detail surfaces prioritize source-channel context for imported media over creator-edit workflows in MVP UI.
 8. Profile visibility is public-by-default for new accounts (`profiles.is_public=true` default); existing privacy choices remain respected.
 9. My Feed blueprint card badge label is normalized to `Blueprint`, and feed tags use the same one-row capped chip treatment as Home (without `#` prefix).
+10. Signed-in primary nav is `Home / Channels / Explore`; search/create entrypoint is the header `Create` action to `/search`.
+11. Subscriptions are reachable from both user dropdown (full page) and profile workspace owner tab (lightweight list).
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.
 2. Generate/import blueprint into `My Feed`.
 3. System auto-evaluates and posts eligible blueprints to channels.
 4. Engage through community interactions in Home feed.
-5. Use profile workspace (`/u/:userId`) tabs `Feed / Comments / Liked` for personal history; `/my-feed` remains a compatibility/direct route.
+5. Use profile workspace (`/u/:userId`) tabs `Feed / Comments / Liked / Subscriptions` for personal history; `/my-feed` remains a compatibility/direct route.
 
 ## What is not core right now
 1. Library-first creation is deprecated as primary identity.

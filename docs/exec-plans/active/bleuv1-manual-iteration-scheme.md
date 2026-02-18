@@ -49,6 +49,7 @@ Execution mode:
 30. [have] Step 29 - Home naming + profile-oriented nav (`/wall` labeled Home, `My Feed` moved to user menu)
 31. [have] Step 30 - Profile workspace tabs (`Feed / Comments / Liked`) + dropdown cleanup
 32. [have] Step 31 - Feed badge/tag consistency + profile visibility default update (`Blueprint` badge, Home-style capped tags without `#`, new profiles default public)
+33. [have] Step 32 - Nav/profile IA refinement (`Home / Channels / Explore`, `Create` -> `/search`, dropdown + profile-tab subscriptions entrypoints)
 
 Interpretation note
 - Step entries capture execution timeline.

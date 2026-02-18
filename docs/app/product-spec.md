@@ -46,6 +46,9 @@ a34) [have] Blueprint detail header now prioritizes source-channel attribution f
 a35) [have] Subscription details popup in `My Feed` is simplified (relative added-time + unsubscribe only, no absolute timestamp or open-channel action).
 a36) [have] `/subscriptions` rows are simplified to channel identity + unsubscribe, with channel-open behavior moved to avatar click and verbose URL/polling text removed.
 a37) [have] New profiles now default to `is_public=true` (public by default); existing profile visibility remains unchanged unless edited.
+a38) [have] Signed-in top nav is simplified to `Home / Channels / Explore`; Search is now entered via the header `Create` action near the profile menu.
+a39) [have] User dropdown includes `Subscriptions` as the direct link to the full subscription management page.
+a40) [have] Profile tabs now include owner-only `Subscriptions` with a lightweight list and `Unsubscribe` action.
 
 ## Core Model
 b1) `Source Item`
@@ -118,7 +121,7 @@ m8) Runtime default for legacy manual gates remains `CHANNEL_GATES_MODE=bypass`;
 ## Primary User Flows (`bleuV1`)
 f1) User follows YouTube channels from `/subscriptions` by clicking `Add Subscription`, searching channels, and clicking `Subscribe`.
 f2) User can unsubscribe from active channels directly on `/subscriptions` (unsubscribed rows disappear from the page list).
-f3) User can search YouTube from `/search` and get transient result suggestions (not persisted yet).
+f3) User enters search/create via header `Create` (which routes to `/search`) and gets transient YouTube suggestions (not persisted yet).
 f4) User selects `Generate Blueprint` on a result to generate and save directly into `My Feed`.
 f5) User can subscribe to a result’s channel from the same search card.
 f6) On subscribe/reactivate, user gets one subscription notice card and future uploads ingest automatically into `My Feed`.
@@ -140,8 +143,9 @@ r8) [have] My Feed first-class route: `/my-feed`
 r9) [have] Subscriptions route: `/subscriptions`
 r10) [have] Search route: `/search` (auth-only)
 r11) [have] Compatibility redirects: `/tags` -> `/channels`, `/blueprints` -> `/wall`
-r12) [have] Signed-in primary nav is community-first: `Home / Search / Channels / Explore`.
-r13) [have] Personal workspace is profile-first: `/u/:userId` tabs are `Feed / Comments / Liked`; `/my-feed` remains compatibility/direct route.
+r12) [have] Signed-in primary nav is community-first: `Home / Channels / Explore`.
+r13) [have] Personal workspace is profile-first: `/u/:userId` tabs are `Feed / Comments / Liked / Subscriptions` (subscriptions tab is owner-only); `/my-feed` remains compatibility/direct route.
+r14) [have] Header `Create` action (next to profile) is the primary entrypoint to `/search`.
 
 ## Scope Boundaries (MVP)
 s1) In scope
