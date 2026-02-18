@@ -40,7 +40,7 @@ Rules:
 - `My Feed` is allowed to be broader/noisier.
 - Channel feeds must pass channel-fit + quality + safety + PII checks.
 - Gate failures stay personal-only.
-- Auto-channel assignment uses deterministic `general` in MVP and is designed for future LLM replacement.
+- Auto-channel assignment uses deterministic tag+alias mapping in MVP with safe fallback to `general`, and is designed for future LLM replacement.
 
 ## 6) Execution Defaults (Lock)
 1. Channel promotion default mode: deterministic auto-publish after checks.
@@ -73,7 +73,7 @@ Rules:
 ## 10) Decision Log
 - D-001: Codename for direction is `bleuV1`.
 - D-002: MVP adapter scope starts with YouTube only.
-- D-003: Channel publish is deterministic auto pipeline in MVP (`general` assignment, swappable later).
+- D-003: Channel publish is deterministic auto pipeline in MVP (tag+alias mapper with `general` fallback, swappable later).
 - D-004: User value-add in MVP is insight/remix on imported blueprints.
 
 ## 11) Implementation Snapshot (2026-02-17)
@@ -142,7 +142,7 @@ Rules:
   - removed nested inner-card shell so blueprint rows render as a single visual card surface.
   - blueprint rows now open detail on card click (explicit `Open blueprint` link removed).
   - My Feed header now includes both `Add Subscription` and `Manage subscriptions` actions.
-  - footer status text now shows `Posted to <Channel>` once channel-published; held items remain labeled `In My Feed` with reason code.
+  - footer status text now shows `Posted to <Channel>` once channel-published; held items remain labeled `In My Feed`.
   - Search->YouTube generate handoff now passes channel context so My Feed subtitle row shows channel name (instead of title duplication).
   - source subtitle mapping now includes metadata fallback (`source_channel_title` from metadata) when base source row column is missing.
 - Subscription notice UX refresh (2026-02-18):
@@ -160,6 +160,11 @@ Rules:
     - `POST /api/auto-banner/jobs/trigger`
     - `GET /api/auto-banner/jobs/latest`
   - global cap rebalance keeps newest generated banners and demotes older generated banners to deterministic channel defaults (or none if unavailable).
+- Auto-channel classifier hardening (2026-02-18):
+  - deterministic classifier service now maps tags/aliases to real curated channel slugs.
+  - fallback remains `general` for ambiguous/no-match cases.
+  - channel-fit gate now uses the same deterministic mapper to keep fit checks aligned with routing decisions.
+  - Wall channel label now prefers latest published candidate channel; tag mapper is fallback only.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

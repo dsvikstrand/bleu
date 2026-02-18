@@ -42,6 +42,7 @@ interface BlueprintPost {
   };
   tags: { id: string; slug: string }[];
   user_liked: boolean;
+  published_channel_slug?: string | null;
 }
 
 const SORT_TABS = [
@@ -149,12 +150,13 @@ export default function Wall() {
       const blueprintIds = blueprints.map((row) => row.id);
       const userIds = [...new Set(blueprints.map((row) => row.creator_user_id))];
 
-      const [tagsRes, likesRes, profilesRes] = await Promise.all([
+      const [tagsRes, likesRes, profilesRes, feedItemsRes] = await Promise.all([
         supabase.from('blueprint_tags').select('blueprint_id, tag_id').in('blueprint_id', blueprintIds),
         user
           ? supabase.from('blueprint_likes').select('blueprint_id').eq('user_id', user.id).in('blueprint_id', blueprintIds)
           : Promise.resolve({ data: [] as { blueprint_id: string }[] }),
         supabase.from('profiles').select('user_id, display_name, avatar_url').in('user_id', userIds),
+        supabase.from('user_feed_items').select('id, blueprint_id').in('blueprint_id', blueprintIds),
       ]);
 
       const tagRows = tagsRes.data || [];
@@ -176,6 +178,41 @@ export default function Wall() {
 
       const likedIds = new Set((likesRes.data || []).map((row) => row.blueprint_id));
       const profilesMap = new Map((profilesRes.data || []).map((profile) => [profile.user_id, profile]));
+      if (feedItemsRes.error) throw feedItemsRes.error;
+      const publishedChannelByBlueprint = new Map<string, { slug: string; createdAtMs: number }>();
+      const feedItems = (feedItemsRes.data || []) as Array<{ id: string; blueprint_id: string }>;
+      const feedItemIds = feedItems.map((row) => row.id);
+      const blueprintIdByFeedItemId = new Map(feedItems.map((row) => [row.id, row.blueprint_id]));
+      let publishedCandidateRows: Array<{
+        channel_slug: string;
+        created_at: string;
+        user_feed_item_id: string;
+      }> = [];
+      if (feedItemIds.length > 0) {
+        const { data: candidatesData, error: candidatesError } = await supabase
+          .from('channel_candidates')
+          .select('channel_slug, created_at, user_feed_item_id')
+          .eq('status', 'published')
+          .in('user_feed_item_id', feedItemIds);
+        if (candidatesError) throw candidatesError;
+        publishedCandidateRows = (candidatesData || []) as Array<{
+          channel_slug: string;
+          created_at: string;
+          user_feed_item_id: string;
+        }>;
+      }
+
+      for (const row of publishedCandidateRows) {
+        const blueprintId = blueprintIdByFeedItemId.get(row.user_feed_item_id);
+        const channelSlug = String(row.channel_slug || '').trim().toLowerCase();
+        if (!blueprintId || !channelSlug) continue;
+
+        const createdAtMs = Number.isFinite(Date.parse(row.created_at)) ? Date.parse(row.created_at) : 0;
+        const existing = publishedChannelByBlueprint.get(blueprintId);
+        if (!existing || createdAtMs > existing.createdAtMs || (createdAtMs === existing.createdAtMs && channelSlug < existing.slug)) {
+          publishedChannelByBlueprint.set(blueprintId, { slug: channelSlug, createdAtMs });
+        }
+      }
 
       let followTagIds = new Set<string>();
       if (isForYouScope) {
@@ -188,10 +225,14 @@ export default function Wall() {
         profile: profilesMap.get(blueprint.creator_user_id) || { display_name: null, avatar_url: null },
         tags: blueprintTags.get(blueprint.id) || [],
         user_liked: likedIds.has(blueprint.id),
+        published_channel_slug: publishedChannelByBlueprint.get(blueprint.id)?.slug || null,
       })) as BlueprintPost[];
 
       if (isSpecificChannelScope && scopedChannel) {
         return hydrated.filter((post) => {
+          if (post.published_channel_slug) {
+            return post.published_channel_slug === scopedChannel.slug;
+          }
           return matchesChannelByTags(scopedChannel.slug, post.tags.map((tag) => tag.slug));
         });
       }
@@ -496,7 +537,8 @@ export default function Wall() {
                     fallback: 'Open to view the full step-by-step guide.',
                     maxChars: 220,
                   });
-                  const channelSlug = resolveChannelLabelForBlueprint(post.tags.map((tag) => tag.slug)).replace(/^b\//, '');
+                  const fallbackChannelSlug = resolveChannelLabelForBlueprint(post.tags.map((tag) => tag.slug)).replace(/^b\//, '');
+                  const channelSlug = post.published_channel_slug || fallbackChannelSlug;
                   const channelLabel = `b/${channelSlug}`;
                   const channelConfig = CHANNELS_CATALOG.find((channel) => channel.slug === channelSlug);
                   const ChannelIcon = getChannelIcon(channelConfig?.icon || 'sparkles');

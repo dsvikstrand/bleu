@@ -23,7 +23,7 @@
     - banner prompt path is constrained to visual-only output (no readable text/typography/logos/watermarks).
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
-    - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status labels (`Posted to <Channel>`, `Publishing...`, or `In My Feed` with reason).
+    - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status labels (`Posted to <Channel>`, `Publishing...`, or `In My Feed`).
     - `My Feed` subscription notices render avatar and optional banner background; card click opens a details popup with confirm-gated `Unsubscribe`.
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
@@ -97,6 +97,7 @@
    - stale running ingestion jobs are recovered before new service/manual trigger paths execute (`STALE_RUNNING_RECOVERY`).
 4. Optional user remix/insight.
 5. Channel candidate evaluation (all-gates-run default, aggregated decision).
+   - channel resolution uses deterministic tag+alias classifier (`AUTO_CHANNEL_CLASSIFIER_MODE=deterministic_v1`) with fallback slug (`AUTO_CHANNEL_FALLBACK_SLUG=general` by default).
 6. Gate decision:
    - pass -> publish to channel feed
    - warn/block -> remain personal-only
@@ -104,6 +105,7 @@
 Current production behavior note:
 - Legacy manual candidate flow remains bypass-first by default (`CHANNEL_GATES_MODE=bypass`) for rollback compatibility.
 - Auto-channel flow can enforce deterministic checks independently via `AUTO_CHANNEL_GATE_MODE`.
+- Channel-fit gate uses the same deterministic mapper as classifier output so route and fit checks stay aligned.
 
 ## 4) Contracts And Policy Surfaces
 - API contract (adapter v0):

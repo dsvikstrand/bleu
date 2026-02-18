@@ -14,7 +14,7 @@ a2) [have] Public feed/channel/community primitives are live (`/wall`, `/channel
 a3) [have] `My Feed` personal unfiltered lane is available as `/my-feed` (feature-flagged rollout).
 a4) [have] Auto-ingestion from followed YouTube channels is available with auto-only UX and new-uploads-only behavior (no initial old-video prefill).
 a5) [have] Auto-channel pipeline contract is implemented for all source paths and can auto-publish to channels after deterministic checks.
-a6) [have] Auto-channel assignment is deterministic MVP placeholder (`general`) and is intentionally swappable with a future LLM classifier.
+a6) [have] Auto-channel assignment is deterministic tag+alias mapping to real curated channels, with safe fallback to `general` when ambiguous.
 a7) [have] Legacy pending/skipped feed rows without blueprints are hidden in `My Feed` UI to reduce migration noise.
 a8) [have] `/subscriptions` is simplified for MVP to two visible actions: `Add Subscription` (popup search) and per-row `Unsubscribe`.
 a9) [have] `/subscriptions` hides the aggregate ingestion-health summary box to reduce new-user confusion.
@@ -30,7 +30,7 @@ a18) [have] `My Feed` blueprint cards now open blueprint detail by card click (d
 a19) [have] `My Feed` header now includes direct `Add Subscription` shortcut in addition to `Manage subscriptions`.
 a20) [have] Auto-banner queue contract is now available for subscription auto-ingest (`/api/auto-banner/jobs/trigger`) with service-auth control and non-blocking ingestion mode.
 a21) [have] Banner-cap policy contract is now available globally with generated banner preservation (`blueprints.banner_generated_url`) and deterministic channel-default fallback.
-a22) [have] `My Feed` card footer now shows read-only auto-channel status (`Posted to <Channel>`, `Publishing...`, or `In My Feed` with reason).
+a22) [have] `My Feed` card footer now shows read-only auto-channel status (`Posted to <Channel>`, `Publishing...`, or `In My Feed`).
 a23) [have] Search-generated saves now carry source channel context so `My Feed` subtitle row can show channel name instead of duplicated post title.
 a24) [have] `My Feed` source subtitle resolution now falls back to source metadata channel title when `source_channel_title` is missing, preventing title duplication for search-generated content.
 a25) [have] `/youtube` now runs core generation first and performs review/banner as async post-steps; `Save to My Feed` is non-blocking while enhancements continue.
@@ -82,7 +82,7 @@ b5) Subscription behavior (MVP simplified)
 ## MVP Lifecycle Contract
 c1) Pull/ingest -> generate blueprint -> publish to `My Feed`.
 c2) Optional user remix/insight.
-c3) Auto-channel pipeline runs per item (deterministic `general` assignment in MVP).
+c3) Auto-channel pipeline runs per item (deterministic tag+alias channel assignment in MVP).
 c4) Channel gate contract remains (`channel_fit`, `quality`, `safety`, `pii`) and auto-channel path uses deterministic checks in enforced mode.
 c5) Result:
 - pass -> publish to channel feed
@@ -104,7 +104,7 @@ p5) Explainable in one sentence.
 ## MVP Default Policies (Lock)
 m1) Adapter scope default: YouTube-only.
 m2) My Feed default visibility: personal/private lane until channel promotion.
-m3) Channel promotion default mode: automatic publish after deterministic checks.
+m3) Channel promotion default mode: automatic publish to deterministically resolved channel after deterministic checks.
 m4) User contribution default: insights/remixes attached to imported blueprints (no standalone free-form posting in MVP core).
 m5) Non-pass auto-channel outcomes default action: blocked from channel, retained in My Feed.
 m6) Evaluator default mode: all-gates-run with aggregated decision evidence.
@@ -185,6 +185,7 @@ si22) `POST /api/source-subscriptions/refresh-generate` returns `400 MAX_ITEMS_E
 si23) refresh candidate cooldown table is active: `refresh_video_attempts` (tracks failed manual refresh attempts with retry hold window).
 si24) user endpoint: `GET /api/ingestion/jobs/latest-mine?scope=manual_refresh_selection` (restore active manual-refresh status after page reload).
 si25) user endpoint: `POST /api/my-feed/items/:id/auto-publish` (run deterministic auto-channel publish for a saved My Feed blueprint).
+si26) `POST /api/my-feed/items/:id/auto-publish` now returns additive classifier metadata (`classifier_mode`, `classifier_reason`) for audit/debug.
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

@@ -104,6 +104,9 @@ const youtubeDataApiKey = String(process.env.YOUTUBE_DATA_API_KEY || '').trim();
 const autoChannelPipelineEnabledRaw = String(process.env.AUTO_CHANNEL_PIPELINE_ENABLED || 'false').trim().toLowerCase();
 const autoChannelPipelineEnabled = autoChannelPipelineEnabledRaw === 'true' || autoChannelPipelineEnabledRaw === '1' || autoChannelPipelineEnabledRaw === 'on';
 const autoChannelDefaultSlug = String(process.env.AUTO_CHANNEL_DEFAULT_SLUG || 'general').trim().toLowerCase() || 'general';
+const autoChannelClassifierModeRaw = String(process.env.AUTO_CHANNEL_CLASSIFIER_MODE || 'deterministic_v1').trim().toLowerCase();
+const autoChannelClassifierMode = autoChannelClassifierModeRaw === 'general_placeholder' ? 'general_placeholder' : 'deterministic_v1';
+const autoChannelFallbackSlug = String(process.env.AUTO_CHANNEL_FALLBACK_SLUG || autoChannelDefaultSlug).trim().toLowerCase() || 'general';
 const autoChannelLegacyManualFlowEnabledRaw = String(process.env.AUTO_CHANNEL_LEGACY_MANUAL_FLOW_ENABLED || 'true').trim().toLowerCase();
 const autoChannelLegacyManualFlowEnabled = !(autoChannelLegacyManualFlowEnabledRaw === 'false' || autoChannelLegacyManualFlowEnabledRaw === '0' || autoChannelLegacyManualFlowEnabledRaw === 'off');
 const autoChannelGateMode = normalizeGateMode(process.env.AUTO_CHANNEL_GATE_MODE, 'enforce');
@@ -1240,7 +1243,8 @@ async function runAutoChannelForFeedItem(input: {
     blueprint_id: input.blueprintId,
     source_item_id: input.sourceItemId,
     source_tag: input.sourceTag,
-    channel_default_slug: autoChannelDefaultSlug,
+    channel_default_slug: autoChannelFallbackSlug,
+    classifier_mode: autoChannelClassifierMode,
     gate_mode: autoChannelGateMode,
   }));
 
@@ -1249,7 +1253,8 @@ async function runAutoChannelForFeedItem(input: {
     userId: input.userId,
     userFeedItemId: input.userFeedItemId,
     blueprintId: input.blueprintId,
-    defaultChannelSlug: autoChannelDefaultSlug,
+    defaultChannelSlug: autoChannelFallbackSlug,
+    classifierMode: autoChannelClassifierMode,
     gateMode: autoChannelGateMode,
     sourceTag: input.sourceTag,
   });
@@ -1263,6 +1268,8 @@ async function runAutoChannelForFeedItem(input: {
     reason_code: result.reasonCode,
     aggregate: result.aggregate,
     gate_mode: result.gateMode,
+    classifier_mode: result.classifierMode,
+    classifier_reason: result.classifierReason,
     idempotent: result.idempotent,
     source_tag: input.sourceTag,
   }));
@@ -3937,6 +3944,8 @@ app.post('/api/my-feed/items/:id/auto-publish', async (req, res) => {
         channel_slug: result.channelSlug,
         decision: result.decision,
         reason_code: result.reasonCode,
+        classifier_mode: result.classifierMode,
+        classifier_reason: result.classifierReason,
       },
     });
   } catch (error) {

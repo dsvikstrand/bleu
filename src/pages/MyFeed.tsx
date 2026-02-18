@@ -507,7 +507,7 @@ export default function MyFeed() {
                       </div>
                     )}
 
-                    {!isSubscriptionNotice && blueprint && item.lastDecisionCode && item.state !== 'channel_published' && (
+                    {!autoChannelPipelineEnabled && !isSubscriptionNotice && blueprint && item.lastDecisionCode && item.state !== 'channel_published' && (
                       <p className="text-xs text-muted-foreground">Reason: {item.lastDecisionCode}</p>
                     )}
 

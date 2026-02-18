@@ -1,19 +1,24 @@
 import type { CandidateContext, CandidateGateDecision, Gate } from './types';
+import { getChannelResolutionMeta } from '../services/deterministicChannelClassifier';
 
 export class ChannelFitGate implements Gate {
   id = 'channel_fit' as const;
 
   evaluate(context: CandidateContext): CandidateGateDecision {
-    const normalizedTags = context.tagSlugs.map((tag) => tag.toLowerCase());
     const channelToken = context.channelSlug.toLowerCase();
+    const fallbackSlug = String(process.env.AUTO_CHANNEL_FALLBACK_SLUG || 'general').trim().toLowerCase() || 'general';
+    const resolved = getChannelResolutionMeta({
+      tagSlugs: context.tagSlugs,
+      fallbackSlug,
+    });
 
-    if (channelToken === 'general' || normalizedTags.includes(channelToken)) {
+    if (channelToken === resolved.resolvedSlug) {
       return {
         gate_id: this.id,
         outcome: 'pass',
         reason_code: 'FIT_PASS',
         score: 1,
-        method_version: 'fit-v1',
+        method_version: 'fit-v2',
       };
     }
 
@@ -22,7 +27,7 @@ export class ChannelFitGate implements Gate {
       outcome: 'warn',
       reason_code: 'FIT_AMBIGUOUS',
       score: 0.45,
-      method_version: 'fit-v1',
+      method_version: 'fit-v2',
     };
   }
 }

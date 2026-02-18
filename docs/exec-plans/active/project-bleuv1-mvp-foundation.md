@@ -35,13 +35,14 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Ensure channel fail does not remove personal access.
 - Hide legacy no-blueprint pending/skipped rows during migration cleanup.
 - Align My Feed card presentation to channel-feed style and show read-only auto-channel status labels.
-- Show `Posted to <Channel>` only for channel-published items; held items remain visible with reason labels.
+- Show `Posted to <Channel>` only for channel-published items; held/rejected items remain visible as `In My Feed` without technical reason copy.
 - Ensure full-card banner fill on My Feed blueprint cards (no transparent edge gap).
 - Harden Search-generated source channel-title persistence + metadata fallback so My Feed subtitle row consistently shows channel name.
 
 ### W2 - Channel Candidate Gating
 - Run deterministic auto-channel checks for all source paths.
 - Preserve quality/safety/channel-fit constraints while keeping legacy manual endpoints as rollback-safe fallback.
+- Use deterministic tag+alias classifier for real channel resolution with `general` fallback, and keep channel-fit gate logic aligned with the same mapper.
 
 ### W3 - YouTube Pull And Caching
 - Keep YouTube-first ingestion flow stable.

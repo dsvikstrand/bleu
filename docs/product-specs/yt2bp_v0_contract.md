@@ -36,6 +36,7 @@
 - 2026-02-18 note: refresh hardening (`GET /api/ingestion/jobs/:id`, refresh endpoint rate caps, `MAX_ITEMS_EXCEEDED`, `JOB_ALREADY_RUNNING`, failed-video cooldown via `refresh_video_attempts`) is additive and does not alter the YT2BP endpoint envelope.
 - 2026-02-18 note: refresh hardening follow-up (`GET /api/ingestion/jobs/latest-mine`, manual-refresh checkpoint-forward updates, cooldown-filter visibility) is additive and does not alter the YT2BP endpoint envelope.
 - 2026-02-18 note: auto-channel publish endpoint (`POST /api/my-feed/items/:id/auto-publish`) is additive and does not alter the YT2BP endpoint envelope.
+- 2026-02-18 note: auto-channel publish now uses deterministic real-channel classification (tag+alias mapper with `general` fallback) and may return additive classifier metadata (`classifier_mode`, `classifier_reason`); this remains outside the YT2BP endpoint envelope.
 
 ## Request
 ```json
@@ -124,6 +125,7 @@
 - Manual refresh latest-user-status endpoint (`GET /api/ingestion/jobs/latest-mine`) is intentionally outside this endpoint contract.
 - Refresh endpoint concurrency/rate/cooldown controls are intentionally outside this endpoint contract.
 - Auto-channel endpoint (`POST /api/my-feed/items/:id/auto-publish`) is intentionally outside this endpoint contract.
+- Auto-channel classifier mode/fallback controls (`AUTO_CHANNEL_CLASSIFIER_MODE`, `AUTO_CHANNEL_FALLBACK_SLUG`) are intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: env-controlled via `YT2BP_CORE_TIMEOUT_MS` (default `120s`).

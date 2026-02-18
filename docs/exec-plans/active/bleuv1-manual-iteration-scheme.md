@@ -43,6 +43,7 @@ Execution mode:
 24. [have] Step 23 - Refresh/poll gotcha hardening (caps + cooldown + job status)
 25. [have] Step 24 - Refresh checkpoint + reload-resume hardening
 26. [have] Step 25 - Auto-channel pipeline cutover (general-first deterministic publish)
+27. [have] Step 26 - Deterministic real-channel classification (tag+alias mapper with `general` fallback)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -625,6 +626,35 @@ Completion evidence (2026-02-18)
 - Updated `server/index.ts` with auto-channel env controls, source-path integrations, `POST /api/my-feed/items/:id/auto-publish`, and legacy-manual rollback gate.
 - Updated `src/pages/YouTubeToBlueprint.tsx` to trigger auto-publish after save.
 - Updated `src/pages/MyFeed.tsx` to default to read-only auto-channel statuses in UI.
+
+### Step 26 - Deterministic real-channel classification (tag+alias mapper)
+Scope
+- replace `general` placeholder routing with deterministic tag+alias channel resolution for new auto-published items
+- keep safe fallback to `general` for ambiguous/no-match cases
+- align channel-fit gate logic and Wall channel labels with the same source of truth
+
+Definition of done
+- backend classifier service resolves channel slug via exact tag match then alias match, with deterministic tie-break
+- auto-channel pipeline returns additive classifier metadata (`classifier_mode`, `classifier_reason`)
+- channel-fit gate uses deterministic resolver output for pass/warn decisions
+- Wall channel label prefers latest published candidate channel and falls back to tag mapping
+- My Feed held/rejected auto-mode cards show `In My Feed` without technical reason copy
+
+Evaluation
+- manual smoke: clear mapped tags route to non-`general` channel automatically
+- manual smoke: ambiguous tags fall back to `general`
+- manual smoke: Wall label follows published candidate channel when present
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+Completion evidence (2026-02-18)
+- Added `server/services/deterministicChannelClassifier.ts` and tests for exact/alias/fallback/tie-break behavior.
+- Updated `server/services/autoChannelPipeline.ts` to use classifier mode + fallback controls.
+- Updated `server/gates/builtins.ts` channel-fit gate to use the same deterministic resolver.
+- Updated `server/index.ts` with `AUTO_CHANNEL_CLASSIFIER_MODE`, `AUTO_CHANNEL_FALLBACK_SLUG`, and additive auto-publish metadata.
+- Updated `src/pages/Wall.tsx` to prefer published candidate channel labels and `src/pages/MyFeed.tsx` to hide held-state technical reason text in auto mode.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

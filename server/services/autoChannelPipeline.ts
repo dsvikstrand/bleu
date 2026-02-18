@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { evaluateCandidateForChannel } from '../gates';
 import type { GateMode } from '../gates/types';
+import {
+  getChannelResolutionMeta,
+  type ChannelClassifierReason,
+} from './deterministicChannelClassifier';
 
 type DbClient = ReturnType<typeof createClient>;
 
@@ -9,16 +13,42 @@ export interface AutoChannelResolver {
     blueprintId: string;
     tagSlugs: string[];
     defaultChannelSlug: string;
-  }): string | Promise<string>;
+    classifierMode: AutoChannelClassifierMode;
+  }): AutoChannelResolution | Promise<AutoChannelResolution>;
 }
 
-class GeneralAutoChannelResolver implements AutoChannelResolver {
+export type AutoChannelClassifierMode = 'deterministic_v1' | 'general_placeholder';
+
+export type AutoChannelResolution = {
+  channelSlug: string;
+  classifierMode: AutoChannelClassifierMode;
+  classifierReason: ChannelClassifierReason;
+};
+
+class DeterministicAutoChannelResolver implements AutoChannelResolver {
   resolveChannelSlugForBlueprint(input: {
     blueprintId: string;
     tagSlugs: string[];
     defaultChannelSlug: string;
+    classifierMode: AutoChannelClassifierMode;
   }) {
-    return String(input.defaultChannelSlug || 'general').trim().toLowerCase() || 'general';
+    const fallbackSlug = String(input.defaultChannelSlug || 'general').trim().toLowerCase() || 'general';
+    if (input.classifierMode === 'general_placeholder') {
+      return {
+        channelSlug: fallbackSlug,
+        classifierMode: input.classifierMode,
+        classifierReason: 'fallback_general',
+      };
+    }
+    const meta = getChannelResolutionMeta({
+      tagSlugs: input.tagSlugs,
+      fallbackSlug,
+    });
+    return {
+      channelSlug: meta.resolvedSlug,
+      classifierMode: input.classifierMode,
+      classifierReason: meta.reason,
+    };
   }
 }
 
@@ -30,6 +60,7 @@ export type AutoChannelPipelineInput = {
   defaultChannelSlug: string;
   gateMode: GateMode;
   sourceTag: string;
+  classifierMode: AutoChannelClassifierMode;
   resolver?: AutoChannelResolver;
 };
 
@@ -43,6 +74,8 @@ export type AutoChannelPipelineResult = {
   aggregate: 'pass' | 'warn' | 'block';
   gateMode: GateMode;
   idempotent: boolean;
+  classifierMode: AutoChannelClassifierMode;
+  classifierReason: ChannelClassifierReason;
 };
 
 function toTagSlug(raw: string) {
@@ -97,7 +130,7 @@ async function getBlueprintTagSlugs(db: DbClient, blueprintId: string): Promise<
 }
 
 export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): Promise<AutoChannelPipelineResult> {
-  const resolver = input.resolver || new GeneralAutoChannelResolver();
+  const resolver = input.resolver || new DeterministicAutoChannelResolver();
 
   const { data: blueprint, error: blueprintError } = await input.db
     .from('blueprints')
@@ -109,12 +142,13 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
   }
 
   const tagSlugs = await getBlueprintTagSlugs(input.db, input.blueprintId);
-  const resolvedChannelSlugRaw = await resolver.resolveChannelSlugForBlueprint({
+  const resolution = await resolver.resolveChannelSlugForBlueprint({
     blueprintId: input.blueprintId,
     tagSlugs,
     defaultChannelSlug: input.defaultChannelSlug,
+    classifierMode: input.classifierMode,
   });
-  const channelSlug = String(resolvedChannelSlugRaw || input.defaultChannelSlug || 'general').trim().toLowerCase() || 'general';
+  const channelSlug = String(resolution.channelSlug || input.defaultChannelSlug || 'general').trim().toLowerCase() || 'general';
 
   const { data: existingCandidate } = await input.db
     .from('channel_candidates')
@@ -134,6 +168,8 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
       aggregate: 'pass',
       gateMode: input.gateMode,
       idempotent: true,
+      classifierMode: resolution.classifierMode,
+      classifierReason: resolution.classifierReason,
     };
   }
 
@@ -222,6 +258,8 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
       aggregate: evaluation.aggregate,
       gateMode: input.gateMode,
       idempotent: false,
+      classifierMode: resolution.classifierMode,
+      classifierReason: resolution.classifierReason,
     };
   }
 
@@ -248,5 +286,7 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
     aggregate: evaluation.aggregate,
     gateMode: input.gateMode,
     idempotent: false,
+    classifierMode: resolution.classifierMode,
+    classifierReason: resolution.classifierReason,
   };
 }

@@ -11,6 +11,7 @@ Status: `canonical`
 3. `My Feed` is the personal default lane.
 4. Channel feed is automatically populated from `My Feed` via deterministic auto-channel checks.
 5. Community value is comments/votes/insights on blueprint content.
+6. Deterministic channel routing resolves real curated channels from tags/aliases and falls back to `general` when ambiguous.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.
