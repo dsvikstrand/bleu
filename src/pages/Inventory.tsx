@@ -118,7 +118,7 @@ export default function Inventory() {
               <p className="text-sm font-semibold text-primary uppercase tracking-wide">Legacy Library</p>
               <h1 className="text-2xl font-semibold tracking-tight">Compatibility library surface</h1>
               <p className="text-sm text-muted-foreground">
-                This flow is retained for compatibility. Primary MVP journey is YouTube pull to My Feed, then channel submit.
+                This flow is retained for compatibility. Primary MVP journey is YouTube pull to My Feed with automatic channel routing.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -141,7 +141,7 @@ export default function Inventory() {
               <div className="min-w-0">
                 <p className="text-sm font-semibold">Posting to b/{postChannel.slug}</p>
                 <p className="text-xs text-muted-foreground line-clamp-2">
-                  Choose a library, then publish your blueprint into this channel.
+                  Choose a legacy library workflow for this channel context. Primary flow remains source-first with automatic channel routing.
                 </p>
               </div>
               <Button asChild size="sm" variant="outline">

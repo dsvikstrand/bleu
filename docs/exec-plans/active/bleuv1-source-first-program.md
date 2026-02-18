@@ -153,6 +153,8 @@ Rules:
   - signed-in top navigation now uses `Home / Search / Channels / Explore`.
   - `My Feed` is moved out of top nav.
   - shared-lane copy now consistently references `Home` while route stays `/wall`.
+- Core terminology harmonization (2026-02-18):
+  - high-traffic UI copy now consistently reflects current runtime (`Home`, header `Create`, auto-channel publish) and removes stale manual-post phrasing.
 - Profile workspace tabs (2026-02-18):
   - profile now anchors personal workspace with tabs `Feed / Comments / Liked`.
   - profile `Feed` reuses My Feed timeline visuals.

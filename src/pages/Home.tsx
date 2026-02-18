@@ -57,12 +57,12 @@ export default function Home() {
             Automated YouTube to blueprint feed, with community publishing.
           </h1>
           <p className="text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Search videos or paste a URL, generate into My Feed, and let the app auto-route eligible items to Home.
+            Use Create or paste a YouTube URL, save into My Feed, and let eligible items auto-publish to Home.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <Link to={user ? '/search' : '/auth'}>
               <Button size="lg" className="gap-2">
-                {user ? 'Search YouTube' : 'Sign in to Start'}
+                {user ? 'Open Create' : 'Sign in to Start'}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
@@ -91,7 +91,7 @@ export default function Home() {
                 <Search className="h-5 w-5 text-primary" />
                 <h3 className="font-semibold">1) Pull content</h3>
                 <p className="text-sm text-muted-foreground">
-                  Subscribe to YouTube channels or find a video via Search/URL.
+                  Subscribe to YouTube channels or open Create to pick a video.
                 </p>
               </CardContent>
             </Card>

@@ -39,6 +39,7 @@
 - 2026-02-18 note: auto-channel publish now uses deterministic real-channel classification (tag+alias mapper with `general` fallback) and may return additive classifier metadata (`classifier_mode`, `classifier_reason`); this remains outside the YT2BP endpoint envelope.
 - 2026-02-18 note: auto-channel classifier now also supports `llm_labeler_v1` (artifact-only sync label pass, retry once on invalid output, fallback to `general`) and may return additive `classifier_confidence`; still outside this endpoint envelope.
 - 2026-02-18 note: profile workspace feed endpoint (`GET /api/profile/:userId/feed`) is additive and does not alter the YT2BP endpoint envelope.
+- 2026-02-18 note: high-traffic wording harmonization (`Home`, `Create`, auto-publish phrasing) is UI-only and does not alter this endpoint envelope.
 
 ## Request
 ```json

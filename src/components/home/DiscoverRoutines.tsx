@@ -121,12 +121,12 @@ export function DiscoverRoutines() {
   return (
     <section className="space-y-4 animate-fade-in">
       <div className="space-y-2">
-        <p className="text-sm font-semibold text-primary uppercase tracking-wide">Discover neat routines</p>
+        <p className="text-sm font-semibold text-primary uppercase tracking-wide">Discover fresh blueprints</p>
         <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-          Blueprints are here to help you
+          Learn from what is working right now
         </h2>
         <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">
-          Blueprints are small yet effective guides to help you get things done. Browse Blueprints from the community, then come back and build your own Blueprints.
+          Browse high-signal blueprints from Home, then create your own from YouTube in a few clicks.
         </p>
       </div>
 

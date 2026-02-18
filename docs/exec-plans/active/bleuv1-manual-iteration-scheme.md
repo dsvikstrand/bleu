@@ -50,6 +50,7 @@ Execution mode:
 31. [have] Step 30 - Profile workspace tabs (`Feed / Comments / Liked`) + dropdown cleanup
 32. [have] Step 31 - Feed badge/tag consistency + profile visibility default update (`Blueprint` badge, Home-style capped tags without `#`, new profiles default public)
 33. [have] Step 32 - Nav/profile IA refinement (`Home / Channels / Explore`, `Create` -> `/search`, dropdown + profile-tab subscriptions entrypoints)
+34. [have] Step 33 - Core copy harmonization for source-first runtime language (Home/Create/auto-publish wording on high-traffic surfaces)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -742,6 +743,21 @@ Evaluation
 - manual smoke: owner profile has full feed actions
 - manual smoke: non-owner public profile feed hides owner-only actions
 - manual smoke: comments tab renders snippets + blueprint links + relative time
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+### Step 33 - Core copy harmonization for source-first runtime language
+Scope
+- align high-traffic UI text to current runtime language (`Home`, header `Create`, auto-channel publish)
+- remove stale legacy phrasing that implies manual post-to-channel as primary flow
+
+Definition of done
+- Home/About/Explore/Help/Auth/Wall/Search/YouTube copy consistently matches current product behavior
+- no core copy suggests deprecated library-first or manual-promotion-first journey
+
+Evaluation
+- manual smoke: high-traffic surfaces use consistent source-first terminology
 - `npm run build`
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`

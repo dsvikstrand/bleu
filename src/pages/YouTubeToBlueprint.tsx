@@ -704,7 +704,7 @@ export default function YouTubeToBlueprint() {
             <div className="min-w-0">
               <p className="text-sm font-semibold">Personal-first flow</p>
               <p className="text-xs text-muted-foreground line-clamp-2">
-                Generated content saves to My Feed first. Submit to channels as a second step.
+                Generated content saves to My Feed first. Channel routing runs automatically after save.
               </p>
             </div>
             <div className="shrink-0">
@@ -836,7 +836,7 @@ export default function YouTubeToBlueprint() {
                       </Button>
                     ) : config.features.channelSubmitV1 && (
                       <Button asChild variant="outline">
-                        <Link to="/my-feed">Manage channel submissions in My Feed</Link>
+                        <Link to="/my-feed">Review channel status in My Feed</Link>
                       </Button>
                     )}
                   </div>

@@ -11,7 +11,7 @@ export default function About() {
           <div className="space-y-4 text-sm text-muted-foreground">
             <p>
               Blueprints is a source-first community app. Pull content into your personal My Feed,
-              remix it into useful steps, then submit high-quality items to channel feeds for
+              remix it into useful steps, and let eligible items auto-publish to Home for
               discussion and voting.
             </p>
             <p>

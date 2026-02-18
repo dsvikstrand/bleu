@@ -197,10 +197,10 @@ export default function SearchPage() {
       <AppHeader />
       <PageMain className="space-y-6">
         <PageSection className="space-y-2">
-          <p className="text-sm font-semibold text-primary uppercase tracking-wide">Search</p>
-          <h1 className="text-2xl font-semibold">Find YouTube content and turn it into blueprints</h1>
+          <p className="text-sm font-semibold text-primary uppercase tracking-wide">Create</p>
+          <h1 className="text-2xl font-semibold">Find YouTube content and create blueprints</h1>
           <p className="text-sm text-muted-foreground">
-            Search is suggestion-only. Nothing is saved until you click Generate Blueprint.
+            Results are suggestion-only. Nothing is saved until you click Generate Blueprint.
           </p>
         </PageSection>
 

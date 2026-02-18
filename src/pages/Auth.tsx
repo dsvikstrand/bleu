@@ -116,7 +116,7 @@ export default function Auth() {
           </div>
           <CardTitle>Welcome</CardTitle>
           <CardDescription>
-            Sign in to save your blueprints and share with the community
+            Sign in to create blueprints, manage subscriptions, and personalize Home
           </CardDescription>
         </CardHeader>
         

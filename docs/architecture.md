@@ -19,6 +19,7 @@
   - React + Vite app (`src/pages/*`).
   - Signed-in primary nav uses `Home / Channels / Explore`.
   - Header `Create` action (next to profile menu) routes to `/search` for search/create discovery.
+  - Core copy across high-traffic surfaces is intentionally aligned to runtime terms (`Home`, `Create`, auto-channel publish) to avoid legacy flow drift.
   - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked / Subscriptions` (subscriptions tab owner-only); `/my-feed` remains direct-access compatible.
   - Profile visibility default is public for new accounts (`profiles.is_public=true` by default).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.

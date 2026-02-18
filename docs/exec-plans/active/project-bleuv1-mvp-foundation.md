@@ -43,6 +43,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Keep imported blueprint detail attribution source-first (show source channel when present, hide default edit CTA in MVP UI).
 - Profile privacy default migration: new profiles default to public (`profiles.is_public=true`), existing profiles unchanged.
 - Main nav IA is simplified to `Home / Channels / Explore`, with search/create moved to the header `Create` action.
+- Core high-traffic copy is harmonized to current source-first behavior (`Home`, `Create`, auto-channel publish) and legacy manual-post phrasing is removed.
 
 ### W2 - Channel Candidate Gating
 - Run deterministic auto-channel checks for all source paths.

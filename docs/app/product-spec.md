@@ -49,6 +49,7 @@ a37) [have] New profiles now default to `is_public=true` (public by default); ex
 a38) [have] Signed-in top nav is simplified to `Home / Channels / Explore`; Search is now entered via the header `Create` action near the profile menu.
 a39) [have] User dropdown includes `Subscriptions` as the direct link to the full subscription management page.
 a40) [have] Profile tabs now include owner-only `Subscriptions` with a lightweight list and `Unsubscribe` action.
+a41) [have] Core high-traffic copy surfaces (Home/About/Explore/Help/Auth/YouTube/Search/Wall) are aligned to current source-first and auto-channel runtime language.
 
 ## Core Model
 b1) `Source Item`

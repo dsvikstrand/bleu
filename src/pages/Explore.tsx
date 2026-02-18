@@ -283,7 +283,7 @@ export default function Explore() {
               <section>
                 <h2 className="text-sm font-medium text-muted-foreground mb-1">Legacy Libraries</h2>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Compatibility surface. Primary MVP journey is YouTube pull to My Feed, then channel submit.
+                  Compatibility surface. Primary MVP journey is YouTube pull to My Feed with automatic channel routing.
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {groupedResults.inventories.map((r) => (

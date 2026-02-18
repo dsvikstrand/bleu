@@ -11,7 +11,7 @@ interface HelpOverlayProps {
 
 const FLOW_STEPS = [
   { label: 'Pull From YouTube', hint: 'Use a single video URL to generate a blueprint draft.' },
-  { label: 'Save To My Feed', hint: 'Personal intake lane keeps content private by default.' },
+  { label: 'Save To My Feed', hint: 'Each item lands in your personal timeline first.' },
   { label: 'Add Insight or Remix', hint: 'Refine and add context before sharing.' },
   { label: 'Auto Channel Publish', hint: 'Quality/safety checks run before public distribution.' },
   { label: 'Community Feedback', hint: 'Votes and comments keep Home relevant.' },
@@ -34,7 +34,7 @@ const FEATURE_CARDS = [
     title: 'Tags',
     description: 'Tags connect the community. Follow them to tailor what you see.',
     icon: Tag,
-    bullets: ['Follow tags you like', 'See trends on the wall', 'Stay focused on your goals'],
+    bullets: ['Follow tags you like', 'See trends in Home', 'Stay focused on your goals'],
   },
   {
     title: 'Community',
@@ -79,8 +79,8 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       Here’s the goal: turn source content into actionable blueprints you can consume
                       in bite-sized form. My Feed is your personal intake lane, and Home is the
-                      shared lane after quality checks. You can remix insights, and auto-publish keeps useful items moving,
-                      and learn from community feedback.
+                      shared lane after quality checks. You can remix insights, auto-publish keeps useful items moving,
+                      and community feedback helps surface the best content.
                     </p>
                   </CardContent>
                 </Card>

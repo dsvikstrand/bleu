@@ -40,6 +40,7 @@ a27) [have] 2026-02-18 save-path hardening now preserves and reuses channel-titl
 a28) [have] 2026-02-18 save-path update: optional review/banner now continue asynchronously after core generation and can attach to a saved blueprint without blocking `Save to My Feed`.
 a29) [have] 2026-02-18 backend timeout update: core endpoint timeout is now configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
 a30) [have] 2026-02-18 save-path update: `POST /api/my-feed/items/:id/auto-publish` is used to auto-publish URL/search saves after `Save to My Feed`.
+a31) [have] 2026-02-18 terminology update: high-traffic UI copy now uses `Home`/`Create`/auto-publish wording consistently; this is UI-only and does not change YT2BP API/runtime contract.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract

@@ -17,6 +17,7 @@ Status: `canonical`
 9. My Feed blueprint card badge label is normalized to `Blueprint`, and feed tags use the same one-row capped chip treatment as Home (without `#` prefix).
 10. Signed-in primary nav is `Home / Channels / Explore`; search/create entrypoint is the header `Create` action to `/search`.
 11. Subscriptions are reachable from both user dropdown (full page) and profile workspace owner tab (lightweight list).
+12. Core high-traffic UI copy must use current runtime language (`Home`, `Create`, auto-channel publish) and avoid legacy manual-post wording.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.
