@@ -433,6 +433,33 @@ Completion evidence (2026-02-17)
 - Updated `src/pages/MyFeed.tsx` for copy, CTA layout, card click navigation, and notice-card visual/action refinements.
 - Updated `src/pages/Subscriptions.tsx` to auto-open add dialog when `add=1` query param is provided.
 
+### Step 20 - My Feed status-row interaction model (subscription details popup + footer post action)
+Scope
+- remove inline subscription-card `Unsubscribe` button from My Feed cards
+- show relative `x time ago` in subscription card top-right and show `Subscription` badge in status row
+- make subscription cards clickable to open a detailed popup with channel info and `Unsubscribe` action
+- remove blueprint top-right `Post to Channel` button and move posting entrypoint to footer text action
+- replace `Not submitted yet` with clickable `Post to Channel`; keep candidate status text after submission
+- apply badge-style treatment for `In My Feed` in footer status slot
+
+Definition of done
+- subscription cards no longer show inline unsubscribe controls
+- subscription cards show top-right relative time and bottom-right `Subscription` badge
+- clicking a subscription card opens a detailed popup; unsubscribe remains confirm-gated
+- blueprint cards no longer have top-right post button
+- footer left action is clickable `Post to Channel` when no candidate and updates to candidate status after submit
+- footer right `In My Feed` displays as badge-style status
+
+Evaluation
+- manual smoke: subscription card opens details popup and unsubscribe still works with confirm
+- manual smoke: blueprint card top-right action removed, footer post action opens submit dialog
+- manual smoke: footer status updates from `Post to Channel` to `Candidate: ...` after submission
+- manual smoke: `In My Feed` renders as badge in footer right slot
+- docs freshness and link checks pass
+
+Completion evidence (2026-02-17)
+- Updated `src/pages/MyFeed.tsx` with subscription-card details popup, footer-driven posting action, and status-row badge treatment.
+
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary
 2. Plan with touched files and acceptance checks

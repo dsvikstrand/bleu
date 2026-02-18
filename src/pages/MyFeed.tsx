@@ -46,6 +46,7 @@ export default function MyFeed() {
   const { data: items, isLoading } = useMyFeed();
   const [selectedChannels, setSelectedChannels] = useState<Record<string, string>>({});
   const [submissionDialogItemId, setSubmissionDialogItemId] = useState<string | null>(null);
+  const [subscriptionDialogItemId, setSubscriptionDialogItemId] = useState<string | null>(null);
   const [unsubscribeDialogItemId, setUnsubscribeDialogItemId] = useState<string | null>(null);
 
   const defaultChannelForItem = (itemId: string, tags: string[]) => {
@@ -248,6 +249,7 @@ export default function MyFeed() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
+      setSubscriptionDialogItemId(null);
       setUnsubscribeDialogItemId(null);
       toast({ title: 'Unsubscribed', description: 'Subscription removed from your feed.' });
     },
@@ -279,6 +281,10 @@ export default function MyFeed() {
   const unsubscribeDialogItem = useMemo(
     () => (items || []).find((item) => item.id === unsubscribeDialogItemId) || null,
     [items, unsubscribeDialogItemId],
+  );
+  const subscriptionDialogItem = useMemo(
+    () => (items || []).find((item) => item.id === subscriptionDialogItemId) || null,
+    [items, subscriptionDialogItemId],
   );
 
   return (
@@ -358,24 +364,32 @@ export default function MyFeed() {
               return (
                 <Card
                   key={item.id}
-                  className={`border-border/50 ${isSubscriptionNotice ? 'relative overflow-hidden' : ''} ${blueprint ? 'cursor-pointer transition-colors hover:border-border' : ''}`}
+                  className={`border-border/50 ${isSubscriptionNotice ? 'relative overflow-hidden cursor-pointer transition-colors hover:border-border' : ''} ${blueprint ? 'cursor-pointer transition-colors hover:border-border' : ''}`}
                   onClick={
-                    blueprint
-                      ? () => navigate(`/blueprint/${blueprint.id}`)
-                      : undefined
+                    isSubscriptionNotice
+                      ? () => setSubscriptionDialogItemId(item.id)
+                      : blueprint
+                        ? () => navigate(`/blueprint/${blueprint.id}`)
+                        : undefined
                   }
                   onKeyDown={
-                    blueprint
+                    (isSubscriptionNotice || blueprint)
                       ? (event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
-                          navigate(`/blueprint/${blueprint.id}`);
+                          if (isSubscriptionNotice) {
+                            setSubscriptionDialogItemId(item.id);
+                            return;
+                          }
+                          if (blueprint) {
+                            navigate(`/blueprint/${blueprint.id}`);
+                          }
                         }
                       }
                       : undefined
                   }
-                  role={blueprint ? 'button' : undefined}
-                  tabIndex={blueprint ? 0 : undefined}
+                  role={isSubscriptionNotice || blueprint ? 'button' : undefined}
+                  tabIndex={isSubscriptionNotice || blueprint ? 0 : undefined}
                 >
                   {isSubscriptionNotice && !!source?.channelBannerUrl && (
                     <>
@@ -408,21 +422,7 @@ export default function MyFeed() {
                               <p className="text-xs text-muted-foreground line-clamp-2">{subtitle}</p>
                             </div>
                           </div>
-                          <Badge variant="secondary">{getMyFeedStateLabel(item.state as MyFeedItemState)}</Badge>
-                        </div>
-                        <div className="flex justify-end">
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="h-7 px-2 text-xs"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setUnsubscribeDialogItemId(item.id);
-                            }}
-                            disabled={unsubscribeMutation.isPending}
-                          >
-                            Unsubscribe
-                          </Button>
+                          <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
                         </div>
                       </>
                     ) : !blueprint ? (
@@ -472,21 +472,7 @@ export default function MyFeed() {
                           <div className="relative space-y-2">
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{subtitle}</p>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 px-2"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setSubmissionDialogItemId(item.id);
-                                  }}
-                                  title="Submit to channel"
-                                >
-                                  <span>Post to Channel</span>
-                                </Button>
-                              </div>
+                              <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
                             </div>
                             <p className="text-base font-semibold leading-tight">{title}</p>
                             <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
@@ -517,14 +503,93 @@ export default function MyFeed() {
 
                     {!isSubscriptionNotice && (
                       <div className="flex justify-between items-center text-xs text-muted-foreground">
-                        <span>{item.candidate ? `Candidate: ${item.candidate.status}` : 'Not submitted yet'}</span>
-                        <span>{getMyFeedStateLabel(item.state as MyFeedItemState)}</span>
+                        <span>
+                          {item.candidate ? (
+                            `Candidate: ${item.candidate.status}`
+                          ) : (
+                            <button
+                              type="button"
+                              className="underline underline-offset-2 hover:text-foreground"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSubmissionDialogItemId(item.id);
+                              }}
+                            >
+                              Post to Channel
+                            </button>
+                          )}
+                        </span>
+                        {item.state === 'my_feed_published' ? (
+                          <Badge variant="secondary">In My Feed</Badge>
+                        ) : (
+                          <span>{getMyFeedStateLabel(item.state as MyFeedItemState)}</span>
+                        )}
+                      </div>
+                    )}
+
+                    {isSubscriptionNotice && (
+                      <div className="flex justify-end">
+                        <Badge variant="secondary">Subscription</Badge>
                       </div>
                     )}
                   </CardContent>
                 </Card>
               );
             })}
+
+            <Dialog
+              open={!!subscriptionDialogItem}
+              onOpenChange={(open) => {
+                if (!open) setSubscriptionDialogItemId(null);
+              }}
+            >
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Subscription details</DialogTitle>
+                  <DialogDescription>
+                    Manage this channel subscription from one place.
+                  </DialogDescription>
+                </DialogHeader>
+                {subscriptionDialogItem?.source ? (
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium leading-tight">
+                        {subscriptionDialogItem.source.sourceChannelTitle || subscriptionDialogItem.source.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Status: {getMyFeedStateLabel(subscriptionDialogItem.state as MyFeedItemState)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Added: {formatRelativeShort(subscriptionDialogItem.createdAt)} ({new Date(subscriptionDialogItem.createdAt).toLocaleString()})
+                      </p>
+                    </div>
+                    {subscriptionDialogItem.source.sourceUrl ? (
+                      <a
+                        href={subscriptionDialogItem.source.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex text-xs underline text-muted-foreground"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        Open channel
+                      </a>
+                    ) : null}
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => setUnsubscribeDialogItemId(subscriptionDialogItem.id)}
+                        disabled={unsubscribeMutation.isPending}
+                      >
+                        Unsubscribe
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Subscription details are unavailable.</p>
+                )}
+              </DialogContent>
+            </Dialog>
 
             <Dialog open={!!submissionDialogItem} onOpenChange={(open) => {
               if (!open) setSubmissionDialogItemId(null);

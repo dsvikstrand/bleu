@@ -18,8 +18,8 @@
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
-    - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and expose explicit `Post to Channel`.
-    - `My Feed` subscription notices render avatar and optional banner background, with confirm-gated `Unsubscribe`.
+    - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer `Post to Channel` actions.
+    - `My Feed` subscription notices render avatar and optional banner background; card click opens a details popup with confirm-gated `Unsubscribe`.
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
 - Backend:
