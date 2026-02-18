@@ -19,13 +19,14 @@
   - React + Vite app (`src/pages/*`).
   - Signed-in primary nav uses `Home / Search / Channels / Explore`.
   - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked`; `/my-feed` remains direct-access compatible.
+  - Profile visibility default is public for new accounts (`profiles.is_public=true` by default).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
     - `/youtube` runs a core-first request (`generate_review=false`, `generate_banner=false`) and executes optional review/banner as async post-steps.
     - `Save to My Feed` is intentionally non-blocking while optional post-steps finish; completed review/banner updates are attached to the saved blueprint later.
     - banner prompt path is constrained to visual-only output (no readable text/typography/logos/watermarks).
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
-    - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status labels (`Posted to <Channel>`, `Publishing...`, or `In My Feed`).
+    - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status labels (`Posted to <Channel>`, `Publishing...`, or `In My Feed`) with a unified `Blueprint` badge.
     - `My Feed` subscription notices render avatar and optional banner background; card click opens a details popup with confirm-gated `Unsubscribe`.
     - subscription notice details popup is intentionally minimal (relative time + unsubscribe only).
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.

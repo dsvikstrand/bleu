@@ -13,6 +13,8 @@ Status: `canonical`
 5. Community value is comments/votes/insights on blueprint content.
 6. Channel routing mode is env-driven (`deterministic_v1` default, `llm_labeler_v1` optional) and falls back to `general` on ambiguous/invalid label output.
 7. Feed/detail surfaces prioritize source-channel context for imported media over creator-edit workflows in MVP UI.
+8. Profile visibility is public-by-default for new accounts (`profiles.is_public=true` default); existing privacy choices remain respected.
+9. My Feed blueprint card badge label is normalized to `Blueprint`, and feed tags use the same one-row capped chip treatment as Home (without `#` prefix).
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.

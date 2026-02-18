@@ -33,6 +33,7 @@ import { logMvpEvent } from '@/lib/logEvent';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { config } from '@/config/runtime';
 import type { MyFeedItemView } from '@/hooks/useMyFeed';
+import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 
 const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 'active' && channel.isJoinEnabled);
 const CHANNEL_NAME_BY_SLUG = new Map(CHANNELS_CATALOG.map((channel) => [channel.slug, channel.name]));
@@ -481,11 +482,16 @@ export function MyFeedTimeline({
                     <p className="text-base font-semibold leading-tight">{title}</p>
                     <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
                     {tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {tags.slice(0, 4).map((tag) => (
-                          <Badge key={tag} variant="outline">#{tag}</Badge>
-                        ))}
-                      </div>
+                      <OneRowTagChips
+                        className="flex flex-nowrap gap-1.5 overflow-hidden"
+                        items={tags.map((tag) => ({
+                          key: tag,
+                          label: tag,
+                          variant: 'outline',
+                          className:
+                            'text-xs transition-colors border bg-muted/40 text-muted-foreground border-border/60',
+                        }))}
+                      />
                     )}
                   </div>
                 </>
@@ -528,9 +534,9 @@ export function MyFeedTimeline({
                     )}
                   </span>
                   {item.state === 'channel_published' ? (
-                    <Badge variant="secondary">Published to Channel</Badge>
+                    <Badge variant="secondary">Blueprint</Badge>
                   ) : item.state === 'my_feed_published' || (autoChannelPipelineEnabled && item.state === 'channel_rejected') ? (
-                    <Badge variant="secondary">In My Feed</Badge>
+                    <Badge variant="secondary">Blueprint</Badge>
                   ) : (
                     <span>{getMyFeedStateLabel(item.state as MyFeedItemState)}</span>
                   )}

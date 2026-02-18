@@ -30,7 +30,7 @@ a18) [have] `My Feed` blueprint cards now open blueprint detail by card click (d
 a19) [have] `My Feed` header now includes direct `Add Subscription` shortcut in addition to `Manage subscriptions`.
 a20) [have] Auto-banner queue contract is now available for subscription auto-ingest (`/api/auto-banner/jobs/trigger`) with service-auth control and non-blocking ingestion mode.
 a21) [have] Banner-cap policy contract is now available globally with generated banner preservation (`blueprints.banner_generated_url`) and deterministic channel-default fallback.
-a22) [have] `My Feed` card footer now shows read-only auto-channel status (`Posted to <Channel>`, `Publishing...`, or `In My Feed`).
+a22) [have] `My Feed` card footer now shows read-only auto-channel status (`Posted to <Channel>`, `Publishing...`, or `In My Feed`) and uses a unified `Blueprint` badge for blueprint cards.
 a23) [have] Search-generated saves now carry source channel context so `My Feed` subtitle row can show channel name instead of duplicated post title.
 a24) [have] `My Feed` source subtitle resolution now falls back to source metadata channel title when `source_channel_title` is missing, preventing title duplication for search-generated content.
 a25) [have] `/youtube` now runs core generation first and performs review/banner as async post-steps; `Save to My Feed` is non-blocking while enhancements continue.
@@ -45,6 +45,7 @@ a33) [have] Refresh scan dialog now shows `cooldown_filtered` count for videos h
 a34) [have] Blueprint detail header now prioritizes source-channel attribution for imported YouTube blueprints (creator-only edit CTA removed from default MVP UI).
 a35) [have] Subscription details popup in `My Feed` is simplified (relative added-time + unsubscribe only, no absolute timestamp or open-channel action).
 a36) [have] `/subscriptions` rows are simplified to channel identity + unsubscribe, with channel-open behavior moved to avatar click and verbose URL/polling text removed.
+a37) [have] New profiles now default to `is_public=true` (public by default); existing profile visibility remains unchanged unless edited.
 
 ## Core Model
 b1) `Source Item`
