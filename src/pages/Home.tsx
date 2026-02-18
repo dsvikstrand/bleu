@@ -3,14 +3,13 @@ import { useEffect, useRef } from 'react';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
-import { CommunityStats } from '@/components/home/CommunityStats';
 import { TopBlueprints } from '@/components/home/TopBlueprints';
 import { FeaturedTags } from '@/components/home/FeaturedTags';
-import { HowItWorks } from '@/components/home/HowItWorks';
-import { DiscoverRoutines } from '@/components/home/DiscoverRoutines';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight, Inbox, Search, Users, Youtube } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 export default function Home() {
   const { user } = useAuth();
@@ -46,58 +45,90 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-
       <AppHeader />
 
       <main className="max-w-3xl mx-auto px-3 sm:px-4 py-10 pb-24 space-y-12">
-        {/* Hero - simplified, community-first */}
         <section className="text-center space-y-5 animate-fade-in">
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight">
-            <span
-              className="text-gradient-themed"
-              style={{
-                fontFamily: "'Impact', 'Haettenschweiler', 'Franklin Gothic Bold', 'Charcoal', sans-serif",
-                letterSpacing: '0.06em',
-              }}
-            >
-              BLUEPRINTS
-            </span>
+          <Badge variant="outline" className="text-xs tracking-wide uppercase px-3 py-1">
+            Source-first MVP
+          </Badge>
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-balance">
+            Automated YouTube to blueprint feed, with community publishing.
           </h1>
-          <p className="text-sm uppercase tracking-widest text-primary/80 font-medium">
-            Pull, refine, and share bite-sized blueprints
-          </p>
-          <p className="text-base text-muted-foreground max-w-md mx-auto leading-relaxed">
-            Pull from YouTube into My Feed first, then submit the best items to Channels.
+          <p className="text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+            Search videos or paste a URL, generate a blueprint into My Feed, then post the best ones to channel feeds.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <Link to="/explore">
+            <Link to={user ? '/search' : '/auth'}>
               <Button size="lg" className="gap-2">
-                Start Exploring
+                {user ? 'Search YouTube' : 'Sign in to Start'}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <Link to="/my-feed">
+            <Link to="/youtube">
               <Button size="lg" variant="outline" className="gap-2">
-                Open My Feed
-                <Sparkles className="h-4 w-4" />
+                Use YouTube URL
+                <Youtube className="h-4 w-4" />
               </Button>
+            </Link>
+            {user ? (
+              <Link to="/my-feed">
+                <Button size="lg" variant="outline" className="gap-2">
+                  Open My Feed
+                  <Inbox className="h-4 w-4" />
+                </Button>
+              </Link>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold tracking-tight">How the app works now</h2>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Card className="border-border/40">
+              <CardContent className="p-4 space-y-2">
+                <Search className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold">1) Pull content</h3>
+                <p className="text-sm text-muted-foreground">
+                  Subscribe to YouTube channels or find a video via Search/URL.
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-border/40">
+              <CardContent className="p-4 space-y-2">
+                <Inbox className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold">2) Land in My Feed</h3>
+                <p className="text-sm text-muted-foreground">
+                  New blueprints arrive in your personal feed first.
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-border/40">
+              <CardContent className="p-4 space-y-2">
+                <Users className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold">3) Post to channels</h3>
+                <p className="text-sm text-muted-foreground">
+                  Share selected items to channel feeds for votes, comments, and discussion.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {user ? (
+              <Link to="/subscriptions">
+                <Button size="sm" variant="outline">Manage Subscriptions</Button>
+              </Link>
+            ) : null}
+            <Link to="/wall">
+              <Button size="sm" variant="outline">Browse Channel Feed</Button>
+            </Link>
+            <Link to="/channels">
+              <Button size="sm" variant="outline">Explore Channels</Button>
             </Link>
           </div>
         </section>
 
-        {/* Community stats bar */}
-        <CommunityStats />
-
-        {/* How it works (moved up for immediate clarity) */}
-        <HowItWorks />
-
-        {/* Discover routines (consumer-first bridge) */}
-        <DiscoverRoutines />
-
-        {/* Top blueprints */}
         <TopBlueprints />
-
-        {/* Featured tags */}
         <FeaturedTags />
 
         <AppFooter />
