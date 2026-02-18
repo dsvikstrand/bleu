@@ -38,6 +38,7 @@
 - 2026-02-18 note: auto-channel publish endpoint (`POST /api/my-feed/items/:id/auto-publish`) is additive and does not alter the YT2BP endpoint envelope.
 - 2026-02-18 note: auto-channel publish now uses deterministic real-channel classification (tag+alias mapper with `general` fallback) and may return additive classifier metadata (`classifier_mode`, `classifier_reason`); this remains outside the YT2BP endpoint envelope.
 - 2026-02-18 note: auto-channel classifier now also supports `llm_labeler_v1` (artifact-only sync label pass, retry once on invalid output, fallback to `general`) and may return additive `classifier_confidence`; still outside this endpoint envelope.
+- 2026-02-18 note: profile workspace feed endpoint (`GET /api/profile/:userId/feed`) is additive and does not alter the YT2BP endpoint envelope.
 
 ## Request
 ```json
@@ -118,6 +119,7 @@
 - Ingestion health polling (`/api/ingestion/jobs/latest`) is intentionally outside this endpoint contract.
 - YouTube query discovery (`/api/youtube-search`) is intentionally outside this endpoint contract.
 - YouTube channel discovery (`/api/youtube-channel-search`) is intentionally outside this endpoint contract.
+- Profile feed retrieval (`/api/profile/:userId/feed`) is intentionally outside this endpoint contract.
 - Subscription row avatar enrichment (`GET /api/source-subscriptions`) is intentionally outside this endpoint contract.
 - Auto-banner queue processing and cap rebalance are intentionally outside this endpoint contract.
 - Optional review/banner post-processing (`/api/analyze-blueprint`, `/api/generate-banner`) and save-time attach behavior are intentionally outside this endpoint contract.

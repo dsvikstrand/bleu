@@ -151,8 +151,12 @@ Rules:
   - subscription detail popup and active rows are simplified for lower cognitive load.
 - Home naming + nav de-emphasis (2026-02-18):
   - signed-in top navigation now uses `Home / Search / Channels / Explore`.
-  - `My Feed` is moved out of top nav and remains available through the user menu shortcut.
+  - `My Feed` is moved out of top nav.
   - shared-lane copy now consistently references `Home` while route stays `/wall`.
+- Profile workspace tabs (2026-02-18):
+  - profile now anchors personal workspace with tabs `Feed / Comments / Liked`.
+  - profile `Feed` reuses My Feed timeline visuals.
+  - non-owner viewers can view public profile feed content but owner-only mutate actions are hidden.
 - Subscription notice UX refresh (2026-02-18):
   - notice cards now render channel avatar and optional profile-banner background metadata when available.
   - notice cards show relative time in top-right and `Subscription` badge in status row.

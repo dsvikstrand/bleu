@@ -139,7 +139,8 @@ r8) [have] My Feed first-class route: `/my-feed`
 r9) [have] Subscriptions route: `/subscriptions`
 r10) [have] Search route: `/search` (auth-only)
 r11) [have] Compatibility redirects: `/tags` -> `/channels`, `/blueprints` -> `/wall`
-r12) [have] Signed-in primary nav is community-first: `Home / Search / Channels / Explore`; `My Feed` remains one-click from user menu.
+r12) [have] Signed-in primary nav is community-first: `Home / Search / Channels / Explore`.
+r13) [have] Personal workspace is profile-first: `/u/:userId` tabs are `Feed / Comments / Liked`; `/my-feed` remains compatibility/direct route.
 
 ## Scope Boundaries (MVP)
 s1) In scope

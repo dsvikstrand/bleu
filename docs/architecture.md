@@ -17,7 +17,8 @@
 ## 2) Runtime Topology
 - Frontend:
   - React + Vite app (`src/pages/*`).
-  - Signed-in primary nav uses `Home / Search / Channels / Explore`; `My Feed` remains accessible via user menu shortcut and direct `/my-feed` route.
+  - Signed-in primary nav uses `Home / Search / Channels / Explore`.
+  - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked`; `/my-feed` remains direct-access compatible.
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
     - `/youtube` runs a core-first request (`generate_review=false`, `generate_banner=false`) and executes optional review/banner as async post-steps.
     - `Save to My Feed` is intentionally non-blocking while optional post-steps finish; completed review/banner updates are attached to the saved blueprint later.

@@ -47,6 +47,7 @@ Execution mode:
 28. [have] Step 27 - Two-step LLM channel labeler (post-artifact sync, retry+fallback)
 29. [have] Step 28 - Attribution + subscription-surface cleanup (source-channel-first detail header and simplified subscription UI)
 30. [have] Step 29 - Home naming + profile-oriented nav (`/wall` labeled Home, `My Feed` moved to user menu)
+31. [have] Step 30 - Profile workspace tabs (`Feed / Comments / Liked`) + dropdown cleanup
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -709,18 +710,36 @@ Evaluation
 ### Step 29 - Home naming + profile-oriented nav
 Scope
 - rename signed-in shared lane label from `Channel Feed` to `Home` while keeping route `/wall`
-- remove `My Feed` from top/floating nav and keep it accessible from user menu
+- remove `My Feed` from top/floating nav
 - align core surface copy and canonical docs to Home terminology
 
 Definition of done
 - signed-in nav shows `Home / Search / Channels / Explore`
-- user menu includes one-click `My Feed` shortcut
 - core feed surfaces and docs call `/wall` the Home feed
 
 Evaluation
 - manual smoke: signed-in header and floating nav labels/order are correct
-- manual smoke: user menu routes correctly to `/my-feed`
 - manual smoke: `/wall` and channel-page CTA copy reference Home
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+### Step 30 - Profile workspace tabs (`Feed / Comments / Liked`) + dropdown cleanup
+Scope
+- make profile the main personal workspace: tabs are now `Feed / Comments / Liked`
+- remove legacy `Blueprints / Libraries / Activity` profile tabs
+- remove `My Feed` from user dropdown and keep `/my-feed` as compatibility/direct route
+
+Definition of done
+- profile tabs show `Feed / Comments / Liked`
+- feed tab reuses My Feed timeline visuals; non-owner viewers can view public profiles but cannot mutate
+- comments tab is sourced from `blueprint_comments` history with blueprint links
+- user menu no longer contains `My Feed`
+
+Evaluation
+- manual smoke: owner profile has full feed actions
+- manual smoke: non-owner public profile feed hides owner-only actions
+- manual smoke: comments tab renders snippets + blueprint links + relative time
 - `npm run build`
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`

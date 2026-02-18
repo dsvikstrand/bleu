@@ -251,11 +251,13 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return next();
   if (req.path === '/api/health') return next();
   const isDebugSimulationRoute = /^\/api\/debug\/subscriptions\/[^/]+\/simulate-new-uploads$/.test(req.path);
+  const isPublicProfileFeedRoute = /^\/api\/profile\/[^/]+\/feed$/.test(req.path);
   const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
     || req.path === '/api/ingestion/jobs/trigger'
     || req.path === '/api/ingestion/jobs/latest'
     || req.path === '/api/auto-banner/jobs/trigger'
     || req.path === '/api/auto-banner/jobs/latest'
+    || isPublicProfileFeedRoute
     || (debugEndpointsEnabled && isDebugSimulationRoute);
 
   if (!supabaseClient) {
@@ -702,6 +704,226 @@ async function scoreYt2bpContentSafetyWithOpenAI(
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
+});
+
+app.get('/api/profile/:userId/feed', async (req, res) => {
+  const profileUserId = String(req.params.userId || '').trim();
+  if (!profileUserId) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_USER_ID',
+      message: 'Missing profile user id',
+      data: null,
+    });
+  }
+
+  const viewerUserId = String((res.locals.user as { id?: string } | undefined)?.id || '').trim() || null;
+  const isOwnerView = !!viewerUserId && viewerUserId === profileUserId;
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    return res.status(500).json({
+      ok: false,
+      error_code: 'CONFIG_ERROR',
+      message: 'Service role client is not configured',
+      data: null,
+    });
+  }
+
+  const { data: profile, error: profileError } = await db
+    .from('profiles')
+    .select('user_id, is_public')
+    .eq('user_id', profileUserId)
+    .maybeSingle();
+  if (profileError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: profileError.message,
+      data: null,
+    });
+  }
+  if (!profile?.user_id) {
+    return res.status(404).json({
+      ok: false,
+      error_code: 'PROFILE_NOT_FOUND',
+      message: 'Profile not found',
+      data: null,
+    });
+  }
+  if (!profile.is_public && !isOwnerView) {
+    return res.status(403).json({
+      ok: false,
+      error_code: 'PROFILE_PRIVATE',
+      message: 'Profile is private',
+      data: null,
+    });
+  }
+
+  const { data: feedRows, error: feedError } = await db
+    .from('user_feed_items')
+    .select('id, source_item_id, blueprint_id, state, last_decision_code, created_at')
+    .eq('user_id', profileUserId)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (feedError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: feedError.message,
+      data: null,
+    });
+  }
+
+  const filteredFeedRows = (feedRows || []).filter((row) => {
+    const isLegacyPendingWithoutBlueprint =
+      !row.blueprint_id && (row.state === 'my_feed_pending_accept' || row.state === 'my_feed_skipped');
+    return !isLegacyPendingWithoutBlueprint;
+  });
+  if (!filteredFeedRows.length) {
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'profile feed',
+      data: {
+        profile_user_id: profileUserId,
+        is_owner_view: isOwnerView,
+        items: [],
+      },
+    });
+  }
+
+  const sourceIds = Array.from(new Set(filteredFeedRows.map((row) => row.source_item_id).filter(Boolean))) as string[];
+  const blueprintIds = Array.from(new Set(filteredFeedRows.map((row) => row.blueprint_id).filter(Boolean))) as string[];
+  const feedItemIds = filteredFeedRows.map((row) => row.id);
+
+  const [{ data: sources, error: sourcesError }, { data: blueprints, error: blueprintsError }, { data: candidates, error: candidatesError }] = await Promise.all([
+    db
+      .from('source_items')
+      .select('id, source_channel_id, source_url, title, source_channel_title, thumbnail_url, metadata')
+      .in('id', sourceIds),
+    blueprintIds.length
+      ? db.from('blueprints').select('id, title, banner_url, llm_review, is_public, steps').in('id', blueprintIds)
+      : Promise.resolve({ data: [], error: null }),
+    db
+      .from('channel_candidates')
+      .select('id, user_feed_item_id, channel_slug, status, created_at')
+      .in('user_feed_item_id', feedItemIds)
+      .order('created_at', { ascending: false }),
+  ]);
+  if (sourcesError || blueprintsError || candidatesError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: sourcesError?.message || blueprintsError?.message || candidatesError?.message || 'Failed to load feed',
+      data: null,
+    });
+  }
+
+  const { data: tagRows, error: tagRowsError } = blueprintIds.length
+    ? await db
+      .from('blueprint_tags')
+      .select('blueprint_id, tags(slug)')
+      .in('blueprint_id', blueprintIds)
+    : { data: [] as Array<{ blueprint_id: string; tags: { slug: string } | { slug: string }[] | null }>, error: null };
+  if (tagRowsError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: tagRowsError.message,
+      data: null,
+    });
+  }
+
+  const tagsByBlueprint = new Map<string, string[]>();
+  (tagRows || []).forEach((row) => {
+    const list = tagsByBlueprint.get(row.blueprint_id) || [];
+    if (Array.isArray(row.tags)) {
+      row.tags.forEach((tag) => {
+        if (tag && typeof tag === 'object' && 'slug' in tag) list.push(String((tag as { slug: string }).slug));
+      });
+    } else if (row.tags && typeof row.tags === 'object' && 'slug' in row.tags) {
+      list.push(String((row.tags as { slug: string }).slug));
+    }
+    tagsByBlueprint.set(row.blueprint_id, list);
+  });
+
+  const sourceMap = new Map((sources || []).map((row) => [row.id, row]));
+  const blueprintMap = new Map((blueprints || []).map((row) => [row.id, row]));
+  const candidateMap = new Map<string, { id: string; channelSlug: string; status: string }>();
+  (candidates || []).forEach((row) => {
+    if (candidateMap.has(row.user_feed_item_id)) return;
+    candidateMap.set(row.user_feed_item_id, {
+      id: row.id,
+      channelSlug: row.channel_slug,
+      status: row.status,
+    });
+  });
+
+  const items = filteredFeedRows.map((row) => {
+    const source = sourceMap.get(row.source_item_id);
+    const blueprint = row.blueprint_id ? blueprintMap.get(row.blueprint_id) : null;
+    const sourceMetadata =
+      source?.metadata
+      && typeof source.metadata === 'object'
+      && source.metadata !== null
+        ? (source.metadata as Record<string, unknown>)
+        : null;
+    const metadataSourceChannelTitle =
+      sourceMetadata && typeof sourceMetadata.source_channel_title === 'string'
+        ? String(sourceMetadata.source_channel_title || '').trim() || null
+        : (
+          sourceMetadata && typeof sourceMetadata.channel_title === 'string'
+            ? String(sourceMetadata.channel_title || '').trim() || null
+            : null
+        );
+
+    return {
+      id: row.id,
+      state: row.state,
+      lastDecisionCode: row.last_decision_code,
+      createdAt: row.created_at,
+      source: source
+        ? {
+            id: source.id,
+            sourceChannelId: source.source_channel_id || null,
+            sourceUrl: source.source_url,
+            title: source.title,
+            sourceChannelTitle: source.source_channel_title || metadataSourceChannelTitle || null,
+            thumbnailUrl: source.thumbnail_url || null,
+            channelBannerUrl:
+              source.metadata
+              && typeof source.metadata === 'object'
+              && source.metadata !== null
+              && 'channel_banner_url' in source.metadata
+                ? String((source.metadata as Record<string, unknown>).channel_banner_url || '') || null
+                : null,
+          }
+        : null,
+      blueprint: blueprint
+        ? {
+            id: blueprint.id,
+            title: blueprint.title,
+            bannerUrl: blueprint.banner_url,
+            llmReview: blueprint.llm_review,
+            isPublic: blueprint.is_public,
+            steps: blueprint.steps,
+            tags: tagsByBlueprint.get(blueprint.id) || [],
+          }
+        : null,
+      candidate: candidateMap.get(row.id) || null,
+    };
+  });
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'profile feed',
+    data: {
+      profile_user_id: profileUserId,
+      is_owner_view: isOwnerView,
+      items,
+    },
+  });
 });
 
 app.get('/api/credits', (_req, res) => {

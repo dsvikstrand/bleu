@@ -89,7 +89,7 @@ export default function UserProfile() {
               </Card>
             )}
 
-            <ProfileTabs userId={userId} />
+            <ProfileTabs userId={userId} isOwnerView={isOwnProfile} profileIsPublic={!!profile.is_public} />
 
             <FollowersList
               userId={userId}

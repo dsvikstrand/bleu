@@ -19,6 +19,7 @@ Status: `canonical`
 2. Generate/import blueprint into `My Feed`.
 3. System auto-evaluates and posts eligible blueprints to channels.
 4. Engage through community interactions in Home feed.
+5. Use profile workspace (`/u/:userId`) tabs `Feed / Comments / Liked` for personal history; `/my-feed` remains a compatibility/direct route.
 
 ## What is not core right now
 1. Library-first creation is deprecated as primary identity.

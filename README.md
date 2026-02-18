@@ -24,6 +24,7 @@ A React + Supabase app for turning media into bite-sized blueprints and discussi
 - My Feed: `/my-feed`
 - Subscriptions: `/subscriptions`
 - Search: `/search`
+- Profile: `/u/:userId` (`Feed / Comments / Liked`)
 - Blueprint detail: `/blueprint/:blueprintId`
 
 ## Tech Stack

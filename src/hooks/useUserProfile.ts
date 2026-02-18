@@ -122,6 +122,54 @@ export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
   });
 }
 
+export interface UserCommentItem {
+  id: string;
+  blueprint_id: string;
+  blueprint_title: string;
+  content: string;
+  created_at: string;
+}
+
+export function useUserComments(userId: string | undefined, limit = 20) {
+  return useQuery({
+    queryKey: ['user-comments', userId, limit],
+    queryFn: async () => {
+      if (!userId) return [] as UserCommentItem[];
+
+      const { data: comments, error: commentsError } = await supabase
+        .from('blueprint_comments')
+        .select('id, blueprint_id, content, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (commentsError) throw commentsError;
+      if (!comments || comments.length === 0) return [] as UserCommentItem[];
+
+      const blueprintIds = Array.from(new Set(comments.map((row) => row.blueprint_id).filter(Boolean)));
+      const { data: blueprints, error: blueprintsError } = blueprintIds.length > 0
+        ? await supabase
+          .from('blueprints')
+          .select('id, title')
+          .in('id', blueprintIds)
+          .eq('is_public', true)
+        : { data: [] as Array<{ id: string; title: string }>, error: null };
+      if (blueprintsError) throw blueprintsError;
+
+      const titleMap = new Map((blueprints || []).map((row) => [row.id, row.title]));
+      return comments
+        .filter((row) => titleMap.has(row.blueprint_id))
+        .map((row) => ({
+          id: row.id,
+          blueprint_id: row.blueprint_id,
+          blueprint_title: titleMap.get(row.blueprint_id) || 'Blueprint',
+          content: row.content,
+          created_at: row.created_at,
+        })) as UserCommentItem[];
+    },
+    enabled: !!userId,
+  });
+}
+
 export interface ActivityItem {
   type: 'blueprint_created' | 'blueprint_liked' | 'comment';
   id: string;

@@ -32,7 +32,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ## Current Workstreams
 ### W1 - My Feed As First-Class Surface
 - Introduce/finish personal unfiltered feed lane behavior.
-- Keep `My Feed` as a profile-oriented workspace surface (user-menu shortcut) instead of a top-nav primary.
+- Keep `My Feed` as a profile-oriented workspace surface (profile `Feed` tab) instead of a top-nav primary.
 - Ensure channel fail does not remove personal access.
 - Hide legacy no-blueprint pending/skipped rows during migration cleanup.
 - Align My Feed card presentation to channel-feed style and show read-only auto-channel status labels.

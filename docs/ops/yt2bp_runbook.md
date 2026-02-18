@@ -25,6 +25,8 @@
   - `POST /api/channel-candidates/:id/reject`
 - Auto-channel endpoint:
   - `POST /api/my-feed/items/:id/auto-publish`
+- Profile feed read endpoint:
+  - `GET /api/profile/:userId/feed` (optional auth; public profiles readable, private profiles owner-only)
 
 ## Health checks
 - Local service health:
