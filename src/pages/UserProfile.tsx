@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Navigate } from 'react-router-dom';
+import { useParams, Navigate, Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -81,9 +81,9 @@ export default function UserProfile() {
               <Card className="border-dashed">
                 <CardContent className="py-4 text-center text-sm text-muted-foreground">
                   Your profile is currently <strong>private</strong>. Only you can see this page.{' '}
-                  <a href="/settings" className="text-primary hover:underline">
+                  <Link to="/settings" className="text-primary hover:underline">
                     Make it public
-                  </a>{' '}
+                  </Link>{' '}
                   to let others discover you.
                 </CardContent>
               </Card>

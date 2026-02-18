@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
@@ -525,9 +525,6 @@ export default function Subscriptions() {
                 disabled={!subscriptionsEnabled}
               >
                 Refresh
-              </Button>
-              <Button asChild size="sm" variant="outline" className="h-8 px-2">
-                <Link to="/my-feed">Back to My Feed</Link>
               </Button>
             </div>
             {!subscriptionsEnabled ? (
