@@ -5,6 +5,7 @@ import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
 import { TopBlueprints } from '@/components/home/TopBlueprints';
 import { FeaturedTags } from '@/components/home/FeaturedTags';
+import { DiscoverRoutines } from '@/components/home/DiscoverRoutines';
 import { ArrowRight, Inbox, Search, Users, Youtube } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
@@ -127,6 +128,8 @@ export default function Home() {
             </Link>
           </div>
         </section>
+
+        <DiscoverRoutines />
 
         <TopBlueprints />
         <FeaturedTags />
