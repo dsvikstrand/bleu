@@ -35,6 +35,8 @@
     - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
     - `POST /api/ingestion/jobs/trigger` (service auth)
     - `GET /api/ingestion/jobs/latest` (service auth, latest job snapshot)
+    - `POST /api/auto-banner/jobs/trigger` (service auth, queue worker + cap rebalance)
+    - `GET /api/auto-banner/jobs/latest` (service auth, queue snapshot)
     - `POST /api/debug/subscriptions/:id/simulate-new-uploads` (debug-only, service auth + `ENABLE_DEBUG_ENDPOINTS=true`; middleware allows service-token access without bearer user auth)
     - `POST /api/my-feed/items/:id/accept|skip`
   - Adapter abstraction in `server/adapters/*` (`BaseAdapter`, `YouTubeAdapter`, registry).
@@ -43,7 +45,7 @@
   - Gate runtime mode switch: `CHANNEL_GATES_MODE = bypass | shadow | enforce` (default `bypass`).
 - Data:
   - Supabase is system of record for blueprints, tags, follows, likes/comments, telemetry.
-  - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables.
+  - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables + auto-banner policy/queue tables.
 - Eval assets:
   - Runtime policy/config under `eval/methods/v0/*`.
 - Operations:
@@ -61,7 +63,13 @@
    - unsubscribe removes that user-scoped notice card while preserving other My Feed blueprint items.
 3. Subscription sync after checkpoint:
    - new uploads generate immediately to `my_feed_published`.
-   - auto-ingest path enables review generation by default and keeps banner generation off.
+   - auto-ingest path enables review generation by default.
+   - auto-banner mode is controlled by env:
+     - `off`: no auto banner processing.
+     - `async`: enqueue `auto_banner_jobs`, ingest stays non-blocking.
+     - `sync`: generate inline (ops/debug mode; higher latency).
+   - successful auto-banner jobs set `blueprints.banner_generated_url` and `blueprints.banner_url`.
+   - cap rebalance enforces newest generated banners up to `SUBSCRIPTION_AUTO_BANNER_CAP`; older generated banners fall back to deterministic channel defaults or `null`.
    - subscription health state is derived in UI from `last_polled_at` + `last_sync_error` (`healthy`, `delayed`, `error`, `never_polled`).
 4. Optional user remix/insight.
 5. Channel candidate evaluation (all-gates-run default, aggregated decision).

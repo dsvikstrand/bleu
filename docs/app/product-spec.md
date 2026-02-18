@@ -23,6 +23,8 @@ a16) [have] `My Feed` subscription notice cards open a detailed popup with `Unsu
 a17) [have] `My Feed` blueprint cards expose `Post to Channel` in the footer status row (top-right action removed).
 a18) [have] `My Feed` blueprint cards now open blueprint detail by card click (dedicated `Open blueprint` link removed).
 a19) [have] `My Feed` header now includes direct `Add Subscription` shortcut in addition to `Manage subscriptions`.
+a20) [have] Auto-banner queue contract is now available for subscription auto-ingest (`/api/auto-banner/jobs/trigger`) with service-auth control and non-blocking ingestion mode.
+a21) [have] Banner-cap policy contract is now available globally with generated banner preservation (`blueprints.banner_generated_url`) and deterministic channel-default fallback.
 
 ## Core Model
 b1) `Source Item`
@@ -45,7 +47,11 @@ b5) Subscription behavior (MVP simplified)
 - UI behavior is auto-only.
 - On subscribe, backend sets a checkpoint (`last_seen_published_at` / `last_seen_video_id`) without ingesting historical uploads.
 - Future uploads after checkpoint ingest directly to `my_feed_published`.
-- Auto-ingested subscription items run review generation by default; banner generation remains off in this path.
+- Auto-ingested subscription items run review generation by default.
+- Banner generation for auto-ingest is controlled by `SUBSCRIPTION_AUTO_BANNER_MODE`:
+  - `off` (default): no auto banner worker activity.
+  - `async` (target): queue background banner jobs with no ingestion blocking.
+  - `sync` (ops/debug): generate in-line (higher latency).
 - A persistent notice card is inserted into `My Feed` with state `subscription_notice`.
 - Notice cards are visualized with channel avatar and optional banner background when metadata is available.
 - API compatibility note: `mode` is accepted on subscription endpoints but coerced/treated as `auto`.
@@ -128,6 +134,7 @@ d2) [have] `tag_follows`, `tags`, `profiles`, `mvp_events`.
 d3) [have] Source ingestion + feed tables (`source_items`, `user_source_subscriptions`, `user_feed_items`).
 d4) [have] Channel candidate + decision logs (`channel_candidates`, `channel_gate_decisions`).
 d5) [have] Scheduled/user-triggered ingestion jobs + trace table (`ingestion_jobs`).
+d6) [have] Auto-banner policy + queue tables (`channel_default_banners`, `auto_banner_jobs`).
 
 ## Subscription Interfaces (MVP)
 si1) `POST /api/source-subscriptions` with `{ channel_input, mode? }` (`mode` accepted but ignored/coerced to `auto` in MVP path)
@@ -144,12 +151,15 @@ si11) service-ops endpoint: `GET /api/ingestion/jobs/latest` (service auth; late
 si12) YouTube search endpoint: `GET /api/youtube-search?q=<query>&limit=<1..25>&page_token=<optional>`
 si13) YouTube channel search endpoint: `GET /api/youtube-channel-search?q=<query>&limit=<1..25>&page_token=<optional>`
 si14) `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` per subscription row (derived from YouTube API; no schema change).
+si15) service-ops endpoint: `POST /api/auto-banner/jobs/trigger` (service auth; processes queue + cap rebalance)
+si16) service-ops endpoint: `GET /api/auto-banner/jobs/latest` (service auth; queue snapshot)
 
 ## Next Milestone (Hardening)
 n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.
 n2) Iterate YouTube search discovery flow before introducing multi-adapter search.
 n3) Harden ingestion reliability visibility (polling freshness + latest job checks) before adding more subscription features.
-n4) Reserve `enforce` mode for non-prod verification until dedicated rollout approval.
+n4) Roll out `SUBSCRIPTION_AUTO_BANNER_MODE=async` in production after channel defaults are seeded.
+n5) Reserve `enforce` mode for non-prod verification until dedicated rollout approval.
 
 ## Key References
 k1) Architecture: `docs/architecture.md`

@@ -113,6 +113,10 @@ export type Database = {
       }
       blueprints: {
         Row: {
+          banner_effective_source: string
+          banner_generated_url: string | null
+          banner_is_locked: boolean
+          banner_policy_updated_at: string | null
           banner_url: string | null
           created_at: string
           creator_user_id: string
@@ -130,6 +134,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          banner_effective_source?: string
+          banner_generated_url?: string | null
+          banner_is_locked?: boolean
+          banner_policy_updated_at?: string | null
           banner_url?: string | null
           created_at?: string
           creator_user_id: string
@@ -147,6 +155,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          banner_effective_source?: string
+          banner_generated_url?: string | null
+          banner_is_locked?: boolean
+          banner_policy_updated_at?: string | null
           banner_url?: string | null
           created_at?: string
           creator_user_id?: string
@@ -287,6 +299,109 @@ export type Database = {
             columns: ["candidate_id"]
             isOneToOne: false
             referencedRelation: "channel_candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_default_banners: {
+        Row: {
+          banner_url: string
+          channel_slug: string
+          created_at: string
+          id: string
+          is_active: boolean
+          priority: number
+          updated_at: string
+        }
+        Insert: {
+          banner_url: string
+          channel_slug: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          priority?: number
+          updated_at?: string
+        }
+        Update: {
+          banner_url?: string
+          channel_slug?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          priority?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      auto_banner_jobs: {
+        Row: {
+          attempts: number
+          available_at: string
+          blueprint_id: string
+          created_at: string
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          max_attempts: number
+          run_id: string | null
+          source_item_id: string | null
+          started_at: string | null
+          status: string
+          subscription_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          available_at?: string
+          blueprint_id: string
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          max_attempts?: number
+          run_id?: string | null
+          source_item_id?: string | null
+          started_at?: string | null
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          available_at?: string
+          blueprint_id?: string
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          max_attempts?: number
+          run_id?: string | null
+          source_item_id?: string | null
+          started_at?: string | null
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auto_banner_jobs_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auto_banner_jobs_source_item_id_fkey"
+            columns: ["source_item_id"]
+            isOneToOne: false
+            referencedRelation: "source_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auto_banner_jobs_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "user_source_subscriptions"
             referencedColumns: ["id"]
           },
         ]

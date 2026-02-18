@@ -140,11 +140,21 @@ Rules:
   - notice cards open a details popup that exposes confirm-gated `Unsubscribe`.
   - notice background spans the full card.
   - `DELETE /api/source-subscriptions/:id` now cleans up user `subscription_notice` feed rows for that channel.
+- Async auto-banner hardening (2026-02-18):
+  - auto-ingest banner mode contract added: `SUBSCRIPTION_AUTO_BANNER_MODE=off|async|sync` (production target: `async`).
+  - queue table added: `auto_banner_jobs` with retry/dead-letter lifecycle.
+  - policy columns added on `blueprints`: `banner_generated_url`, `banner_effective_source`, `banner_is_locked`, `banner_policy_updated_at`.
+  - fallback defaults table added: `channel_default_banners`.
+  - service endpoints added:
+    - `POST /api/auto-banner/jobs/trigger`
+    - `GET /api/auto-banner/jobs/latest`
+  - global cap rebalance keeps newest generated banners and demotes older generated banners to deterministic channel defaults (or none if unavailable).
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.
 2. Decide on `/subscriptions` discoverability upgrade (nav item timing) after URL-only validation period.
 3. Design future “sync specific videos” flow before exposing sync controls in UI.
-4. Add richer ingestion observability dashboards from `ingestion_jobs` + `mvp_events`.
-5. Keep gate behavior in `bypass` until dedicated enforcement cycle approval.
-6. Add pagination and quota guardrails iteration for `/api/youtube-search` based on production usage.
+4. Seed per-channel default banners before enabling async mode in production.
+5. Add richer ingestion observability dashboards from `ingestion_jobs` + `mvp_events`.
+6. Keep gate behavior in `bypass` until dedicated enforcement cycle approval.
+7. Add pagination and quota guardrails iteration for `/api/youtube-search` based on production usage.

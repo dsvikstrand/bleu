@@ -35,6 +35,11 @@ curl -sS https://bapi.vdsai.cloud/api/health
 curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/latest \
   -H "x-service-token: $INGESTION_SERVICE_TOKEN"
 ```
+- Latest auto-banner queue snapshot (service auth):
+```bash
+curl -sS https://bapi.vdsai.cloud/api/auto-banner/jobs/latest \
+  -H "x-service-token: $INGESTION_SERVICE_TOKEN"
+```
 - Public YT2BP endpoint basic probe:
 ```bash
 curl -sS -X POST https://bapi.vdsai.cloud/api/youtube-to-blueprint \
@@ -76,6 +81,12 @@ Required runtime variables:
 - `INGESTION_SERVICE_TOKEN` (shared secret for `/api/ingestion/jobs/trigger`)
 - `ENABLE_DEBUG_ENDPOINTS` (`false` by default; must be `true` to enable debug simulation endpoint)
 - `INGESTION_MAX_PER_SUBSCRIPTION` (default `5`)
+- `SUBSCRIPTION_AUTO_BANNER_MODE` (`off|async|sync`)
+- `SUBSCRIPTION_AUTO_BANNER_CAP` (default `1000`)
+- `SUBSCRIPTION_AUTO_BANNER_MAX_ATTEMPTS` (default `3`)
+- `SUBSCRIPTION_AUTO_BANNER_TIMEOUT_MS` (default `12000`)
+- `SUBSCRIPTION_AUTO_BANNER_BATCH_SIZE` (default `20`)
+- `SUBSCRIPTION_AUTO_BANNER_CONCURRENCY` (default `1`)
 
 Safe defaults:
 - `YT2BP_ENABLED=true`
@@ -87,6 +98,12 @@ Safe defaults:
 - `CHANNEL_GATES_MODE=bypass`
 - `ENABLE_DEBUG_ENDPOINTS=false`
 - `INGESTION_MAX_PER_SUBSCRIPTION=5`
+- `SUBSCRIPTION_AUTO_BANNER_MODE=off`
+- `SUBSCRIPTION_AUTO_BANNER_CAP=1000`
+- `SUBSCRIPTION_AUTO_BANNER_MAX_ATTEMPTS=3`
+- `SUBSCRIPTION_AUTO_BANNER_TIMEOUT_MS=12000`
+- `SUBSCRIPTION_AUTO_BANNER_BATCH_SIZE=20`
+- `SUBSCRIPTION_AUTO_BANNER_CONCURRENCY=1`
 
 ## Failure playbooks
 
@@ -255,6 +272,15 @@ Notes:
 - endpoint uses service-token auth only; do not send/require a user bearer token.
 - endpoint rewinds checkpoint for one subscription, then runs one sync cycle.
 - this can generate blueprints and consume tokens/credits.
+- if `SUBSCRIPTION_AUTO_BANNER_MODE=async`, generated blueprints will enqueue banner jobs for background processing.
+
+Auto-banner worker trigger (service auth):
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/auto-banner/jobs/trigger \
+  -H "x-service-token: $INGESTION_SERVICE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{}'
+```
 
 Subscription input note:
 - Handle URLs may resolve via `browseId` fallback parsing when direct `channelId` metadata is absent in YouTube page HTML.
@@ -274,10 +300,15 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/my-feed/items/<user_feed_item_id>/
   --data '{}'
 ```
 
-## Oracle cron setup (every 30 minutes)
+## Oracle cron setup
 Example cron entry:
 ```bash
 */30 * * * * curl -sS -X POST https://bapi.vdsai.cloud/api/ingestion/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-ingestion-cron.log 2>&1
+```
+
+Auto-banner worker cron example (every 5 minutes):
+```bash
+*/5 * * * * curl -sS -X POST https://bapi.vdsai.cloud/api/auto-banner/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-auto-banner-cron.log 2>&1
 ```
 
 ## Ingestion reliability triage

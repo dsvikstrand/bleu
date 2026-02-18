@@ -35,6 +35,7 @@ Execution mode:
 16. [have] Step 15 - Subscription channel search (auth-only `/subscriptions` discovery + subscribe)
 17. [have] Step 16 - Subscription row polish (avatar enrichment + hide technical row badges)
 18. [have] Step 17 - Feed UX polish (hide ingestion summary + My Feed `+` submit popup + review/banner defaults)
+19. [have] Step 18 - Async auto-banner queue + global cap fallback policy
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -278,6 +279,23 @@ Evaluation
 
 Completion evidence (2026-02-17)
 - Added `src/lib/subscriptionHealth.ts` and `src/test/subscriptionHealth.test.ts`.
+
+### Step 18 - Async auto-banner queue + global cap fallback policy
+Scope
+- add non-blocking auto-banner generation for subscription auto-ingest
+- preserve generated banner URL separately from effective banner URL
+- enforce global generated-banner cap with deterministic channel-default fallback
+
+Definition of done
+- subscription auto-ingest stays fast while banner jobs run in background (`SUBSCRIPTION_AUTO_BANNER_MODE=async`)
+- worker endpoint processes queue with retries and dead-letter terminal state
+- rebalance policy keeps newest generated banners up to cap and demotes older generated banners
+- default fallback is deterministic per blueprint/channel
+
+Evaluation
+- unit tests for deterministic fallback + cap partition + retry transition
+- manual smoke: auto-ingested item appears first, banner arrives later after worker trigger
+- docs checks and build checks pass
 - Updated `src/pages/Subscriptions.tsx` with health badges, summary counts, and delayed warning.
 - Added `GET /api/ingestion/jobs/latest` (service-auth) to `server/index.ts`.
 

@@ -28,6 +28,15 @@ import {
   searchYouTubeChannels,
   YouTubeChannelSearchError,
 } from './services/youtubeChannelSearch';
+import {
+  clampInt,
+  getFailureTransition,
+  normalizeAutoBannerMode,
+  partitionByBannerCap,
+  selectDeterministicDefaultBanner,
+  type AutoBannerMode,
+  type BannerEffectiveSource,
+} from './services/autoBannerPolicy';
 import type {
   BlueprintAnalysisRequest,
   BlueprintGenerationRequest,
@@ -74,12 +83,22 @@ const yt2bpEnabledRaw = String(process.env.YT2BP_ENABLED ?? 'true').trim().toLow
 const yt2bpEnabled = !(yt2bpEnabledRaw === 'false' || yt2bpEnabledRaw === '0' || yt2bpEnabledRaw === 'off');
 const ingestionServiceToken = String(process.env.INGESTION_SERVICE_TOKEN || '').trim();
 const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX_PER_SUBSCRIPTION) || 5);
+const autoBannerMode = normalizeAutoBannerMode(process.env.SUBSCRIPTION_AUTO_BANNER_MODE);
+const autoBannerCap = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_CAP, 1000, 1, 25_000);
+const autoBannerMaxAttempts = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_MAX_ATTEMPTS, 3, 1, 10);
+const autoBannerTimeoutMs = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_TIMEOUT_MS, 12_000, 1_000, 120_000);
+const autoBannerBatchSize = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_BATCH_SIZE, 20, 1, 200);
+const autoBannerConcurrency = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_CONCURRENCY, 1, 1, 5);
 const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
 const debugEndpointsEnabled = debugEndpointsEnabledRaw === 'true' || debugEndpointsEnabledRaw === '1' || debugEndpointsEnabledRaw === 'on';
 const youtubeDataApiKey = String(process.env.YOUTUBE_DATA_API_KEY || '').trim();
 
 if (!youtubeDataApiKey) {
   console.warn('[youtube-search] YOUTUBE_DATA_API_KEY is not configured. /api/youtube-search and /api/youtube-channel-search will return SEARCH_DISABLED.');
+}
+
+if (autoBannerMode !== 'off' && !String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) {
+  console.warn('[auto-banner] SUBSCRIPTION_AUTO_BANNER_MODE is enabled but SUPABASE_SERVICE_ROLE_KEY is missing. Worker and uploads will be disabled.');
 }
 
 function getRetryAfterSeconds(req: express.Request) {
@@ -168,6 +187,8 @@ app.use((req, res, next) => {
   const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
     || req.path === '/api/ingestion/jobs/trigger'
     || req.path === '/api/ingestion/jobs/latest'
+    || req.path === '/api/auto-banner/jobs/trigger'
+    || req.path === '/api/auto-banner/jobs/latest'
     || (debugEndpointsEnabled && isDebugSimulationRoute);
 
   if (!supabaseClient) {
@@ -1276,11 +1297,496 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
   return data;
 }
 
+const AUTO_BANNER_ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
+const AUTO_BANNER_MAX_BYTES = 5 * 1024 * 1024;
+
+type AutoBannerJobRow = {
+  id: string;
+  blueprint_id: string;
+  status: string;
+  attempts: number;
+  max_attempts: number;
+  available_at: string;
+  source_item_id: string | null;
+  subscription_id: string | null;
+  run_id: string | null;
+  last_error?: string | null;
+};
+
+function toBannerFileExtension(contentType: string) {
+  if (contentType === 'image/png') return 'png';
+  if (contentType === 'image/webp') return 'webp';
+  if (contentType === 'image/jpg' || contentType === 'image/jpeg') return 'jpg';
+  return 'bin';
+}
+
+async function uploadBannerToSupabaseAsService(input: {
+  imageBase64: string;
+  contentType: string;
+  blueprintId: string;
+}) {
+  const serviceDb = getServiceSupabaseClient();
+  if (!serviceDb) {
+    throw new Error('Service role client not configured');
+  }
+
+  if (!AUTO_BANNER_ALLOWED_TYPES.has(input.contentType)) {
+    throw new Error(`Unsupported banner content type: ${input.contentType}`);
+  }
+
+  const bytes = Buffer.from(input.imageBase64, 'base64');
+  if (!bytes.length || bytes.length > AUTO_BANNER_MAX_BYTES) {
+    throw new Error(`Banner payload out of bounds (${bytes.length} bytes)`);
+  }
+
+  const extension = toBannerFileExtension(input.contentType);
+  const filename = `auto/${input.blueprintId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+  const { error: uploadError } = await serviceDb
+    .storage
+    .from('blueprint-banners')
+    .upload(filename, bytes, {
+      contentType: input.contentType,
+      upsert: false,
+    });
+  if (uploadError) {
+    throw new Error(`Banner upload failed: ${uploadError.message}`);
+  }
+
+  const { data } = serviceDb.storage.from('blueprint-banners').getPublicUrl(filename);
+  if (!data?.publicUrl) {
+    throw new Error('Banner upload missing public URL');
+  }
+  return data.publicUrl;
+}
+
+async function enqueueAutoBannerJob(input: {
+  blueprintId: string;
+  sourceItemId: string | null;
+  subscriptionId: string | null;
+  runId: string | null;
+}) {
+  const serviceDb = getServiceSupabaseClient();
+  if (!serviceDb) {
+    throw new Error('Service role client not configured');
+  }
+
+  const { data, error } = await serviceDb
+    .from('auto_banner_jobs')
+    .upsert(
+      {
+        blueprint_id: input.blueprintId,
+        status: 'queued',
+        max_attempts: autoBannerMaxAttempts,
+        available_at: new Date().toISOString(),
+        source_item_id: input.sourceItemId,
+        subscription_id: input.subscriptionId,
+        run_id: input.runId,
+        finished_at: null,
+        last_error: null,
+      },
+      { onConflict: 'blueprint_id' },
+    )
+    .select('id, blueprint_id, status, attempts, max_attempts, available_at')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function fetchPublishedChannelSlugMapForBlueprints(db: ReturnType<typeof createClient>, blueprintIds: string[]) {
+  const map = new Map<string, string>();
+  const uniqueBlueprintIds = Array.from(new Set(blueprintIds.filter(Boolean)));
+  if (!uniqueBlueprintIds.length) return map;
+
+  const { data: feedItems, error: feedError } = await db
+    .from('user_feed_items')
+    .select('id, blueprint_id')
+    .in('blueprint_id', uniqueBlueprintIds);
+  if (feedError) throw feedError;
+
+  const feedToBlueprint = new Map<string, string>();
+  const feedIds: string[] = [];
+  for (const row of feedItems || []) {
+    const feedId = String(row.id || '').trim();
+    const blueprintId = String(row.blueprint_id || '').trim();
+    if (!feedId || !blueprintId) continue;
+    feedToBlueprint.set(feedId, blueprintId);
+    feedIds.push(feedId);
+  }
+  if (!feedIds.length) return map;
+
+  const { data: candidates, error: candidateError } = await db
+    .from('channel_candidates')
+    .select('user_feed_item_id, channel_slug, updated_at, created_at')
+    .eq('status', 'published')
+    .in('user_feed_item_id', feedIds)
+    .order('updated_at', { ascending: false });
+  if (candidateError) throw candidateError;
+
+  const newestByBlueprint = new Map<string, { channelSlug: string; ts: number }>();
+  for (const candidate of candidates || []) {
+    const feedId = String(candidate.user_feed_item_id || '').trim();
+    const channelSlug = String(candidate.channel_slug || '').trim();
+    const blueprintId = feedToBlueprint.get(feedId);
+    if (!blueprintId || !channelSlug) continue;
+    const ts = Date.parse(String(candidate.updated_at || candidate.created_at || ''));
+    const prev = newestByBlueprint.get(blueprintId);
+    if (!prev || ts > prev.ts) {
+      newestByBlueprint.set(blueprintId, { channelSlug, ts: Number.isNaN(ts) ? 0 : ts });
+    }
+  }
+
+  newestByBlueprint.forEach((value, blueprintId) => {
+    map.set(blueprintId, value.channelSlug);
+  });
+  return map;
+}
+
+async function fetchChannelDefaultBannerMap(db: ReturnType<typeof createClient>, channelSlugs: string[]) {
+  const map = new Map<string, string[]>();
+  const uniqueSlugs = Array.from(new Set(channelSlugs.filter(Boolean)));
+  if (!uniqueSlugs.length) return map;
+
+  const { data, error } = await db
+    .from('channel_default_banners')
+    .select('channel_slug, banner_url, priority, created_at')
+    .in('channel_slug', uniqueSlugs)
+    .eq('is_active', true)
+    .order('priority', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+
+  for (const row of data || []) {
+    const channelSlug = String(row.channel_slug || '').trim();
+    const bannerUrl = String(row.banner_url || '').trim();
+    if (!channelSlug || !bannerUrl) continue;
+    const existing = map.get(channelSlug) || [];
+    existing.push(bannerUrl);
+    map.set(channelSlug, existing);
+  }
+
+  return map;
+}
+
+async function rebalanceGeneratedBannerCap(db: ReturnType<typeof createClient>) {
+  const pageSize = 500;
+  let from = 0;
+  const eligibleRows: Array<{
+    id: string;
+    created_at: string;
+    banner_generated_url: string;
+    banner_url: string | null;
+    banner_effective_source: BannerEffectiveSource | null;
+  }> = [];
+
+  while (true) {
+    const { data, error } = await db
+      .from('blueprints')
+      .select('id, created_at, banner_generated_url, banner_url, banner_effective_source')
+      .not('banner_generated_url', 'is', null)
+      .eq('banner_is_locked', false)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+
+    for (const row of data) {
+      if (!row.banner_generated_url) continue;
+      eligibleRows.push({
+        id: row.id,
+        created_at: row.created_at,
+        banner_generated_url: row.banner_generated_url,
+        banner_url: row.banner_url,
+        banner_effective_source: (row.banner_effective_source || null) as BannerEffectiveSource | null,
+      });
+    }
+
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  const partition = partitionByBannerCap(
+    eligibleRows.map((row) => ({ id: row.id, created_at: row.created_at })),
+    autoBannerCap,
+  );
+  const keepIds = new Set(partition.keep.map((row) => row.id));
+  const keepRows = eligibleRows.filter((row) => keepIds.has(row.id));
+  const demoteRows = eligibleRows.filter((row) => !keepIds.has(row.id));
+  const nowIso = new Date().toISOString();
+
+  let restoredToGenerated = 0;
+  for (const row of keepRows) {
+    if (row.banner_url === row.banner_generated_url && row.banner_effective_source === 'generated') continue;
+    const { error } = await db
+      .from('blueprints')
+      .update({
+        banner_url: row.banner_generated_url,
+        banner_effective_source: 'generated',
+        banner_policy_updated_at: nowIso,
+      })
+      .eq('id', row.id);
+    if (!error) restoredToGenerated += 1;
+  }
+
+  let demotedToDefault = 0;
+  let demotedToNone = 0;
+  if (demoteRows.length) {
+    const blueprintIds = demoteRows.map((row) => row.id);
+    const channelSlugMap = await fetchPublishedChannelSlugMapForBlueprints(db, blueprintIds);
+    const defaultMap = await fetchChannelDefaultBannerMap(db, Array.from(channelSlugMap.values()));
+
+    for (const row of demoteRows) {
+      const channelSlug = channelSlugMap.get(row.id);
+      const fallback = channelSlug
+        ? selectDeterministicDefaultBanner({
+            channelSlug,
+            blueprintId: row.id,
+            bannerUrls: defaultMap.get(channelSlug) || [],
+          })
+        : null;
+
+      const nextSource: BannerEffectiveSource = fallback ? 'channel_default' : 'none';
+      const nextBanner = fallback || null;
+      const { error } = await db
+        .from('blueprints')
+        .update({
+          banner_url: nextBanner,
+          banner_effective_source: nextSource,
+          banner_policy_updated_at: nowIso,
+        })
+        .eq('id', row.id);
+      if (error) continue;
+      if (fallback) demotedToDefault += 1;
+      else demotedToNone += 1;
+    }
+  }
+
+  return {
+    eligible: eligibleRows.length,
+    kept: keepRows.length,
+    demoted: demoteRows.length,
+    restoredToGenerated,
+    demotedToDefault,
+    demotedToNone,
+  };
+}
+
+async function processAutoBannerJob(db: ReturnType<typeof createClient>, job: AutoBannerJobRow) {
+  const { data: blueprint, error: blueprintError } = await db
+    .from('blueprints')
+    .select('id, title')
+    .eq('id', job.blueprint_id)
+    .maybeSingle();
+  if (blueprintError) throw blueprintError;
+  if (!blueprint) {
+    throw new Error('Blueprint not found');
+  }
+
+  const { data: tagsData } = await db
+    .from('blueprint_tags')
+    .select('tag:tags(slug)')
+    .eq('blueprint_id', blueprint.id);
+  const tags = (tagsData || [])
+    .map((row) => {
+      const maybeTag = (row as { tag?: { slug?: string } | Array<{ slug?: string }> }).tag;
+      if (Array.isArray(maybeTag)) return maybeTag[0]?.slug || null;
+      return maybeTag?.slug || null;
+    })
+    .filter((value): value is string => !!value);
+
+  const client = createLLMClient();
+  const banner = await withTimeout(
+    client.generateBanner({
+      title: blueprint.title,
+      inventoryTitle: 'Auto subscription ingest',
+      tags,
+    }),
+    autoBannerTimeoutMs,
+  );
+  const bannerUrl = await uploadBannerToSupabaseAsService({
+    imageBase64: banner.buffer.toString('base64'),
+    contentType: banner.mimeType,
+    blueprintId: blueprint.id,
+  });
+
+  const nowIso = new Date().toISOString();
+  const { error: bannerUpdateError } = await db
+    .from('blueprints')
+    .update({
+      banner_generated_url: bannerUrl,
+      banner_url: bannerUrl,
+      banner_effective_source: 'generated',
+      banner_policy_updated_at: nowIso,
+    })
+    .eq('id', blueprint.id);
+  if (bannerUpdateError) throw bannerUpdateError;
+
+  const { error: jobUpdateError } = await db
+    .from('auto_banner_jobs')
+    .update({
+      status: 'succeeded',
+      finished_at: nowIso,
+      last_error: null,
+    })
+    .eq('id', job.id);
+  if (jobUpdateError) throw jobUpdateError;
+
+  return {
+    blueprintId: blueprint.id,
+    bannerUrl,
+  };
+}
+
+async function processAutoBannerQueue(db: ReturnType<typeof createClient>, input?: { maxJobs?: number }) {
+  const nowIso = new Date().toISOString();
+  const maxJobs = Math.max(1, Math.min(200, input?.maxJobs || autoBannerBatchSize));
+  const claimScanLimit = Math.max(maxJobs * 4, maxJobs);
+
+  const { data: queueCandidates, error: queueError } = await db
+    .from('auto_banner_jobs')
+    .select('id, blueprint_id, status, attempts, max_attempts, available_at, source_item_id, subscription_id, run_id, last_error')
+    .in('status', ['queued', 'failed'])
+    .lte('available_at', nowIso)
+    .order('created_at', { ascending: true })
+    .limit(claimScanLimit);
+  if (queueError) throw queueError;
+
+  const claimed: AutoBannerJobRow[] = [];
+  for (const candidate of queueCandidates || []) {
+    if (claimed.length >= maxJobs) break;
+    const attempts = Number(candidate.attempts || 0);
+    const maxAttempts = Math.max(1, Number(candidate.max_attempts || autoBannerMaxAttempts));
+    if (attempts >= maxAttempts) {
+      await db.from('auto_banner_jobs')
+        .update({
+          status: 'dead',
+          finished_at: new Date().toISOString(),
+          last_error: candidate.last_error || 'Reached max attempts',
+        })
+        .eq('id', candidate.id)
+        .eq('status', candidate.status);
+      continue;
+    }
+
+    const { data: locked } = await db
+      .from('auto_banner_jobs')
+      .update({
+        status: 'running',
+        attempts: attempts + 1,
+        started_at: new Date().toISOString(),
+        finished_at: null,
+      })
+      .eq('id', candidate.id)
+      .eq('status', candidate.status)
+      .lte('available_at', nowIso)
+      .select('id, blueprint_id, status, attempts, max_attempts, available_at, source_item_id, subscription_id, run_id')
+      .maybeSingle();
+    if (locked) claimed.push(locked as AutoBannerJobRow);
+  }
+
+  const results = {
+    claimed: claimed.length,
+    succeeded: 0,
+    failed: 0,
+    dead: 0,
+    errors: [] as Array<{ job_id: string; error: string }>,
+  };
+
+  for (const job of claimed) {
+    try {
+      const processed = await processAutoBannerJob(db, job);
+      results.succeeded += 1;
+      console.log('[auto_banner_job_succeeded]', JSON.stringify({
+        job_id: job.id,
+        blueprint_id: processed.blueprintId,
+        source_item_id: job.source_item_id,
+        subscription_id: job.subscription_id,
+        run_id: job.run_id,
+      }));
+    } catch (error) {
+      const transition = getFailureTransition({
+        attempts: Number(job.attempts || 0),
+        maxAttempts: Math.max(1, Number(job.max_attempts || autoBannerMaxAttempts)),
+        now: new Date(),
+      });
+      const message = error instanceof Error ? error.message : String(error);
+      await db
+        .from('auto_banner_jobs')
+        .update({
+          status: transition.status,
+          available_at: transition.availableAt,
+          finished_at: transition.status === 'dead' ? new Date().toISOString() : null,
+          last_error: message.slice(0, 500),
+        })
+        .eq('id', job.id);
+      if (transition.status === 'dead') results.dead += 1;
+      else results.failed += 1;
+      results.errors.push({ job_id: job.id, error: message.slice(0, 180) });
+      console.log('[auto_banner_job_failed]', JSON.stringify({
+        job_id: job.id,
+        blueprint_id: job.blueprint_id,
+        status: transition.status,
+        next_available_at: transition.availableAt,
+        error: message,
+      }));
+    }
+  }
+
+  const rebalance = await rebalanceGeneratedBannerCap(db);
+  console.log('[auto_banner_rebalance]', JSON.stringify({
+    cap: autoBannerCap,
+    eligible: rebalance.eligible,
+    kept: rebalance.kept,
+    demoted: rebalance.demoted,
+    restored_generated: rebalance.restoredToGenerated,
+    demoted_default: rebalance.demotedToDefault,
+    demoted_none: rebalance.demotedToNone,
+  }));
+
+  return {
+    ...results,
+    rebalance,
+  };
+}
+
+async function maybeApplyAutoBannerPolicyAfterCreate(input: {
+  blueprintId: string;
+  sourceItemId: string | null;
+  subscriptionId: string | null;
+  runId: string | null;
+}) {
+  if (autoBannerMode === 'off') return;
+  const serviceDb = getServiceSupabaseClient();
+  if (!serviceDb) return;
+
+  if (autoBannerMode === 'async') {
+    await enqueueAutoBannerJob({
+      blueprintId: input.blueprintId,
+      sourceItemId: input.sourceItemId,
+      subscriptionId: input.subscriptionId,
+      runId: input.runId,
+    });
+    return;
+  }
+
+  if (autoBannerMode === 'sync') {
+    await enqueueAutoBannerJob({
+      blueprintId: input.blueprintId,
+      sourceItemId: input.sourceItemId,
+      subscriptionId: input.subscriptionId,
+      runId: input.runId,
+    });
+    await processAutoBannerQueue(serviceDb, { maxJobs: autoBannerConcurrency });
+  }
+}
+
 async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, input: {
   userId: string;
   videoUrl: string;
   videoId: string;
   sourceTag: 'subscription_auto' | 'subscription_accept';
+  sourceItemId?: string | null;
+  subscriptionId?: string | null;
 }) {
   const runId = `sub-${input.sourceTag}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const result = await runYouTubePipeline({
@@ -1318,6 +1824,25 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
     await db
       .from('blueprint_tags')
       .upsert({ blueprint_id: blueprint.id, tag_id: tagId }, { onConflict: 'blueprint_id,tag_id' });
+  }
+
+  if (input.sourceTag === 'subscription_auto') {
+    try {
+      await maybeApplyAutoBannerPolicyAfterCreate({
+        blueprintId: blueprint.id,
+        sourceItemId: input.sourceItemId || null,
+        subscriptionId: input.subscriptionId || null,
+        runId: result.run_id,
+      });
+    } catch (bannerError) {
+      console.log('[auto_banner_enqueue_failed]', JSON.stringify({
+        blueprint_id: blueprint.id,
+        source_item_id: input.sourceItemId || null,
+        subscription_id: input.subscriptionId || null,
+        run_id: result.run_id,
+        error: bannerError instanceof Error ? bannerError.message : String(bannerError),
+      }));
+    }
   }
 
   return {
@@ -1407,6 +1932,8 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
       videoUrl: source.source_url,
       videoId: source.source_native_id,
       sourceTag: 'subscription_auto',
+      sourceItemId: source.id,
+      subscriptionId: subscription.id,
     });
 
     const insertedItem = await insertFeedItem(db, {
@@ -1897,6 +2424,135 @@ app.get('/api/ingestion/jobs/latest', async (req, res) => {
           error_message: data.error_message,
         }
       : null,
+  });
+});
+
+app.post('/api/auto-banner/jobs/trigger', async (req, res) => {
+  if (!isServiceRequestAuthorized(req)) {
+    return res.status(401).json({ ok: false, error_code: 'SERVICE_AUTH_REQUIRED', message: 'Missing or invalid service token', data: null });
+  }
+  if (autoBannerMode === 'off') {
+    return res.status(409).json({ ok: false, error_code: 'AUTO_BANNER_DISABLED', message: 'Auto banner mode is disabled', data: null });
+  }
+
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  try {
+    const workerRuns = Math.max(1, autoBannerConcurrency);
+    const batchPerRun = Math.max(1, Math.ceil(autoBannerBatchSize / workerRuns));
+    const runResults: Array<{
+      claimed: number;
+      succeeded: number;
+      failed: number;
+      dead: number;
+      errors: Array<{ job_id: string; error: string }>;
+      rebalance: {
+        eligible: number;
+        kept: number;
+        demoted: number;
+        restoredToGenerated: number;
+        demotedToDefault: number;
+        demotedToNone: number;
+      };
+    }> = [];
+
+    for (let index = 0; index < workerRuns; index += 1) {
+      const run = await processAutoBannerQueue(db, { maxJobs: batchPerRun });
+      runResults.push(run);
+    }
+
+    const totals = runResults.reduce((acc, run) => ({
+      claimed: acc.claimed + run.claimed,
+      succeeded: acc.succeeded + run.succeeded,
+      failed: acc.failed + run.failed,
+      dead: acc.dead + run.dead,
+      errors: acc.errors.concat(run.errors),
+    }), {
+      claimed: 0,
+      succeeded: 0,
+      failed: 0,
+      dead: 0,
+      errors: [] as Array<{ job_id: string; error: string }>,
+    });
+    const rebalance = runResults[runResults.length - 1]?.rebalance || {
+      eligible: 0,
+      kept: 0,
+      demoted: 0,
+      restoredToGenerated: 0,
+      demotedToDefault: 0,
+      demotedToNone: 0,
+    };
+
+    return res.status(totals.failed || totals.dead ? 207 : 200).json({
+      ok: true,
+      error_code: totals.failed || totals.dead ? 'PARTIAL_FAILURE' : null,
+      message: 'auto banner trigger complete',
+      data: {
+        mode: autoBannerMode,
+        cap: autoBannerCap,
+        batch_size: autoBannerBatchSize,
+        concurrency: autoBannerConcurrency,
+        ...totals,
+        rebalance,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({
+      ok: false,
+      error_code: 'AUTO_BANNER_TRIGGER_FAILED',
+      message,
+      data: null,
+    });
+  }
+});
+
+app.get('/api/auto-banner/jobs/latest', async (req, res) => {
+  if (!isServiceRequestAuthorized(req)) {
+    return res.status(401).json({ ok: false, error_code: 'SERVICE_AUTH_REQUIRED', message: 'Missing or invalid service token', data: null });
+  }
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  const { data: latest, error: latestError } = await db
+    .from('auto_banner_jobs')
+    .select('id, blueprint_id, status, attempts, max_attempts, available_at, last_error, started_at, finished_at, created_at, updated_at, source_item_id, subscription_id, run_id')
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (latestError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestError.message, data: null });
+  }
+
+  const summary = {
+    queued: 0,
+    running: 0,
+    succeeded: 0,
+    failed: 0,
+    dead: 0,
+  };
+  for (const row of latest || []) {
+    if (row.status === 'queued') summary.queued += 1;
+    else if (row.status === 'running') summary.running += 1;
+    else if (row.status === 'succeeded') summary.succeeded += 1;
+    else if (row.status === 'failed') summary.failed += 1;
+    else if (row.status === 'dead') summary.dead += 1;
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: latest?.length ? 'latest auto banner jobs fetched' : 'no auto banner jobs found',
+    data: {
+      mode: autoBannerMode as AutoBannerMode,
+      cap: autoBannerCap,
+      max_attempts: autoBannerMaxAttempts,
+      timeout_ms: autoBannerTimeoutMs,
+      batch_size: autoBannerBatchSize,
+      concurrency: autoBannerConcurrency,
+      summary,
+      jobs: latest || [],
+    },
   });
 });
 

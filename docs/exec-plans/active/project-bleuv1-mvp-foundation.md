@@ -44,6 +44,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Keep YouTube-first ingestion flow stable.
 - Reuse generated artifacts for duplicate pulls when canonical source id matches.
 - Keep optional review/banner enhancement as separate post-generation steps to reduce core latency bottlenecks.
+- Async auto-banner queue path is now available for subscription auto-ingest, preserving ingestion speed and applying banners later.
 
 ### W4 - Community Value Layer
 - Keep insights/remixes tied to imported blueprints.
@@ -62,6 +63,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 7 My Feed notice polish adds avatar/banner notice rendering and confirm-gated unsubscribe that removes notice cards from My Feed.
 - Step 8 My Feed interaction cleanup adds simpler copy, direct `Add Subscription`, card-click blueprint opening, and compact notice-card actions.
 - Step 9 My Feed status-row refinement adds subscription details popup and footer-driven post-to-channel actions.
+- Step 10 async auto-banner policy adds queue processing (`auto_banner_jobs`) and generated-banner cap fallback with deterministic channel defaults.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Keep sync/deactivate and pending accept/skip endpoints as compatibility/operator paths.
 - Keep debug simulation endpoint env-gated (`ENABLE_DEBUG_ENDPOINTS`) for non-prod ingestion testing.
