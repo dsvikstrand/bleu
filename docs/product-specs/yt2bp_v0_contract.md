@@ -29,6 +29,8 @@
 - 2026-02-18 note: async auto-banner queue endpoints (`/api/auto-banner/jobs/trigger`, `/api/auto-banner/jobs/latest`) and cap fallback policy are additive ops paths and remain outside the YT2BP endpoint envelope.
 - 2026-02-18 note: Search->YouTube route handoff now includes channel context (`channel_id`, `channel_title`, `channel_url`) so save-to-feed can persist source channel metadata; YT2BP endpoint envelope remains unchanged.
 - 2026-02-18 note: save-to-feed now preserves channel-title metadata across source upserts so My Feed subtitle mapping stays stable; YT2BP endpoint envelope remains unchanged.
+- 2026-02-18 note: `/youtube` UI now forces core endpoint calls with `generate_review=false` and `generate_banner=false`; toggles run async post-steps and attach results after save when available.
+- 2026-02-18 note: endpoint timeout is now env-configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`, bounded server-side).
 
 ## Request
 ```json
@@ -43,6 +45,7 @@
 ### Request constraints
 - Single YouTube clip only (`youtube.com/watch` or `youtu.be`).
 - Playlist URLs are rejected.
+- `/youtube` UI path currently sends `generate_review=false` and `generate_banner=false` for core-first latency behavior.
 
 ## Success response
 ```json
@@ -97,6 +100,7 @@
 - `YT2BP_ANON_LIMIT_PER_MIN`
 - `YT2BP_AUTH_LIMIT_PER_MIN`
 - `YT2BP_IP_LIMIT_PER_HOUR`
+- `YT2BP_CORE_TIMEOUT_MS` (default `120000`, bounded `30000..300000`)
 - `CHANNEL_GATES_MODE` (`bypass|shadow|enforce`) for channel-candidate evaluation path outside this endpoint.
 
 ## Integration contract (bleuV1)
@@ -109,9 +113,10 @@
 - YouTube channel discovery (`/api/youtube-channel-search`) is intentionally outside this endpoint contract.
 - Subscription row avatar enrichment (`GET /api/source-subscriptions`) is intentionally outside this endpoint contract.
 - Auto-banner queue processing and cap rebalance are intentionally outside this endpoint contract.
+- Optional review/banner post-processing (`/api/analyze-blueprint`, `/api/generate-banner`) and save-time attach behavior are intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)
-- Endpoint timeout target: 120s.
+- Endpoint timeout target: env-controlled via `YT2BP_CORE_TIMEOUT_MS` (default `120s`).
 - Quality retries: controlled by `YT2BP_QUALITY_MAX_RETRIES`.
 - Content safety retries: controlled by `YT2BP_CONTENT_SAFETY_MAX_RETRIES`.
 - Transcript fetch uses provider-level retry behavior.

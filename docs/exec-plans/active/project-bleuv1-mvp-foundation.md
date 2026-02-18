@@ -47,6 +47,9 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Keep YouTube-first ingestion flow stable.
 - Reuse generated artifacts for duplicate pulls when canonical source id matches.
 - Keep optional review/banner enhancement as separate post-generation steps to reduce core latency bottlenecks.
+- `/youtube` now forces core-first endpoint payload (`generate_review=false`, `generate_banner=false`) and runs optional enhancement attach asynchronously.
+- `Save to My Feed` is non-blocking during optional post-steps; late review/banner can attach to already-saved blueprints.
+- Backend timeout budget for core endpoint is configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
 - Async auto-banner queue path is now available for subscription auto-ingest, preserving ingestion speed and applying banners later.
 
 ### W4 - Community Value Layer

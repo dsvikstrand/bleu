@@ -23,11 +23,13 @@ a19) [have] 2026-02-17 flow update: generated YouTube drafts are saved to `My Fe
 a20) [have] 2026-02-17 backend update: channel-candidate lifecycle endpoints and gate decision persistence are available for second-step channel publication.
 a21) [have] 2026-02-17 UX update: optional AI review and banner run as separate post-generation steps (core draft completes first).
 a22) [have] 2026-02-17 gating note: production channel-gate runtime is currently bypass-first (`EVAL_BYPASSED`) pending enforcement rollout.
-a23) [have] 2026-02-18 default update: `/youtube` generation now sends toggle values from UI, so `Generate AI review` and `Generate banner` are both on by default unless user turns them off.
+a23) [have] 2026-02-18 default update: `/youtube` keeps `Generate AI review` and `Generate banner` toggles on by default for UX, but core endpoint calls remain forced-off (`generate_review=false`, `generate_banner=false`) to keep core generation fast.
 a24) [have] 2026-02-18 search handoff update: `Generate Blueprint` on `/search` opens `/youtube` with a prefilled video URL and review/banner defaults on, so users get staged progress feedback in one place.
 a25) [have] 2026-02-18 ingestion default update: subscription auto-ingestion enables review by default and keeps banner generation off by default for throughput.
 a26) [have] 2026-02-18 search handoff now also carries channel context (`channel_id`, `channel_title`, `channel_url`) so saved source rows can show channel name in `My Feed`.
 a27) [have] 2026-02-18 save-path hardening now preserves and reuses channel-title metadata on source upsert, preventing subtitle fallback to duplicated post title.
+a28) [have] 2026-02-18 save-path update: optional review/banner now continue asynchronously after core generation and can attach to a saved blueprint without blocking `Save to My Feed`.
+a29) [have] 2026-02-18 backend timeout update: core endpoint timeout is now configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract
@@ -146,7 +148,7 @@ d2) [have] Keep the page minimal:
 - Two optional toggles:
 - `Generate AI review`
 - `Generate banner`
-d2b) [have] Toggle behavior is now respected end-to-end by request payload (no hardcoded-off override).
+d2b) [have] Toggle behavior is now respected as async post-step controls in UI; core endpoint payload is intentionally hardcoded off for review/banner to reduce timeout risk.
 d3) [have] No source customization and no edit-mode branch in v1.
 d4) [have] Same-page preview is implemented.
 d5) [have] Logged-out users can preview and are prompted to log in to publish.

@@ -17,6 +17,7 @@ import { ensureSourceItemForYouTube, getExistingUserFeedItem, upsertUserFeedItem
 import { apiFetch } from '@/lib/api';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
+import { supabase } from '@/integrations/supabase/client';
 
 const YOUTUBE_ENDPOINT = getFunctionUrl('youtube-to-blueprint');
 const GENERIC_FAILURE_TEXT = 'Could not complete the blueprint. Please test another video.';
@@ -195,14 +196,20 @@ export default function YouTubeToBlueprint() {
   const [bannerErrorText, setBannerErrorText] = useState<string | null>(null);
   const [result, setResult] = useState<YouTubeToBlueprintSuccessResponse | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [savedBlueprintId, setSavedBlueprintId] = useState<string | null>(null);
   const progressResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const phaseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasHydratedFromParamsRef = useRef(false);
   const hasAutoStartedRef = useRef(false);
+  const savedBlueprintIdRef = useRef<string | null>(null);
 
   const urlValidation = useMemo(() => validateYouTubeInput(videoUrl), [videoUrl]);
   const isPostProcessing = isGeneratingReview || isGeneratingBanner;
   const canSubmit = !isGenerating && !isPostProcessing && videoUrl.trim().length > 0 && urlValidation.ok;
+
+  useEffect(() => {
+    savedBlueprintIdRef.current = savedBlueprintId;
+  }, [savedBlueprintId]);
 
   useEffect(() => {
     if (hasHydratedFromParamsRef.current) return;
@@ -340,6 +347,14 @@ export default function YouTubeToBlueprint() {
                   }
                 : current
             );
+            const persistedBlueprintId = savedBlueprintIdRef.current;
+            if (persistedBlueprintId && summary) {
+              await supabase
+                .from('blueprints')
+                .update({ llm_review: summary })
+                .eq('id', persistedBlueprintId)
+                .eq('creator_user_id', user?.id || '');
+            }
 
             await logMvpEvent({
               eventName: 'youtube_review_succeeded',
@@ -409,6 +424,14 @@ export default function YouTubeToBlueprint() {
                   }
                 : current
             );
+            const persistedBlueprintId = savedBlueprintIdRef.current;
+            if (persistedBlueprintId && bannerUrl) {
+              await supabase
+                .from('blueprints')
+                .update({ banner_url: bannerUrl })
+                .eq('id', persistedBlueprintId)
+                .eq('creator_user_id', user?.id || '');
+            }
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Could not generate banner.';
             await logMvpEvent({
@@ -443,6 +466,7 @@ export default function YouTubeToBlueprint() {
     setResult(null);
     setReviewErrorText(null);
     setBannerErrorText(null);
+    setSavedBlueprintId(null);
 
     if (!urlValidation.ok) {
       setErrorText(urlValidation.code === 'playlist'
@@ -463,8 +487,9 @@ export default function YouTubeToBlueprint() {
 
     const payload: YouTubeToBlueprintRequest = {
       video_url: videoUrl.trim(),
-      generate_review: optionalToggles.generateReview,
-      generate_banner: optionalToggles.generateBanner,
+      // Keep core pipeline fast and predictable; optional enhancements run as post-steps.
+      generate_review: false,
+      generate_banner: false,
       source: 'youtube_mvp',
     };
     setIsGenerating(true);
@@ -612,6 +637,7 @@ export default function YouTubeToBlueprint() {
         tags: result.draft.tags || [],
         isPublic: false,
       });
+      setSavedBlueprintId(created.id);
 
       const feedItem = await upsertUserFeedItem({
         userId: user.id,
@@ -783,7 +809,7 @@ export default function YouTubeToBlueprint() {
               ) : (
                 <div className="space-y-2">
                   <div className="flex flex-wrap gap-2">
-                    <Button onClick={saveToMyFeed} disabled={isSaving || isPostProcessing}>
+                    <Button onClick={saveToMyFeed} disabled={isSaving}>
                       {isSaving ? 'Saving...' : 'Save to My Feed'}
                     </Button>
                     {config.features.channelSubmitV1 && (
@@ -794,7 +820,7 @@ export default function YouTubeToBlueprint() {
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {isPostProcessing
-                      ? 'Optional enhancements are still running. Save unlocks when they finish.'
+                      ? 'Optional enhancements are still running. You can save now and they will attach when finished.'
                       : 'Channel publishing is handled after submit and gate checks in My Feed.'}
                   </p>
                 </div>

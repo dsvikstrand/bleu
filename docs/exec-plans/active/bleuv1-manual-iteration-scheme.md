@@ -38,6 +38,7 @@ Execution mode:
 19. [have] Step 18 - Async auto-banner queue + global cap fallback policy
 20. [have] Step 19 - My Feed card copy refinement + search channel-context subtitle handoff
 21. [have] Step 20 - Search channel-title persistence hardening for My Feed subtitle row
+22. [have] Step 21 - `/youtube` core-first async attach + timeout control hardening
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -479,6 +480,31 @@ Evaluation
 
 Completion evidence (2026-02-17)
 - Updated `src/pages/MyFeed.tsx` with subscription-card details popup, footer-driven posting action, and status-row badge treatment.
+
+### Step 21 - `/youtube` core-first async attach + timeout control hardening
+Scope
+- keep core generation path fast and predictable by forcing review/banner off in `/api/youtube-to-blueprint` request payload from `/youtube`
+- run optional review/banner as async post-steps and attach results to saved blueprint when available
+- allow `Save to My Feed` while optional post-steps are still running
+- add env-controlled core timeout budget for backend endpoint
+
+Definition of done
+- `/youtube` core generation no longer blocks on optional review/banner operations
+- users can save immediately after core generation and still receive late review/banner attachments
+- backend endpoint timeout is controlled by `YT2BP_CORE_TIMEOUT_MS` with safe server bounds
+- docs contracts are aligned with runtime behavior (frontend + backend + runbook)
+
+Evaluation
+- manual smoke: generate with review/banner toggles on, save before post-steps finish, then verify review/banner attach on saved blueprint
+- manual smoke: timeout behavior remains stable under slow requests with configured timeout budget
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+Completion evidence (2026-02-18)
+- Updated `src/pages/YouTubeToBlueprint.tsx` to force core payload review/banner off, run async post-steps, and allow non-blocking save.
+- Updated `src/pages/YouTubeToBlueprint.tsx` to persist late review/banner results onto already-saved blueprints.
+- Updated `server/index.ts` to use env-controlled `YT2BP_CORE_TIMEOUT_MS` (bounded `30000..300000`, default `120000`).
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

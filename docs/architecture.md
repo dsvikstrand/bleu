@@ -13,9 +13,11 @@
   - No full moderation platform for user-created channels.
 
 ## 2) Runtime Topology
-  - Frontend:
+- Frontend:
   - React + Vite app (`src/pages/*`).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
+    - `/youtube` runs a core-first request (`generate_review=false`, `generate_banner=false`) and executes optional review/banner as async post-steps.
+    - `Save to My Feed` is intentionally non-blocking while optional post-steps finish; completed review/banner updates are attached to the saved blueprint later.
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
     - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status actions (`Post to Channel` until published, then `Posted to <Channel>`).
@@ -56,6 +58,8 @@
    - discovery option: user can search YouTube results in `/search` before selecting a source video.
    - Search-generated `/youtube` handoff carries channel context (id/title/url) so saved source items retain channel subtitle data in My Feed.
    - My Feed source subtitle mapping also falls back to source metadata channel title when column-level channel title is absent.
+   - `/youtube` core request is timeout-bounded by `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
+   - optional review/banner generation is executed outside the core endpoint request and may attach after save.
 2. Subscription create/reactivate:
    - user opens `/subscriptions`, launches `Add Subscription`, searches channels, then clicks subscribe.
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.
@@ -104,6 +108,7 @@ Current production behavior note:
   - unified API envelope for planned endpoints
   - user/service auth split for mutable operations
   - hybrid idempotency model (natural-key upserts + idempotency keys)
+  - core endpoint timeout control: `YT2BP_CORE_TIMEOUT_MS` (default `120000`, bounded server-side)
 
 ## 5) Invariants
 - Safety invariants:

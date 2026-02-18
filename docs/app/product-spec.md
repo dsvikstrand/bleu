@@ -28,6 +28,7 @@ a21) [have] Banner-cap policy contract is now available globally with generated 
 a22) [have] `My Feed` card footer now shows `Posted to <Channel>` only after publish; non-published/rejected items keep the `Post to Channel` action label.
 a23) [have] Search-generated saves now carry source channel context so `My Feed` subtitle row can show channel name instead of duplicated post title.
 a24) [have] `My Feed` source subtitle resolution now falls back to source metadata channel title when `source_channel_title` is missing, preventing title duplication for search-generated content.
+a25) [have] `/youtube` now runs core generation first and performs review/banner as async post-steps; `Save to My Feed` is non-blocking while enhancements continue.
 
 ## Core Model
 b1) `Source Item`
@@ -156,6 +157,7 @@ si13) YouTube channel search endpoint: `GET /api/youtube-channel-search?q=<query
 si14) `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` per subscription row (derived from YouTube API; no schema change).
 si15) service-ops endpoint: `POST /api/auto-banner/jobs/trigger` (service auth; processes queue + cap rebalance)
 si16) service-ops endpoint: `GET /api/auto-banner/jobs/latest` (service auth; queue snapshot)
+si17) Backend core timeout control: `YT2BP_CORE_TIMEOUT_MS` (applies to `/api/youtube-to-blueprint` request budget).
 
 ## Next Milestone (Hardening)
 n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.

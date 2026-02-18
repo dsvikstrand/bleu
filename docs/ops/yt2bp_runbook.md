@@ -11,6 +11,8 @@
 - Personal-first routing is now expected:
   - generated draft is saved to `My Feed` (`user_feed_items.state = my_feed_published`).
   - channel visibility is a second-step candidate flow, not direct YT2BP publish.
+  - `/youtube` runs core generation first and executes optional review/banner asynchronously after core success.
+  - `Save to My Feed` is non-blocking while optional review/banner complete and attach later.
 - Gate runtime mode:
   - `CHANNEL_GATES_MODE=bypass` is the current production default (`EVAL_BYPASSED`).
   - `shadow` and `enforce` modes are non-prod hardening modes.
@@ -76,6 +78,7 @@ Required runtime variables:
 - `YT2BP_ANON_LIMIT_PER_MIN`
 - `YT2BP_AUTH_LIMIT_PER_MIN`
 - `YT2BP_IP_LIMIT_PER_HOUR`
+- `YT2BP_CORE_TIMEOUT_MS` (default `120000`)
 - `CHANNEL_GATES_MODE` (`bypass` | `shadow` | `enforce`)
 - `SUPABASE_SERVICE_ROLE_KEY` (required for cron ingestion trigger path)
 - `INGESTION_SERVICE_TOKEN` (shared secret for `/api/ingestion/jobs/trigger`)
@@ -95,6 +98,7 @@ Safe defaults:
 - `YT2BP_ANON_LIMIT_PER_MIN=6`
 - `YT2BP_AUTH_LIMIT_PER_MIN=20`
 - `YT2BP_IP_LIMIT_PER_HOUR=30`
+- `YT2BP_CORE_TIMEOUT_MS=120000`
 - `CHANNEL_GATES_MODE=bypass`
 - `ENABLE_DEBUG_ENDPOINTS=false`
 - `INGESTION_MAX_PER_SUBSCRIPTION=5`
@@ -127,9 +131,10 @@ Safe defaults:
 ### `TIMEOUT`
 - Meaning: pipeline exceeded max timeout.
 - Action:
-  1) Disable review/banner for smoke.
-  2) Validate transcript provider latency.
-  3) Check OpenAI latency and retries.
+  1) Confirm `YT2BP_CORE_TIMEOUT_MS` value is sane for current load.
+  2) Keep `/youtube` in core-first mode (review/banner async) for user flows.
+  3) Validate transcript provider latency.
+  4) Check OpenAI latency and retries.
 
 ### `SAFETY_BLOCKED`
 - Meaning: generated output violated content safety policy.

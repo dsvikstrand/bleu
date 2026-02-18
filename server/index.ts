@@ -81,6 +81,7 @@ const yt2bpAuthLimitPerMin = Number(process.env.YT2BP_AUTH_LIMIT_PER_MIN) || 20;
 const yt2bpIpLimitPerHour = Number(process.env.YT2BP_IP_LIMIT_PER_HOUR) || 30;
 const yt2bpEnabledRaw = String(process.env.YT2BP_ENABLED ?? 'true').trim().toLowerCase();
 const yt2bpEnabled = !(yt2bpEnabledRaw === 'false' || yt2bpEnabledRaw === '0' || yt2bpEnabledRaw === 'off');
+const yt2bpCoreTimeoutMs = clampInt(process.env.YT2BP_CORE_TIMEOUT_MS, 120_000, 30_000, 300_000);
 const ingestionServiceToken = String(process.env.INGESTION_SERVICE_TOKEN || '').trim();
 const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX_PER_SUBSCRIPTION) || 5);
 const autoBannerMode = normalizeAutoBannerMode(process.env.SUBSCRIPTION_AUTO_BANNER_MODE);
@@ -867,7 +868,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
         generateBanner: parsed.data.generate_banner,
         authToken,
       }),
-      120_000
+      yt2bpCoreTimeoutMs
     );
     return res.json(result);
   } catch (error) {
