@@ -1862,6 +1862,243 @@ type SyncSubscriptionResult = {
   channelTitle: string | null;
 };
 
+type RefreshScanCandidate = {
+  subscription_id: string;
+  source_channel_id: string;
+  source_channel_title: string | null;
+  source_channel_url: string | null;
+  video_id: string;
+  video_url: string;
+  title: string;
+  published_at: string | null;
+  thumbnail_url: string | null;
+};
+
+const RefreshSubscriptionsScanSchema = z.object({
+  max_per_subscription: z.coerce.number().int().min(1).max(20).optional(),
+  max_total: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+const RefreshSubscriptionsGenerateSchema = z.object({
+  items: z.array(
+    z.object({
+      subscription_id: z.string().uuid(),
+      source_channel_id: z.string().min(1),
+      source_channel_title: z.string().nullable().optional(),
+      source_channel_url: z.string().nullable().optional(),
+      video_id: z.string().min(1),
+      video_url: z.string().url(),
+      title: z.string().min(1),
+      published_at: z.string().nullable().optional(),
+      thumbnail_url: z.string().nullable().optional(),
+    }),
+  ).min(1).max(200),
+});
+
+async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClient>, userId: string, options?: {
+  maxPerSubscription?: number;
+  maxTotal?: number;
+}) {
+  const maxPerSubscription = Math.max(1, Math.min(20, options?.maxPerSubscription || ingestionMaxPerSubscription));
+  const maxTotal = Math.max(1, Math.min(200, options?.maxTotal || 100));
+
+  const { data: subscriptions, error: subscriptionsError } = await db
+    .from('user_source_subscriptions')
+    .select('id, source_channel_id, source_channel_title, source_channel_url, last_seen_published_at, last_seen_video_id, is_active')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .eq('source_type', 'youtube')
+    .order('updated_at', { ascending: false });
+  if (subscriptionsError) throw subscriptionsError;
+
+  const scanErrors: Array<{ subscription_id: string; error: string }> = [];
+  const rawCandidates: RefreshScanCandidate[] = [];
+
+  for (const subscription of subscriptions || []) {
+    try {
+      const feed = await fetchYouTubeFeed(subscription.source_channel_id, 20);
+      const candidates = feed.videos
+        .filter((video) =>
+          isNewerThanCheckpoint(video, subscription.last_seen_published_at, subscription.last_seen_video_id),
+        )
+        .slice(0, maxPerSubscription);
+
+      for (const video of candidates) {
+        rawCandidates.push({
+          subscription_id: subscription.id,
+          source_channel_id: subscription.source_channel_id,
+          source_channel_title: feed.channelTitle || subscription.source_channel_title || null,
+          source_channel_url: subscription.source_channel_url || `https://www.youtube.com/channel/${subscription.source_channel_id}`,
+          video_id: video.videoId,
+          video_url: video.url,
+          title: video.title,
+          published_at: video.publishedAt,
+          thumbnail_url: video.thumbnailUrl,
+        });
+      }
+    } catch (error) {
+      scanErrors.push({
+        subscription_id: subscription.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const dedupedMap = new Map<string, RefreshScanCandidate>();
+  for (const candidate of rawCandidates) {
+    dedupedMap.set(`${candidate.subscription_id}:${candidate.video_id}`, candidate);
+  }
+  let candidates = Array.from(dedupedMap.values());
+
+  if (candidates.length > 0) {
+    const canonicalKeys = candidates.map((candidate) => `youtube:${candidate.video_id}`);
+    const { data: existingSources, error: existingSourcesError } = await db
+      .from('source_items')
+      .select('id, canonical_key')
+      .in('canonical_key', canonicalKeys);
+    if (existingSourcesError) throw existingSourcesError;
+
+    const sourceIds = (existingSources || []).map((row) => row.id);
+    const sourceIdsWithFeedItems = new Set<string>();
+    if (sourceIds.length > 0) {
+      const { data: existingFeedRows, error: existingFeedRowsError } = await db
+        .from('user_feed_items')
+        .select('source_item_id')
+        .eq('user_id', userId)
+        .in('source_item_id', sourceIds);
+      if (existingFeedRowsError) throw existingFeedRowsError;
+      for (const row of existingFeedRows || []) {
+        if (row.source_item_id) sourceIdsWithFeedItems.add(row.source_item_id);
+      }
+    }
+
+    const canonicalKeysWithFeedItems = new Set<string>();
+    for (const source of existingSources || []) {
+      if (source.id && sourceIdsWithFeedItems.has(source.id)) {
+        canonicalKeysWithFeedItems.add(String(source.canonical_key || '').trim());
+      }
+    }
+
+    candidates = candidates.filter((candidate) => !canonicalKeysWithFeedItems.has(`youtube:${candidate.video_id}`));
+  }
+
+  candidates = candidates
+    .sort((a, b) => {
+      const aTs = a.published_at ? Date.parse(a.published_at) : 0;
+      const bTs = b.published_at ? Date.parse(b.published_at) : 0;
+      return bTs - aTs;
+    })
+    .slice(0, maxTotal);
+
+  return {
+    subscriptionsTotal: (subscriptions || []).length,
+    candidates,
+    scanErrors,
+  };
+}
+
+async function processManualRefreshGenerateJob(input: {
+  jobId: string;
+  userId: string;
+  items: RefreshScanCandidate[];
+}) {
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    throw new Error('Service role client not configured');
+  }
+
+  let processed = 0;
+  let inserted = 0;
+  let skipped = 0;
+  const failures: Array<{ subscription_id: string; video_id: string; error: string }> = [];
+
+  const subscriptionIds = Array.from(new Set(input.items.map((item) => item.subscription_id)));
+  const { data: subscriptions, error: subscriptionsError } = await db
+    .from('user_source_subscriptions')
+    .select('id, user_id, source_channel_id, source_channel_title')
+    .eq('user_id', input.userId)
+    .eq('is_active', true)
+    .in('id', subscriptionIds);
+  if (subscriptionsError) throw subscriptionsError;
+  const subscriptionById = new Map((subscriptions || []).map((row) => [row.id, row]));
+
+  for (const item of input.items) {
+    processed += 1;
+    const subscription = subscriptionById.get(item.subscription_id);
+    if (!subscription) {
+      skipped += 1;
+      continue;
+    }
+    if (subscription.source_channel_id !== item.source_channel_id) {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      const source = await upsertSourceItemFromVideo(db, {
+        video: {
+          videoId: item.video_id,
+          title: item.title,
+          url: item.video_url,
+          publishedAt: item.published_at || null,
+          thumbnailUrl: item.thumbnail_url || null,
+        },
+        channelId: subscription.source_channel_id,
+        channelTitle: item.source_channel_title || subscription.source_channel_title || null,
+      });
+
+      const existingFeedItem = await getExistingFeedItem(db, input.userId, source.id);
+      if (existingFeedItem) {
+        skipped += 1;
+        continue;
+      }
+
+      const generated = await createBlueprintFromVideo(db, {
+        userId: input.userId,
+        videoUrl: source.source_url,
+        videoId: source.source_native_id,
+        sourceTag: 'subscription_auto',
+        sourceItemId: source.id,
+        subscriptionId: subscription.id,
+      });
+
+      const insertedItem = await insertFeedItem(db, {
+        userId: input.userId,
+        sourceItemId: source.id,
+        blueprintId: generated.blueprintId,
+        state: 'my_feed_published',
+      });
+      if (insertedItem) inserted += 1;
+      else skipped += 1;
+    } catch (error) {
+      failures.push({
+        subscription_id: item.subscription_id,
+        video_id: item.video_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  await db.from('ingestion_jobs').update({
+    status: failures.length ? 'failed' : 'succeeded',
+    finished_at: new Date().toISOString(),
+    processed_count: processed,
+    inserted_count: inserted,
+    skipped_count: skipped,
+    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
+    error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
+  }).eq('id', input.jobId);
+
+  console.log('[subscription_manual_refresh_job_done]', JSON.stringify({
+    job_id: input.jobId,
+    user_id: input.userId,
+    processed,
+    inserted,
+    skipped,
+    failures: failures.length,
+  }));
+}
+
 async function syncSingleSubscription(db: ReturnType<typeof createClient>, subscription: {
   id: string;
   user_id: string;
@@ -2137,6 +2374,153 @@ app.get('/api/source-subscriptions', async (_req, res) => {
     error_code: null,
     message: 'subscriptions fetched',
     data: withAvatars,
+  });
+});
+
+app.post('/api/source-subscriptions/refresh-scan', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const parsed = RefreshSubscriptionsScanSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'Invalid scan request', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  try {
+    const scanned = await collectRefreshCandidatesForUser(db, userId, {
+      maxPerSubscription: parsed.data.max_per_subscription,
+      maxTotal: parsed.data.max_total,
+    });
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'refresh scan complete',
+      data: {
+        subscriptions_total: scanned.subscriptionsTotal,
+        candidates_total: scanned.candidates.length,
+        candidates: scanned.candidates,
+        scan_errors: scanned.scanErrors,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ ok: false, error_code: 'SCAN_FAILED', message, data: null });
+  }
+});
+
+app.post('/api/source-subscriptions/refresh-generate', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const parsed = RefreshSubscriptionsGenerateSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'Invalid generate request', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+  if (!getServiceSupabaseClient()) {
+    return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+  }
+
+  const subscriptionIds = Array.from(new Set(parsed.data.items.map((item) => item.subscription_id)));
+  const { data: subscriptions, error: subscriptionsError } = await db
+    .from('user_source_subscriptions')
+    .select('id, source_channel_id, is_active')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .in('id', subscriptionIds);
+  if (subscriptionsError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: subscriptionsError.message, data: null });
+  }
+
+  const activeById = new Map((subscriptions || []).map((row) => [row.id, row]));
+  const allowedItems = parsed.data.items.filter((item) => {
+    const sub = activeById.get(item.subscription_id);
+    if (!sub) return false;
+    return String(sub.source_channel_id || '').trim() === String(item.source_channel_id || '').trim();
+  });
+
+  const dedupedMap = new Map<string, RefreshScanCandidate>();
+  for (const item of allowedItems) {
+    dedupedMap.set(`${item.subscription_id}:${item.video_id}`, {
+      subscription_id: item.subscription_id,
+      source_channel_id: item.source_channel_id,
+      source_channel_title: item.source_channel_title || null,
+      source_channel_url: item.source_channel_url || null,
+      video_id: item.video_id,
+      video_url: item.video_url,
+      title: item.title,
+      published_at: item.published_at || null,
+      thumbnail_url: item.thumbnail_url || null,
+    });
+  }
+  const dedupedItems = Array.from(dedupedMap.values());
+
+  if (dedupedItems.length === 0) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'NO_ELIGIBLE_ITEMS',
+      message: 'No eligible videos found for active subscriptions',
+      data: null,
+    });
+  }
+
+  const { data: job, error: jobCreateError } = await db
+    .from('ingestion_jobs')
+    .insert({
+      trigger: 'user_sync',
+      scope: 'manual_refresh_selection',
+      status: 'running',
+      requested_by_user_id: userId,
+      started_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (jobCreateError) {
+    return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
+  }
+
+  setImmediate(() => {
+    void processManualRefreshGenerateJob({
+      jobId: job.id,
+      userId,
+      items: dedupedItems,
+    }).catch(async (error) => {
+      const serviceDb = getServiceSupabaseClient();
+      if (serviceDb) {
+        await serviceDb.from('ingestion_jobs').update({
+          status: 'failed',
+          finished_at: new Date().toISOString(),
+          error_code: 'ASYNC_JOB_FAILED',
+          error_message: (error instanceof Error ? error.message : String(error)).slice(0, 500),
+        }).eq('id', job.id);
+      }
+      console.log('[subscription_manual_refresh_job_failed]', JSON.stringify({
+        job_id: job.id,
+        user_id: userId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
+  });
+
+  return res.status(202).json({
+    ok: true,
+    error_code: null,
+    message: 'background generation started',
+    data: {
+      job_id: job.id,
+      queued_count: dedupedItems.length,
+    },
   });
 });
 

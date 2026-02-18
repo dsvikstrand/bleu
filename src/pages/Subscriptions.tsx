@@ -6,6 +6,7 @@ import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,7 +16,10 @@ import {
   ApiRequestError,
   createSourceSubscription,
   deactivateSourceSubscription,
+  generateSubscriptionRefreshBlueprints,
   listSourceSubscriptions,
+  scanSubscriptionRefreshCandidates,
+  type SubscriptionRefreshCandidate,
   type SourceSubscription,
 } from '@/lib/subscriptionsApi';
 import { evaluateSubscriptionHealth } from '@/lib/subscriptionHealth';
@@ -45,6 +49,10 @@ function formatDateTime(value: string | null) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return 'Unknown';
   return parsed.toLocaleString();
+}
+
+function getRefreshCandidateKey(item: SubscriptionRefreshCandidate) {
+  return `${item.subscription_id}:${item.video_id}`;
 }
 
 function getActionErrorMessage(error: unknown, fallback: string) {
@@ -94,6 +102,11 @@ export default function Subscriptions() {
   const [channelSearchError, setChannelSearchError] = useState<string | null>(null);
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
   const [pendingRows, setPendingRows] = useState<Record<string, boolean>>({});
+  const [isRefreshDialogOpen, setIsRefreshDialogOpen] = useState(false);
+  const [refreshCandidates, setRefreshCandidates] = useState<SubscriptionRefreshCandidate[]>([]);
+  const [refreshSelected, setRefreshSelected] = useState<Record<string, boolean>>({});
+  const [refreshScanErrors, setRefreshScanErrors] = useState<Array<{ subscription_id: string; error: string }>>([]);
+  const [refreshErrorText, setRefreshErrorText] = useState<string | null>(null);
 
   const invalidateSubscriptionViews = () => {
     queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
@@ -211,6 +224,51 @@ export default function Subscriptions() {
     },
   });
 
+  const refreshScanMutation = useMutation({
+    mutationFn: async () => {
+      if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
+      return scanSubscriptionRefreshCandidates();
+    },
+    onSuccess: (payload) => {
+      setRefreshErrorText(null);
+      setRefreshCandidates(payload.candidates || []);
+      setRefreshScanErrors(payload.scan_errors || []);
+      const next: Record<string, boolean> = {};
+      for (const candidate of payload.candidates || []) {
+        next[getRefreshCandidateKey(candidate)] = true;
+      }
+      setRefreshSelected(next);
+    },
+    onError: (error) => {
+      setRefreshErrorText(error instanceof Error ? error.message : 'Could not scan subscriptions.');
+      setRefreshCandidates([]);
+      setRefreshScanErrors([]);
+      setRefreshSelected({});
+    },
+  });
+
+  const refreshGenerateMutation = useMutation({
+    mutationFn: async (items: SubscriptionRefreshCandidate[]) => {
+      if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
+      return generateSubscriptionRefreshBlueprints({ items });
+    },
+    onSuccess: (payload) => {
+      invalidateSubscriptionViews();
+      toast({
+        title: 'Background generation started',
+        description: `Queued ${payload.queued_count} video(s). You can keep using the app while blueprints are generated.`,
+      });
+      setIsRefreshDialogOpen(false);
+    },
+    onError: (error) => {
+      toast({
+        title: 'Generate failed',
+        description: error instanceof Error ? error.message : 'Could not start background generation.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleUnsubscribe = (subscription: SourceSubscription) => {
     void withRowPending(subscription.id, () => deactivateMutation.mutateAsync(subscription.id));
   };
@@ -279,6 +337,50 @@ export default function Subscriptions() {
     });
     return map;
   }, [activeSubscriptions, nowMs]);
+
+  const selectedRefreshItems = useMemo(
+    () => refreshCandidates.filter((item) => refreshSelected[getRefreshCandidateKey(item)]),
+    [refreshCandidates, refreshSelected],
+  );
+
+  useEffect(() => {
+    if (!isRefreshDialogOpen) return;
+    if (refreshScanMutation.isPending) return;
+    if (refreshCandidates.length > 0 || refreshErrorText) return;
+    refreshScanMutation.mutate();
+  }, [isRefreshDialogOpen, refreshCandidates.length, refreshErrorText, refreshScanMutation]);
+
+  const handleRefreshDialogChange = (nextOpen: boolean) => {
+    setIsRefreshDialogOpen(nextOpen);
+    if (!nextOpen) {
+      setRefreshErrorText(null);
+      setRefreshCandidates([]);
+      setRefreshSelected({});
+      setRefreshScanErrors([]);
+    }
+  };
+
+  const toggleRefreshCandidate = (item: SubscriptionRefreshCandidate, nextChecked: boolean) => {
+    const key = getRefreshCandidateKey(item);
+    setRefreshSelected((previous) => ({
+      ...previous,
+      [key]: nextChecked,
+    }));
+  };
+
+  const handleRefreshSelectAll = (nextChecked: boolean) => {
+    const next: Record<string, boolean> = {};
+    for (const candidate of refreshCandidates) {
+      next[getRefreshCandidateKey(candidate)] = nextChecked;
+    }
+    setRefreshSelected(next);
+  };
+
+  const handleStartBackgroundGeneration = () => {
+    if (selectedRefreshItems.length === 0) return;
+    refreshGenerateMutation.mutate(selectedRefreshItems);
+  };
+
   return (
     <PageRoot>
       <AppHeader />
@@ -298,6 +400,14 @@ export default function Subscriptions() {
                 disabled={!subscriptionsEnabled}
               >
                 Add Subscription
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleRefreshDialogChange(true)}
+                disabled={!subscriptionsEnabled}
+              >
+                Refresh
               </Button>
               <Button asChild size="sm" variant="outline" className="h-8 px-2">
                 <Link to="/my-feed">Back to My Feed</Link>
@@ -391,6 +501,127 @@ export default function Subscriptions() {
                   ) : null}
                 </div>
               ) : null}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isRefreshDialogOpen} onOpenChange={handleRefreshDialogChange}>
+          <DialogContent className="sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Refresh subscriptions</DialogTitle>
+              <DialogDescription>
+                Scan your active subscriptions for new videos, then choose what to generate in the background.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => refreshScanMutation.mutate()}
+                  disabled={refreshScanMutation.isPending || refreshGenerateMutation.isPending || !subscriptionsEnabled}
+                >
+                  {refreshScanMutation.isPending ? 'Scanning...' : 'Scan again'}
+                </Button>
+                {refreshCandidates.length > 0 ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleRefreshSelectAll(true)}
+                      disabled={refreshGenerateMutation.isPending}
+                    >
+                      Select all
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleRefreshSelectAll(false)}
+                      disabled={refreshGenerateMutation.isPending}
+                    >
+                      Clear
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+
+              {refreshErrorText ? (
+                <p className="text-sm text-destructive">{refreshErrorText}</p>
+              ) : null}
+
+              {refreshScanErrors.length > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Some channels could not be scanned right now ({refreshScanErrors.length}).
+                </p>
+              ) : null}
+
+              {refreshScanMutation.isPending ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-16 rounded-md" />
+                  <Skeleton className="h-16 rounded-md" />
+                </div>
+              ) : null}
+
+              {!refreshScanMutation.isPending && !refreshErrorText && refreshCandidates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No new videos found.</p>
+              ) : null}
+
+              {refreshCandidates.length > 0 ? (
+                <div className="space-y-2 max-h-[52vh] overflow-y-auto pr-1">
+                  {refreshCandidates.map((item) => {
+                    const key = getRefreshCandidateKey(item);
+                    const checked = Boolean(refreshSelected[key]);
+                    return (
+                      <div key={key} className="rounded-md border border-border/40 p-3">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(value) => toggleRefreshCandidate(item, value === true)}
+                            className="mt-0.5"
+                          />
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <p className="text-sm font-medium line-clamp-2">{item.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {item.source_channel_title || item.source_channel_id}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <span>{formatDateTime(item.published_at)}</span>
+                              <a
+                                href={item.video_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="underline"
+                              >
+                                Open video
+                              </a>
+                            </div>
+                          </div>
+                          {item.thumbnail_url ? (
+                            <img
+                              src={item.thumbnail_url}
+                              alt={item.title}
+                              className="h-12 w-20 rounded-md object-cover border border-border/40 shrink-0"
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              <div className="flex items-center justify-between gap-2 pt-2">
+                <p className="text-xs text-muted-foreground">
+                  Selected: {selectedRefreshItems.length} / {refreshCandidates.length}
+                </p>
+                <Button
+                  size="sm"
+                  onClick={handleStartBackgroundGeneration}
+                  disabled={selectedRefreshItems.length === 0 || refreshGenerateMutation.isPending || refreshScanMutation.isPending}
+                >
+                  {refreshGenerateMutation.isPending ? 'Starting...' : 'Generate blueprints'}
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

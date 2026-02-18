@@ -20,6 +20,18 @@ export type SourceSubscription = {
   updated_at: string;
 };
 
+export type SubscriptionRefreshCandidate = {
+  subscription_id: string;
+  source_channel_id: string;
+  source_channel_title: string | null;
+  source_channel_url: string | null;
+  video_id: string;
+  video_url: string;
+  title: string;
+  published_at: string | null;
+  thumbnail_url: string | null;
+};
+
 type ApiEnvelope<T> = {
   ok: boolean;
   error_code: string | null;
@@ -144,6 +156,40 @@ export async function syncSourceSubscription(id: string) {
     newestPublishedAt: string | null;
     channelTitle: string | null;
   }>(`/source-subscriptions/${id}/sync`, { method: 'POST', body: JSON.stringify({}) });
+  return response.data;
+}
+
+export async function scanSubscriptionRefreshCandidates(input?: {
+  maxPerSubscription?: number;
+  maxTotal?: number;
+}) {
+  const response = await apiRequest<{
+    subscriptions_total: number;
+    candidates_total: number;
+    candidates: SubscriptionRefreshCandidate[];
+    scan_errors: Array<{ subscription_id: string; error: string }>;
+  }>('/source-subscriptions/refresh-scan', {
+    method: 'POST',
+    body: JSON.stringify({
+      max_per_subscription: input?.maxPerSubscription,
+      max_total: input?.maxTotal,
+    }),
+  });
+  return response.data;
+}
+
+export async function generateSubscriptionRefreshBlueprints(input: {
+  items: SubscriptionRefreshCandidate[];
+}) {
+  const response = await apiRequest<{
+    job_id: string;
+    queued_count: number;
+  }>('/source-subscriptions/refresh-generate', {
+    method: 'POST',
+    body: JSON.stringify({
+      items: input.items,
+    }),
+  });
   return response.data;
 }
 

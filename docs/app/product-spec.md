@@ -30,6 +30,7 @@ a23) [have] Search-generated saves now carry source channel context so `My Feed`
 a24) [have] `My Feed` source subtitle resolution now falls back to source metadata channel title when `source_channel_title` is missing, preventing title duplication for search-generated content.
 a25) [have] `/youtube` now runs core generation first and performs review/banner as async post-steps; `Save to My Feed` is non-blocking while enhancements continue.
 a26) [have] Banner generation prompt is now explicitly visual-only (no readable text/typography/logos/watermarks) to keep card backgrounds clean.
+a27) [have] `/subscriptions` now includes `Refresh` popup flow: scan new videos from active subscriptions, select videos, and start background blueprint generation async.
 
 ## Core Model
 b1) `Source Item`
@@ -105,6 +106,7 @@ f7) From `My Feed`, user clicks footer `Post to Channel` to submit a blueprint t
 f8) User scans, remixes, and adds insights.
 f9) Eligible items are promoted to channel feeds after gates.
 f10) Community votes/comments to surface higher-value items.
+f11) User can manually refresh subscriptions from `/subscriptions`, preview new videos, and launch async background generation without blocking app usage.
 
 ## Route and IA Snapshot
 r1) [have] Home: `/`
@@ -159,6 +161,8 @@ si14) `GET /api/source-subscriptions` now includes optional `source_channel_avat
 si15) service-ops endpoint: `POST /api/auto-banner/jobs/trigger` (service auth; processes queue + cap rebalance)
 si16) service-ops endpoint: `GET /api/auto-banner/jobs/latest` (service auth; queue snapshot)
 si17) Backend core timeout control: `YT2BP_CORE_TIMEOUT_MS` (applies to `/api/youtube-to-blueprint` request budget).
+si18) user endpoint: `POST /api/source-subscriptions/refresh-scan` (scan active subscriptions for new videos; no blueprint generation)
+si19) user endpoint: `POST /api/source-subscriptions/refresh-generate` (enqueue selected videos for async background blueprint generation)
 
 ## Next Milestone (Hardening)
 n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.

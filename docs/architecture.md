@@ -25,6 +25,7 @@
     - `My Feed` subscription notices render avatar and optional banner background; card click opens a details popup with confirm-gated `Unsubscribe`.
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
+    - includes manual `Refresh` popup flow: scan new subscription videos, select items, and start async background generation.
 - Backend:
   - Express server in `server/index.ts`.
   - `/api/youtube-to-blueprint` generation pipeline.
@@ -34,6 +35,8 @@
       - `POST` notice insertion stores channel avatar + optional banner metadata for My Feed notice-card rendering
       - `DELETE` deactivates subscription and removes user-scoped `subscription_notice` feed row for that channel
     - `POST /api/source-subscriptions/:id/sync`
+    - `POST /api/source-subscriptions/refresh-scan` (auth-only scan, returns candidate videos; no blueprint generation side effects)
+    - `POST /api/source-subscriptions/refresh-generate` (auth-only enqueue for selected videos; starts async background generation job)
     - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
     - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
     - `POST /api/ingestion/jobs/trigger` (service auth)
@@ -78,6 +81,7 @@
    - successful auto-banner jobs set `blueprints.banner_generated_url` and `blueprints.banner_url`.
    - cap rebalance enforces newest generated banners up to `SUBSCRIPTION_AUTO_BANNER_CAP`; older generated banners fall back to deterministic channel defaults or `null`.
    - subscription health state is derived in UI from `last_polled_at` + `last_sync_error` (`healthy`, `delayed`, `error`, `never_polled`).
+   - manual refresh flow can scan candidate videos and enqueue selected generation in a detached background job (`ingestion_jobs.scope = manual_refresh_selection`), so UI stays responsive.
 4. Optional user remix/insight.
 5. Channel candidate evaluation (all-gates-run default, aggregated decision).
 6. Gate decision:

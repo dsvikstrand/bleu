@@ -71,6 +71,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 8 My Feed interaction cleanup adds simpler copy, direct `Add Subscription`, card-click blueprint opening, and compact notice-card actions.
 - Step 9 My Feed status-row refinement adds subscription details popup and footer-driven post-to-channel actions.
 - Step 10 async auto-banner policy adds queue processing (`auto_banner_jobs`) and generated-banner cap fallback with deterministic channel defaults.
+- Step 11 manual refresh adds `/subscriptions` scan popup + selected async background generation for new subscription videos.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Keep sync/deactivate and pending accept/skip endpoints as compatibility/operator paths.
 - Keep debug simulation endpoint env-gated (`ENABLE_DEBUG_ENDPOINTS`) for non-prod ingestion testing.

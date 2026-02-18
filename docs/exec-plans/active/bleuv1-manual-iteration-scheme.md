@@ -39,6 +39,7 @@ Execution mode:
 20. [have] Step 19 - My Feed card copy refinement + search channel-context subtitle handoff
 21. [have] Step 20 - Search channel-title persistence hardening for My Feed subtitle row
 22. [have] Step 21 - `/youtube` core-first async attach + timeout control hardening
+23. [have] Step 22 - Subscription manual refresh popup + async selected generation
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -506,6 +507,31 @@ Completion evidence (2026-02-18)
 - Updated `src/pages/YouTubeToBlueprint.tsx` to persist late review/banner results onto already-saved blueprints.
 - Updated `server/index.ts` to use env-controlled `YT2BP_CORE_TIMEOUT_MS` (bounded `30000..300000`, default `120000`).
 - Updated `server/llm/openaiClient.ts` banner prompt rules to enforce visual-only output (no readable text/typography/logos/watermarks).
+
+### Step 22 - Subscription manual refresh popup + async selected generation
+Scope
+- add a `/subscriptions` `Refresh` action that opens a scan popup
+- scan active subscriptions for new videos without immediately generating blueprints
+- allow users to select scanned videos and start async generation in background
+
+Definition of done
+- `/subscriptions` shows a `Refresh` button that opens a popup flow
+- scan returns selectable candidate videos per user
+- clicking `Generate blueprints` closes popup and starts non-blocking async generation
+- generation writes to My Feed as jobs complete and does not freeze the page
+
+Evaluation
+- manual smoke: open refresh popup -> scan -> list appears
+- manual smoke: select videos -> generate -> popup closes quickly with background-start toast
+- manual smoke: generated blueprints appear later in My Feed
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+Completion evidence (2026-02-18)
+- Updated `src/pages/Subscriptions.tsx` with refresh popup UX, candidate selection, and async generate trigger.
+- Added `POST /api/source-subscriptions/refresh-scan` in `server/index.ts`.
+- Added `POST /api/source-subscriptions/refresh-generate` in `server/index.ts` with detached background job processing.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

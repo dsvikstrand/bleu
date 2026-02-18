@@ -239,6 +239,26 @@ Expected behavior:
 - unsubscribing (`DELETE /api/source-subscriptions/:id`) removes the user-scoped notice card from My Feed for that channel.
 - subscription auto-ingest generation runs with review enabled and banner disabled by default.
 
+Manual refresh scan (auth required):
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions/refresh-scan \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"max_per_subscription":5,"max_total":50}'
+```
+
+Manual refresh enqueue (auth required):
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions/refresh-generate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"items":[{"subscription_id":"<uuid>","source_channel_id":"<channel_id>","video_id":"<video_id>","video_url":"https://www.youtube.com/watch?v=<video_id>","title":"<title>"}]}'
+```
+Expected behavior:
+- request returns quickly with `job_id` and `queued_count`
+- generation continues asynchronously in background
+- progress is visible via `ingestion_jobs` (scope `manual_refresh_selection`) and resulting My Feed inserts
+
 User-triggered sync (operator/debug path):
 ```bash
 curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions/<subscription_id>/sync \

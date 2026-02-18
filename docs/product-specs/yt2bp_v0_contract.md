@@ -32,6 +32,7 @@
 - 2026-02-18 note: `/youtube` UI now forces core endpoint calls with `generate_review=false` and `generate_banner=false`; toggles run async post-steps and attach results after save when available.
 - 2026-02-18 note: endpoint timeout is now env-configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`, bounded server-side).
 - 2026-02-18 note: banner prompt hardening now enforces visual-only imagery and explicitly blocks readable text/typography/logos/watermarks in generated backgrounds.
+- 2026-02-18 note: subscription manual-refresh endpoints (`/api/source-subscriptions/refresh-scan`, `/api/source-subscriptions/refresh-generate`) are additive and do not alter the YT2BP endpoint envelope.
 
 ## Request
 ```json
@@ -115,6 +116,7 @@
 - Subscription row avatar enrichment (`GET /api/source-subscriptions`) is intentionally outside this endpoint contract.
 - Auto-banner queue processing and cap rebalance are intentionally outside this endpoint contract.
 - Optional review/banner post-processing (`/api/analyze-blueprint`, `/api/generate-banner`) and save-time attach behavior are intentionally outside this endpoint contract.
+- Subscription manual scan/enqueue flows are intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: env-controlled via `YT2BP_CORE_TIMEOUT_MS` (default `120s`).
