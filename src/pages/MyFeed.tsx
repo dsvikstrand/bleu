@@ -533,7 +533,9 @@ export default function MyFeed() {
                             </button>
                           )}
                         </span>
-                        {item.state === 'my_feed_published' || (autoChannelPipelineEnabled && item.state === 'channel_rejected') ? (
+                        {item.state === 'channel_published' ? (
+                          <Badge variant="secondary">Published to Channel</Badge>
+                        ) : item.state === 'my_feed_published' || (autoChannelPipelineEnabled && item.state === 'channel_rejected') ? (
                           <Badge variant="secondary">In My Feed</Badge>
                         ) : (
                           <span>{getMyFeedStateLabel(item.state as MyFeedItemState)}</span>

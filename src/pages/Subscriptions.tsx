@@ -111,6 +111,7 @@ export default function Subscriptions() {
   const [refreshScanErrors, setRefreshScanErrors] = useState<Array<{ subscription_id: string; error: string }>>([]);
   const [refreshCooldownFiltered, setRefreshCooldownFiltered] = useState<number>(0);
   const [refreshErrorText, setRefreshErrorText] = useState<string | null>(null);
+  const [hasScannedRefreshCandidates, setHasScannedRefreshCandidates] = useState(false);
   const [activeRefreshJobId, setActiveRefreshJobId] = useState<string | null>(null);
   const [queuedRefreshCount, setQueuedRefreshCount] = useState<number>(0);
   const [terminalHandledJobId, setTerminalHandledJobId] = useState<string | null>(null);
@@ -237,6 +238,7 @@ export default function Subscriptions() {
       return scanSubscriptionRefreshCandidates();
     },
     onSuccess: (payload) => {
+      setHasScannedRefreshCandidates(true);
       setRefreshErrorText(null);
       setRefreshCandidates(payload.candidates || []);
       setRefreshScanErrors(payload.scan_errors || []);
@@ -248,6 +250,7 @@ export default function Subscriptions() {
       setRefreshSelected(next);
     },
     onError: (error) => {
+      setHasScannedRefreshCandidates(true);
       if (error instanceof ApiRequestError && error.errorCode === 'RATE_LIMITED') {
         setRefreshErrorText(error.message || 'Refresh scan is cooling down. Please retry shortly.');
       } else {
@@ -467,6 +470,7 @@ export default function Subscriptions() {
 
   const handleRefreshDialogChange = (nextOpen: boolean) => {
     setIsRefreshDialogOpen(nextOpen);
+    setHasScannedRefreshCandidates(false);
     setRefreshErrorText(null);
     setRefreshCandidates([]);
     setRefreshSelected({});
@@ -793,9 +797,13 @@ export default function Subscriptions() {
               ) : null}
 
               <div className="flex items-center justify-between gap-2 pt-2">
-                <p className="text-xs text-muted-foreground">
-                  Selected: {selectedRefreshItems.length} / {refreshCandidates.length}
-                </p>
+                {hasScannedRefreshCandidates ? (
+                  <p className="text-xs text-muted-foreground">
+                    Selected: {selectedRefreshItems.length} / {refreshCandidates.length}
+                  </p>
+                ) : (
+                  <span />
+                )}
                 <Button
                   size="sm"
                   onClick={handleStartBackgroundGeneration}
