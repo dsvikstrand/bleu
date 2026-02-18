@@ -576,20 +576,9 @@ export default function MyFeed() {
                         Status: {getMyFeedStateLabel(subscriptionDialogItem.state as MyFeedItemState)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Added: {formatRelativeShort(subscriptionDialogItem.createdAt)} ({new Date(subscriptionDialogItem.createdAt).toLocaleString()})
+                        Added: {formatRelativeShort(subscriptionDialogItem.createdAt)}
                       </p>
                     </div>
-                    {subscriptionDialogItem.source.sourceUrl ? (
-                      <a
-                        href={subscriptionDialogItem.source.sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex text-xs underline text-muted-foreground"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        Open channel
-                      </a>
-                    ) : null}
                     <div className="flex justify-end">
                       <Button
                         size="sm"

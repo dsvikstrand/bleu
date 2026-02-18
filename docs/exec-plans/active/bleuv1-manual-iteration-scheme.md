@@ -45,6 +45,7 @@ Execution mode:
 26. [have] Step 25 - Auto-channel pipeline cutover (general-first deterministic publish)
 27. [have] Step 26 - Deterministic real-channel classification (tag+alias mapper with `general` fallback)
 28. [have] Step 27 - Two-step LLM channel labeler (post-artifact sync, retry+fallback)
+29. [have] Step 28 - Attribution + subscription-surface cleanup (source-channel-first detail header and simplified subscription UI)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -684,6 +685,25 @@ Completion evidence (2026-02-18)
 - Updated `server/services/autoChannelPipeline.ts` and `server/gates/builtins.ts` for `llm_labeler_v1` classifier-aware routing.
 - Updated `server/index.ts` and `src/lib/myFeedApi.ts` to include additive classifier confidence metadata in auto-publish responses.
 - Added backend tests in `src/test/channelLabelerBackend.test.ts` and expanded channel-fit backend tests for llm mode.
+
+### Step 28 - Attribution + subscription-surface cleanup
+Scope
+- blueprint detail header should display source-channel attribution for imported YouTube blueprints
+- remove default MVP edit CTA from blueprint detail
+- simplify subscription notice details and subscriptions list copy density
+
+Definition of done
+- `BlueprintDetail` header shows source channel name (fallback to creator only when source metadata is unavailable)
+- subscription notice popup no longer shows absolute timestamp or open-channel action
+- subscriptions rows hide raw URL and verbose poll text; avatar opens channel
+
+Evaluation
+- manual smoke: blueprint detail shows source channel instead of creator on imported YouTube blueprint
+- manual smoke: My Feed subscription popup shows relative added time and unsubscribe only
+- manual smoke: subscriptions rows are simplified and avatar opens channel
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

@@ -12,6 +12,7 @@ Status: `canonical`
 4. Channel feed is automatically populated from `My Feed` via auto-channel checks.
 5. Community value is comments/votes/insights on blueprint content.
 6. Channel routing mode is env-driven (`deterministic_v1` default, `llm_labeler_v1` optional) and falls back to `general` on ambiguous/invalid label output.
+7. Feed/detail surfaces prioritize source-channel context for imported media over creator-edit workflows in MVP UI.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.

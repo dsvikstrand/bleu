@@ -42,6 +42,9 @@ a30) [have] `/subscriptions` now displays lightweight background-generation job 
 a31) [have] Successful manual refresh generation now advances subscription checkpoints forward so those videos are not picked up again by later auto polling.
 a32) [have] `/subscriptions` now restores active manual-refresh status on reload via latest user job lookup.
 a33) [have] Refresh scan dialog now shows `cooldown_filtered` count for videos hidden by the 6-hour retry window.
+a34) [have] Blueprint detail header now prioritizes source-channel attribution for imported YouTube blueprints (creator-only edit CTA removed from default MVP UI).
+a35) [have] Subscription details popup in `My Feed` is simplified (relative added-time + unsubscribe only, no absolute timestamp or open-channel action).
+a36) [have] `/subscriptions` rows are simplified to channel identity + unsubscribe, with channel-open behavior moved to avatar click and verbose URL/polling text removed.
 
 ## Core Model
 b1) `Source Item`

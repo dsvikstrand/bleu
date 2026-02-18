@@ -145,6 +145,10 @@ Rules:
   - footer status text now shows `Posted to <Channel>` once channel-published; held items remain labeled `In My Feed`.
   - Search->YouTube generate handoff now passes channel context so My Feed subtitle row shows channel name (instead of title duplication).
   - source subtitle mapping now includes metadata fallback (`source_channel_title` from metadata) when base source row column is missing.
+- Attribution + subscriptions polish (2026-02-18):
+  - blueprint detail header now prefers source-channel attribution for imported YouTube blueprints.
+  - default MVP detail view no longer exposes edit CTA.
+  - subscription detail popup and active rows are simplified for lower cognitive load.
 - Subscription notice UX refresh (2026-02-18):
   - notice cards now render channel avatar and optional profile-banner background metadata when available.
   - notice cards show relative time in top-right and `Subscription` badge in status row.

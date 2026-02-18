@@ -25,7 +25,6 @@ import {
   type SubscriptionRefreshCandidate,
   type SourceSubscription,
 } from '@/lib/subscriptionsApi';
-import { evaluateSubscriptionHealth } from '@/lib/subscriptionHealth';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { config } from '@/config/runtime';
 import {
@@ -397,15 +396,6 @@ export default function Subscriptions() {
     () => subscriptions.filter((subscription) => subscription.is_active),
     [subscriptions],
   );
-  const nowMs = useMemo(() => Date.now(), [activeSubscriptions]);
-  const healthBySubscriptionId = useMemo(() => {
-    const map = new Map<string, ReturnType<typeof evaluateSubscriptionHealth>>();
-    activeSubscriptions.forEach((subscription) => {
-      map.set(subscription.id, evaluateSubscriptionHealth(subscription, nowMs));
-    });
-    return map;
-  }, [activeSubscriptions, nowMs]);
-
   const selectedRefreshItems = useMemo(
     () => refreshCandidates.filter((item) => refreshSelected[getRefreshCandidateKey(item)]),
     [refreshCandidates, refreshSelected],
@@ -844,39 +834,28 @@ export default function Subscriptions() {
                   <p className="text-sm text-muted-foreground">No subscriptions yet.</p>
                 ) : (
                   activeSubscriptions.map((subscription) => {
-                    const health = healthBySubscriptionId.get(subscription.id) || evaluateSubscriptionHealth(subscription, nowMs);
                     return (
                       <div key={subscription.id} className="rounded-md border border-border/40 p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-3 min-w-0">
-                            {subscription.source_channel_avatar_url ? (
-                              <img
-                                src={subscription.source_channel_avatar_url}
-                                alt={subscription.source_channel_title || subscription.source_channel_id}
-                                className="h-10 w-10 rounded-full object-cover border border-border/40 shrink-0"
-                              />
-                            ) : (
-                              <div className="h-10 w-10 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center shrink-0">
-                                {getChannelInitials(subscription)}
-                              </div>
-                            )}
+                            <a href={getChannelUrl(subscription)} target="_blank" rel="noreferrer" className="shrink-0">
+                              {subscription.source_channel_avatar_url ? (
+                                <img
+                                  src={subscription.source_channel_avatar_url}
+                                  alt={subscription.source_channel_title || subscription.source_channel_id}
+                                  className="h-10 w-10 rounded-full object-cover border border-border/40"
+                                />
+                              ) : (
+                                <div className="h-10 w-10 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center">
+                                  {getChannelInitials(subscription)}
+                                </div>
+                              )}
+                            </a>
                             <p className="text-sm font-medium truncate">
                               {subscription.source_channel_title || subscription.source_channel_id}
                             </p>
                           </div>
                         </div>
-                        <a
-                          href={getChannelUrl(subscription)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block text-xs underline text-muted-foreground break-all"
-                        >
-                          {getChannelUrl(subscription)}
-                        </a>
-                        <p className="text-xs text-muted-foreground">{health.detail}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Last polled: {formatDateTime(subscription.last_polled_at)}
-                        </p>
                         {subscription.last_sync_error ? (
                           <p className="text-xs text-red-600/90">Sync issue: {subscription.last_sync_error}</p>
                         ) : null}

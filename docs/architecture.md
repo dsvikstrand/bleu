@@ -25,8 +25,11 @@
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
     - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status labels (`Posted to <Channel>`, `Publishing...`, or `In My Feed`).
     - `My Feed` subscription notices render avatar and optional banner background; card click opens a details popup with confirm-gated `Unsubscribe`.
+    - subscription notice details popup is intentionally minimal (relative time + unsubscribe only).
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
+  - Blueprint detail in `src/pages/BlueprintDetail.tsx` now prefers source-channel attribution for imported YouTube blueprints and hides edit CTA in default MVP UI.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
+    - active subscription rows are copy-light; avatar is the channel-open link target.
     - includes manual `Refresh` popup flow: scan new subscription videos, select items, and start async background generation.
 - Backend:
   - Express server in `server/index.ts`.

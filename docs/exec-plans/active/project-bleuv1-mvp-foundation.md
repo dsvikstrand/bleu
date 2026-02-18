@@ -38,6 +38,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Show `Posted to <Channel>` only for channel-published items; held/rejected items remain visible as `In My Feed` without technical reason copy.
 - Ensure full-card banner fill on My Feed blueprint cards (no transparent edge gap).
 - Harden Search-generated source channel-title persistence + metadata fallback so My Feed subtitle row consistently shows channel name.
+- Keep imported blueprint detail attribution source-first (show source channel when present, hide default edit CTA in MVP UI).
 
 ### W2 - Channel Candidate Gating
 - Run deterministic auto-channel checks for all source paths.
@@ -76,6 +77,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 11 manual refresh adds `/subscriptions` scan popup + selected async background generation for new subscription videos.
 - Step 12 gotcha hardening adds refresh rate caps, manual-job concurrency lock, failed-video cooldown suppression, and lightweight background job status on `/subscriptions`.
 - Step 13 refresh hardening follow-up advances manual refresh checkpoints forward, adds reload-safe latest-user-job restore, and surfaces cooldown-filtered counts in scan UI.
+- Step 14 polish pass simplifies subscription popup/list copy and moves channel-open affordance to avatar click.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Added user endpoint `GET /api/ingestion/jobs/:id` for owner-scoped manual refresh progress.
 - Added user endpoint `GET /api/ingestion/jobs/latest-mine` for owner-scoped latest refresh-job restore after page reload.

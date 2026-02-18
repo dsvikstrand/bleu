@@ -19,6 +19,7 @@ import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layou
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
+import { supabase } from '@/integrations/supabase/client';
 
 type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
@@ -65,7 +66,11 @@ export default function BlueprintDetail() {
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
-  const isOwner = !!(user && blueprint && user.id === blueprint.creator_user_id);
+  const [sourceChannel, setSourceChannel] = useState<{
+    title: string;
+    url: string | null;
+    thumbnailUrl: string | null;
+  } | null>(null);
   const curatedChannelTagSlugs = useMemo(() => new Set(getCatalogChannelTagSlugs().map(normalizeTag)), []);
   const displayTags = useMemo(() => {
     if (!blueprint?.tags?.length) return [];
@@ -84,6 +89,60 @@ export default function BlueprintDetail() {
       path: location.pathname,
     });
   }, [blueprint?.id, location.pathname, user?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSourceChannel() {
+      if (!blueprint?.id) {
+        setSourceChannel(null);
+        return;
+      }
+      const { data: feedRow, error: feedError } = await supabase
+        .from('user_feed_items')
+        .select('source_item_id, created_at')
+        .eq('blueprint_id', blueprint.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (feedError || !feedRow?.source_item_id) {
+        if (!cancelled) setSourceChannel(null);
+        return;
+      }
+      const { data: source, error: sourceError } = await supabase
+        .from('source_items')
+        .select('title, source_url, source_channel_title, thumbnail_url, metadata')
+        .eq('id', feedRow.source_item_id)
+        .maybeSingle();
+      if (sourceError || !source) {
+        if (!cancelled) setSourceChannel(null);
+        return;
+      }
+      const sourceMetadata =
+        source.metadata && typeof source.metadata === 'object'
+          ? (source.metadata as Record<string, unknown>)
+          : null;
+      const metadataChannelTitle =
+        sourceMetadata && typeof sourceMetadata.source_channel_title === 'string'
+          ? String(sourceMetadata.source_channel_title || '').trim() || null
+          : (
+              sourceMetadata && typeof sourceMetadata.channel_title === 'string'
+                ? String(sourceMetadata.channel_title || '').trim() || null
+                : null
+            );
+      const channelTitle = source.source_channel_title || metadataChannelTitle || null;
+      if (!cancelled) {
+        setSourceChannel({
+          title: channelTitle || source.title || 'Source channel',
+          url: source.source_url || null,
+          thumbnailUrl: source.thumbnail_url || null,
+        });
+      }
+    }
+    void loadSourceChannel();
+    return () => {
+      cancelled = true;
+    };
+  }, [blueprint?.id]);
 
   const handleLike = async () => {
     if (!blueprint) return;
@@ -145,30 +204,24 @@ export default function BlueprintDetail() {
                   </Button>
                   <h1 className="text-2xl font-semibold leading-tight break-words">{blueprint.title}</h1>
                 </div>
-                {isOwner && (
-                  <Link to={`/blueprint/${blueprint.id}/edit`} className="shrink-0">
-                    <Button variant="outline" size="sm">
-                      Edit
-                    </Button>
-                  </Link>
-                )}
               </div>
 
               <div className="flex items-center justify-between gap-3">
-                <Link
-                  to={`/u/${blueprint.creator_user_id}`}
-                  className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0"
-                >
+                <div className="flex items-center gap-2 min-w-0">
                   <Avatar className="h-6 w-6">
-                    <AvatarImage src={blueprint.creator_profile?.avatar_url || undefined} />
+                    <AvatarImage
+                      src={sourceChannel?.thumbnailUrl || blueprint.creator_profile?.avatar_url || undefined}
+                    />
                     <AvatarFallback className="text-[10px]">
-                      {(blueprint.creator_profile?.display_name || 'U').slice(0, 2).toUpperCase()}
+                      {(sourceChannel?.title || blueprint.creator_profile?.display_name || 'U')
+                        .slice(0, 2)
+                        .toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <span className="text-sm text-muted-foreground truncate">
-                    {blueprint.creator_profile?.display_name || 'Anonymous'}
+                    {sourceChannel?.title || blueprint.creator_profile?.display_name || 'Anonymous'}
                   </span>
-                </Link>
+                </div>
                 <span className="text-xs text-muted-foreground shrink-0">
                   {formatDistanceToNow(new Date(blueprint.created_at), { addSuffix: true })}
                 </span>
