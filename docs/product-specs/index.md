@@ -1,6 +1,7 @@
 # Product Specs Index
 
 ## Canonical
+- Core direction lock: `docs/app/core-direction-lock.md`
 - Core product behavior: `docs/app/product-spec.md`
 - Active direction plan (`bleuV1`): `docs/exec-plans/active/bleuv1-source-first-program.md`
 - Active MVP project plan: `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`

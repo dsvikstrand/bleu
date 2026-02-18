@@ -1,6 +1,8 @@
 # Architecture (`bleuV1`)
 
 ## 1) Intent And Boundaries
+- Direction lock reference:
+  - `docs/app/core-direction-lock.md`
 - Product scope:
   - Source-first blueprint app.
   - Personal unfiltered feed (`My Feed`) as primary lane.
@@ -134,6 +136,7 @@ Current production behavior note:
   - Channel publish is never unconditional; it is a gated second-stage action.
 - Compatibility invariants:
   - Existing public blueprint feed and channel routes remain functional while `My Feed` is introduced.
+  - Legacy library/inventory surfaces remain compatibility-only (non-core) until post-MVP cleanup.
   - Legacy no-blueprint pending/skipped rows are filtered out in `My Feed` rendering.
   - Legacy pending-card endpoints (`/api/my-feed/items/:id/accept|skip`) remain available for compatibility/operator flows.
   - Gate runtime mode remains `CHANNEL_GATES_MODE=bypass` in production for this cycle.

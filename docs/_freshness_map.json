@@ -11,6 +11,7 @@
         "src/lib/generationControls.ts"
       ],
       "required_docs": [
+        "docs/app/core-direction-lock.md",
         "docs/app/product-spec.md",
         "docs/architecture.md",
         "docs/product-specs/youtube_to_blueprint_plan.md",
@@ -41,6 +42,7 @@
         "src/hooks/useTagFollows.ts"
       ],
       "required_docs": [
+        "docs/app/core-direction-lock.md",
         "docs/app/product-spec.md",
         "docs/architecture.md",
         "docs/exec-plans/active/bleuv1-source-first-program.md",
@@ -61,6 +63,7 @@
         "scripts/yt2bp_metrics_from_logs.mjs"
       ],
       "required_docs": [
+        "docs/app/core-direction-lock.md",
         "docs/app/product-spec.md",
         "docs/architecture.md",
         "docs/product-specs/yt2bp_v0_contract.md",
@@ -101,6 +104,7 @@
         "supabase/**"
       ],
       "required_docs": [
+        "docs/app/core-direction-lock.md",
         "docs/app/product-spec.md",
         "docs/architecture.md",
         "docs/exec-plans/active/project-bleuv1-mvp-foundation.md",
@@ -119,6 +123,7 @@
       ],
       "required_docs": [
         "docs/README.md",
+        "docs/app/core-direction-lock.md",
         "docs/app/product-spec.md",
         "docs/architecture.md",
         "docs/exec-plans/index.md",

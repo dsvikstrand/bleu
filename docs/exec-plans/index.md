@@ -36,6 +36,7 @@ This file is the authoritative active/completed registry for execution plans.
   Completed: full docs inventory/classification and deprecated-stub removal.
 
 ## Current Program Snapshot
+- Core identity lock: `docs/app/core-direction-lock.md`.
 - Legacy channels-first program: completed/archived.
 - `bleuV1` source-first program: active.
 - `bleuV1` MVP build execution: manual iterative mode.

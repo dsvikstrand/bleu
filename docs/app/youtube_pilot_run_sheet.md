@@ -1,5 +1,14 @@
 # YouTube Pilot Run Sheet (MVP)
 
+Status: `historical/reference`
+
+Interpretation
+- This file is a historical pilot artifact from early YT2BP validation.
+- Use canonical docs for current runtime behavior:
+  - `docs/app/core-direction-lock.md`
+  - `docs/app/product-spec.md`
+  - `docs/architecture.md`
+
 ## Pilot Config
 - Scope: English-first output, include one Spanish edge case
 - Max video length: 30 minutes

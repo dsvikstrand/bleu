@@ -9,15 +9,17 @@ This folder is the source of truth for product, architecture, planning, and oper
 - Historical plan/reference docs may describe superseded intermediate states. Current runtime truth is always anchored in canonical docs below.
 
 ## Read Order For Current Work
-1. `docs/architecture.md`
-2. `docs/app/product-spec.md`
-3. `docs/exec-plans/index.md`
-4. `docs/exec-plans/active/bleuv1-source-first-program.md`
-5. `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
-6. `docs/exec-plans/active/bleuv1-manual-iteration-scheme.md`
-7. `docs/ops/yt2bp_runbook.md`
+1. `docs/app/core-direction-lock.md`
+2. `docs/architecture.md`
+3. `docs/app/product-spec.md`
+4. `docs/exec-plans/index.md`
+5. `docs/exec-plans/active/bleuv1-source-first-program.md`
+6. `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
+7. `docs/exec-plans/active/bleuv1-manual-iteration-scheme.md`
+8. `docs/ops/yt2bp_runbook.md`
 
 ## Canonical Documents
+- Core direction lock: `docs/app/core-direction-lock.md`
 - Architecture: `docs/architecture.md`
 - Product behavior/spec: `docs/app/product-spec.md`
 - Execution registry (active/completed): `docs/exec-plans/index.md`

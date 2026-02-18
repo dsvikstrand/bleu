@@ -3,6 +3,11 @@
 ## One-Line Product Promise
 `bleuV1` is a source-first app that turns favorite media into bite-sized blueprints, enriched by community insights.
 
+## Core Direction Lock
+- Canonical identity lock: `docs/app/core-direction-lock.md`.
+- Primary MVP journey: source input -> `My Feed` -> optional channel publish.
+- Library/inventory routes are compatibility-only and not part of the core user journey.
+
 ## Status Snapshot
 a1) [have] YouTube to Blueprint generation is live (`/youtube` + `/api/youtube-to-blueprint`).
 a2) [have] Public feed/channel/community primitives are live (`/wall`, `/channels`, `/b/:channelSlug`, likes/comments).
