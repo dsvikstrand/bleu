@@ -136,6 +136,7 @@ Rules:
   - My Feed header now includes both `Add Subscription` and `Manage subscriptions` actions.
   - footer status text now shows `Posted to <Channel>` only once channel-published; non-published/rejected rows keep `Post to Channel`.
   - Search->YouTube generate handoff now passes channel context so My Feed subtitle row shows channel name (instead of title duplication).
+  - source subtitle mapping now includes metadata fallback (`source_channel_title` from metadata) when base source row column is missing.
 - Subscription notice UX refresh (2026-02-18):
   - notice cards now render channel avatar and optional profile-banner background metadata when available.
   - notice cards show relative time in top-right and `Subscription` badge in status row.

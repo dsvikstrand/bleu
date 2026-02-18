@@ -55,6 +55,7 @@
 1. Ingest source item (manual URL pull or subscription sync).
    - discovery option: user can search YouTube results in `/search` before selecting a source video.
    - Search-generated `/youtube` handoff carries channel context (id/title/url) so saved source items retain channel subtitle data in My Feed.
+   - My Feed source subtitle mapping also falls back to source metadata channel title when column-level channel title is absent.
 2. Subscription create/reactivate:
    - user opens `/subscriptions`, launches `Add Subscription`, searches channels, then clicks subscribe.
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.

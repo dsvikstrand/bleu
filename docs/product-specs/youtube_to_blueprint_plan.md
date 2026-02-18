@@ -27,6 +27,7 @@ a23) [have] 2026-02-18 default update: `/youtube` generation now sends toggle va
 a24) [have] 2026-02-18 search handoff update: `Generate Blueprint` on `/search` opens `/youtube` with a prefilled video URL and review/banner defaults on, so users get staged progress feedback in one place.
 a25) [have] 2026-02-18 ingestion default update: subscription auto-ingestion enables review by default and keeps banner generation off by default for throughput.
 a26) [have] 2026-02-18 search handoff now also carries channel context (`channel_id`, `channel_title`, `channel_url`) so saved source rows can show channel name in `My Feed`.
+a27) [have] 2026-02-18 save-path hardening now preserves and reuses channel-title metadata on source upsert, preventing subtitle fallback to duplicated post title.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract

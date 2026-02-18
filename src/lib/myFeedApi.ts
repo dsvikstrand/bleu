@@ -17,6 +17,28 @@ export async function ensureSourceItemForYouTube(input: {
   if (!videoId) throw new Error('Invalid YouTube URL.');
 
   const identity = toYouTubeIdentity(videoId);
+  const { data: existingSource } = await supabase
+    .from('source_items')
+    .select('id, source_channel_id, source_channel_title, metadata')
+    .eq('canonical_key', identity.canonicalKey)
+    .maybeSingle();
+
+  const existingMetadata =
+    existingSource?.metadata
+    && typeof existingSource.metadata === 'object'
+    && existingSource.metadata !== null
+      ? (existingSource.metadata as Record<string, unknown>)
+      : {};
+  const effectiveSourceChannelId = input.sourceChannelId || existingSource?.source_channel_id || null;
+  const effectiveSourceChannelTitle = input.sourceChannelTitle || existingSource?.source_channel_title || null;
+  const metadata: Record<string, unknown> = {
+    ...existingMetadata,
+    ...(input.metadata || {}),
+  };
+  if (effectiveSourceChannelId) metadata.source_channel_id = effectiveSourceChannelId;
+  if (effectiveSourceChannelTitle) metadata.source_channel_title = effectiveSourceChannelTitle;
+  if (input.sourceChannelUrl) metadata.source_channel_url = input.sourceChannelUrl;
+
   const { data, error } = await supabase
     .from('source_items')
     .upsert(
@@ -26,9 +48,9 @@ export async function ensureSourceItemForYouTube(input: {
         canonical_key: identity.canonicalKey,
         source_url: input.videoUrl,
         title: input.title,
-        source_channel_id: input.sourceChannelId || null,
-        source_channel_title: input.sourceChannelTitle || null,
-        metadata: input.metadata || {},
+        source_channel_id: effectiveSourceChannelId,
+        source_channel_title: effectiveSourceChannelTitle,
+        metadata,
         ingest_status: 'ready',
       },
       { onConflict: 'canonical_key' },

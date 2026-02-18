@@ -172,6 +172,7 @@ export default function SearchPage() {
         source: 'youtube_search',
         channel_id: result.channel_id,
         channel_title: result.channel_title || '',
+        channel_name: result.channel_title || '',
         channel_url: result.channel_url || '',
       });
       navigate(`/youtube?${params.toString()}`);

@@ -574,7 +574,7 @@ export default function YouTubeToBlueprint() {
     setIsSaving(true);
     try {
       const sourceChannelId = String(searchParams.get('channel_id') || '').trim() || null;
-      const sourceChannelTitle = String(searchParams.get('channel_title') || '').trim() || null;
+      const sourceChannelTitle = String(searchParams.get('channel_title') || searchParams.get('channel_name') || '').trim() || null;
       const sourceChannelUrl = String(searchParams.get('channel_url') || '').trim() || null;
       const sourceItem = await ensureSourceItemForYouTube({
         videoUrl: videoUrl.trim(),

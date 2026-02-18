@@ -37,6 +37,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Align My Feed card presentation to channel-feed style and move submission entry to footer `Post to Channel` action flow.
 - Show `Posted to <Channel>` only for channel-published items; keep `Post to Channel` wording for non-published states.
 - Ensure full-card banner fill on My Feed blueprint cards (no transparent edge gap).
+- Harden Search-generated source channel-title persistence + metadata fallback so My Feed subtitle row consistently shows channel name.
 
 ### W2 - Channel Candidate Gating
 - Keep promotion as explicit second step from My Feed.

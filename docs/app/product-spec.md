@@ -27,6 +27,7 @@ a20) [have] Auto-banner queue contract is now available for subscription auto-in
 a21) [have] Banner-cap policy contract is now available globally with generated banner preservation (`blueprints.banner_generated_url`) and deterministic channel-default fallback.
 a22) [have] `My Feed` card footer now shows `Posted to <Channel>` only after publish; non-published/rejected items keep the `Post to Channel` action label.
 a23) [have] Search-generated saves now carry source channel context so `My Feed` subtitle row can show channel name instead of duplicated post title.
+a24) [have] `My Feed` source subtitle resolution now falls back to source metadata channel title when `source_channel_title` is missing, preventing title duplication for search-generated content.
 
 ## Core Model
 b1) `Source Item`

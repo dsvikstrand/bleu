@@ -114,6 +114,20 @@ export function useMyFeed() {
       return filteredFeedRows.map((row) => {
         const source = sourceMap.get(row.source_item_id);
         const blueprint = blueprintMap.get(row.blueprint_id);
+        const sourceMetadata =
+          source?.metadata
+          && typeof source.metadata === 'object'
+          && source.metadata !== null
+            ? (source.metadata as Record<string, unknown>)
+            : null;
+        const metadataSourceChannelTitle =
+          sourceMetadata && typeof sourceMetadata.source_channel_title === 'string'
+            ? String(sourceMetadata.source_channel_title || '').trim() || null
+            : (
+              sourceMetadata && typeof sourceMetadata.channel_title === 'string'
+                ? String(sourceMetadata.channel_title || '').trim() || null
+                : null
+            );
 
         return {
           id: row.id,
@@ -126,7 +140,7 @@ export function useMyFeed() {
                 sourceChannelId: source.source_channel_id || null,
                 sourceUrl: source.source_url,
                 title: source.title,
-                sourceChannelTitle: source.source_channel_title || null,
+                sourceChannelTitle: source.source_channel_title || metadataSourceChannelTitle || null,
                 thumbnailUrl: source.thumbnail_url || null,
                 channelBannerUrl:
                   source.metadata
