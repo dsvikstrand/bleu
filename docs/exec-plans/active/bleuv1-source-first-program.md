@@ -134,6 +134,8 @@ Rules:
   - removed nested inner-card shell so blueprint rows render as a single visual card surface.
   - blueprint rows now open detail on card click (explicit `Open blueprint` link removed).
   - My Feed header now includes both `Add Subscription` and `Manage subscriptions` actions.
+  - footer status text now shows `Posted to <Channel>` only once channel-published; non-published/rejected rows keep `Post to Channel`.
+  - Search->YouTube generate handoff now passes channel context so My Feed subtitle row shows channel name (instead of title duplication).
 - Subscription notice UX refresh (2026-02-18):
   - notice cards now render channel avatar and optional profile-banner background metadata when available.
   - notice cards show relative time in top-right and `Subscription` badge in status row.

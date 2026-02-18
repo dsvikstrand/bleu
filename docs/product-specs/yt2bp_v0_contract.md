@@ -27,6 +27,7 @@
 - 2026-02-17 note: subscription auto-ingest generation now enables review-by-default while keeping banner disabled; this remains outside the YT2BP endpoint envelope.
 - 2026-02-18 note: subscription notice cards may use `source_items.metadata.channel_banner_url`, and unsubscribe now removes user-scoped notice rows from My Feed; this remains outside the YT2BP endpoint envelope.
 - 2026-02-18 note: async auto-banner queue endpoints (`/api/auto-banner/jobs/trigger`, `/api/auto-banner/jobs/latest`) and cap fallback policy are additive ops paths and remain outside the YT2BP endpoint envelope.
+- 2026-02-18 note: Search->YouTube route handoff now includes channel context (`channel_id`, `channel_title`, `channel_url`) so save-to-feed can persist source channel metadata; YT2BP endpoint envelope remains unchanged.
 
 ## Request
 ```json

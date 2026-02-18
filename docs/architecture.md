@@ -13,12 +13,12 @@
   - No full moderation platform for user-created channels.
 
 ## 2) Runtime Topology
-- Frontend:
+  - Frontend:
   - React + Vite app (`src/pages/*`).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
-    - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer `Post to Channel` actions.
+    - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status actions (`Post to Channel` until published, then `Posted to <Channel>`).
     - `My Feed` subscription notices render avatar and optional banner background; card click opens a details popup with confirm-gated `Unsubscribe`.
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
@@ -54,6 +54,7 @@
 ## 3) Core Lifecycle (`bleuV1`)
 1. Ingest source item (manual URL pull or subscription sync).
    - discovery option: user can search YouTube results in `/search` before selecting a source video.
+   - Search-generated `/youtube` handoff carries channel context (id/title/url) so saved source items retain channel subtitle data in My Feed.
 2. Subscription create/reactivate:
    - user opens `/subscriptions`, launches `Add Subscription`, searches channels, then clicks subscribe.
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.

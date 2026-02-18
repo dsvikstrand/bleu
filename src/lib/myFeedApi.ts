@@ -8,6 +8,9 @@ import { extractYouTubeVideoId, toYouTubeIdentity } from '@/lib/sourceIdentity';
 export async function ensureSourceItemForYouTube(input: {
   videoUrl: string;
   title: string;
+  sourceChannelId?: string | null;
+  sourceChannelTitle?: string | null;
+  sourceChannelUrl?: string | null;
   metadata?: Record<string, unknown>;
 }) {
   const videoId = extractYouTubeVideoId(input.videoUrl);
@@ -23,6 +26,8 @@ export async function ensureSourceItemForYouTube(input: {
         canonical_key: identity.canonicalKey,
         source_url: input.videoUrl,
         title: input.title,
+        source_channel_id: input.sourceChannelId || null,
+        source_channel_title: input.sourceChannelTitle || null,
         metadata: input.metadata || {},
         ingest_status: 'ready',
       },

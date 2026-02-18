@@ -36,6 +36,7 @@ Execution mode:
 17. [have] Step 16 - Subscription row polish (avatar enrichment + hide technical row badges)
 18. [have] Step 17 - Feed UX polish (hide ingestion summary + My Feed `+` submit popup + review/banner defaults)
 19. [have] Step 18 - Async auto-banner queue + global cap fallback policy
+20. [have] Step 19 - My Feed card copy refinement + search channel-context subtitle handoff
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment

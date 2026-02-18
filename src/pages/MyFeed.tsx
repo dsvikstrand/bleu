@@ -37,6 +37,7 @@ import { logMvpEvent } from '@/lib/logEvent';
 import { formatRelativeShort } from '@/lib/timeFormat';
 
 const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 'active' && channel.isJoinEnabled);
+const CHANNEL_NAME_BY_SLUG = new Map(CHANNELS_CATALOG.map((channel) => [channel.slug, channel.name]));
 
 export default function MyFeed() {
   const { user } = useAuth();
@@ -53,6 +54,11 @@ export default function MyFeed() {
     const picked = selectedChannels[itemId];
     if (picked) return picked;
     return resolvePrimaryChannelFromTags(tags);
+  };
+
+  const getChannelDisplayName = (channelSlug: string | null | undefined) => {
+    if (!channelSlug) return 'channel';
+    return CHANNEL_NAME_BY_SLUG.get(channelSlug) || channelSlug;
   };
 
   const submitMutation = useMutation({
@@ -346,6 +352,7 @@ export default function MyFeed() {
               const blueprint = item.blueprint;
               const source = item.source;
               const isSubscriptionNotice = item.state === 'subscription_notice';
+              const hasBlueprintBanner = !isSubscriptionNotice && !!blueprint?.bannerUrl;
               const title = isSubscriptionNotice
                 ? (source?.title || 'You are now subscribed')
                 : (blueprint?.title || source?.title || 'Pending source import');
@@ -364,7 +371,7 @@ export default function MyFeed() {
               return (
                 <Card
                   key={item.id}
-                  className={`border-border/50 ${isSubscriptionNotice ? 'relative overflow-hidden cursor-pointer transition-colors hover:border-border' : ''} ${blueprint ? 'cursor-pointer transition-colors hover:border-border' : ''}`}
+                  className={`border-border/50 ${isSubscriptionNotice || hasBlueprintBanner ? 'relative overflow-hidden' : ''} ${isSubscriptionNotice ? 'cursor-pointer transition-colors hover:border-border' : ''} ${blueprint ? 'cursor-pointer transition-colors hover:border-border' : ''}`}
                   onClick={
                     isSubscriptionNotice
                       ? () => setSubscriptionDialogItemId(item.id)
@@ -402,7 +409,18 @@ export default function MyFeed() {
                       <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/70 to-background/85" />
                     </>
                   )}
-                  <CardContent className={`p-4 space-y-3 ${isSubscriptionNotice ? 'relative' : ''}`}>
+                  {hasBlueprintBanner && (
+                    <>
+                      <img
+                        src={blueprint.bannerUrl || ''}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover opacity-35"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-b from-background/35 via-background/60 to-background/80" />
+                    </>
+                  )}
+                  <CardContent className={`p-4 space-y-3 ${isSubscriptionNotice || hasBlueprintBanner ? 'relative' : ''}`}>
                     {isSubscriptionNotice ? (
                       <>
                         <div className="flex items-start justify-between gap-3">
@@ -457,36 +475,20 @@ export default function MyFeed() {
                       </>
                     ) : (
                       <>
-                        <div className="relative overflow-hidden">
-                          {!!blueprint.bannerUrl && (
-                            <>
-                              <img
-                                src={blueprint.bannerUrl}
-                                alt=""
-                                className="absolute inset-0 h-full w-full object-cover opacity-35"
-                                loading="lazy"
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-b from-background/35 via-background/60 to-background/80" />
-                            </>
-                          )}
-                          <div className="relative space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{subtitle}</p>
-                              <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
-                            </div>
-                            <p className="text-base font-semibold leading-tight">{title}</p>
-                            <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
-                            {tags.length > 0 && (
-                              <div className="flex flex-wrap gap-2">
-                                {tags.slice(0, 4).map((tag) => (
-                                  <Badge key={tag} variant="outline">#{tag}</Badge>
-                                ))}
-                              </div>
-                            )}
-                            {item.lastDecisionCode ? (
-                              <p className="text-xs text-muted-foreground">Reason: {item.lastDecisionCode}</p>
-                            ) : null}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{subtitle}</p>
+                            <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
                           </div>
+                          <p className="text-base font-semibold leading-tight">{title}</p>
+                          <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
+                          {tags.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {tags.slice(0, 4).map((tag) => (
+                                <Badge key={tag} variant="outline">#{tag}</Badge>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </>
                     )}
@@ -504,8 +506,8 @@ export default function MyFeed() {
                     {!isSubscriptionNotice && (
                       <div className="flex justify-between items-center text-xs text-muted-foreground">
                         <span>
-                          {item.candidate ? (
-                            `Candidate: ${item.candidate.status}`
+                          {item.state === 'channel_published' && item.candidate ? (
+                            `Posted to ${getChannelDisplayName(item.candidate.channelSlug)}`
                           ) : (
                             <button
                               type="button"

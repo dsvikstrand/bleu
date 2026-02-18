@@ -170,6 +170,9 @@ export default function SearchPage() {
         generate_review: '1',
         generate_banner: '1',
         source: 'youtube_search',
+        channel_id: result.channel_id,
+        channel_title: result.channel_title || '',
+        channel_url: result.channel_url || '',
       });
       navigate(`/youtube?${params.toString()}`);
     } catch (error) {

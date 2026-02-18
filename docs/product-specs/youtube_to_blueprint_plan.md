@@ -26,6 +26,7 @@ a22) [have] 2026-02-17 gating note: production channel-gate runtime is currently
 a23) [have] 2026-02-18 default update: `/youtube` generation now sends toggle values from UI, so `Generate AI review` and `Generate banner` are both on by default unless user turns them off.
 a24) [have] 2026-02-18 search handoff update: `Generate Blueprint` on `/search` opens `/youtube` with a prefilled video URL and review/banner defaults on, so users get staged progress feedback in one place.
 a25) [have] 2026-02-18 ingestion default update: subscription auto-ingestion enables review by default and keeps banner generation off by default for throughput.
+a26) [have] 2026-02-18 search handoff now also carries channel context (`channel_id`, `channel_title`, `channel_url`) so saved source rows can show channel name in `My Feed`.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract

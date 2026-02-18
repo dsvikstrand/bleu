@@ -35,6 +35,8 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Ensure channel fail does not remove personal access.
 - Hide legacy no-blueprint pending/skipped rows during migration cleanup.
 - Align My Feed card presentation to channel-feed style and move submission entry to footer `Post to Channel` action flow.
+- Show `Posted to <Channel>` only for channel-published items; keep `Post to Channel` wording for non-published states.
+- Ensure full-card banner fill on My Feed blueprint cards (no transparent edge gap).
 
 ### W2 - Channel Candidate Gating
 - Keep promotion as explicit second step from My Feed.

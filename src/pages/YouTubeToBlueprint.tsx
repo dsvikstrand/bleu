@@ -573,13 +573,20 @@ export default function YouTubeToBlueprint() {
     if (!result || !user || isSaving) return;
     setIsSaving(true);
     try {
+      const sourceChannelId = String(searchParams.get('channel_id') || '').trim() || null;
+      const sourceChannelTitle = String(searchParams.get('channel_title') || '').trim() || null;
+      const sourceChannelUrl = String(searchParams.get('channel_url') || '').trim() || null;
       const sourceItem = await ensureSourceItemForYouTube({
         videoUrl: videoUrl.trim(),
         title: result.draft.title,
+        sourceChannelId,
+        sourceChannelTitle,
+        sourceChannelUrl,
         metadata: {
           run_id: result.run_id,
           transcript_source: result.meta.transcript_source,
           confidence: result.meta.confidence,
+          source_channel_url: sourceChannelUrl,
         },
       });
 

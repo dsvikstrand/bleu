@@ -25,6 +25,8 @@ a18) [have] `My Feed` blueprint cards now open blueprint detail by card click (d
 a19) [have] `My Feed` header now includes direct `Add Subscription` shortcut in addition to `Manage subscriptions`.
 a20) [have] Auto-banner queue contract is now available for subscription auto-ingest (`/api/auto-banner/jobs/trigger`) with service-auth control and non-blocking ingestion mode.
 a21) [have] Banner-cap policy contract is now available globally with generated banner preservation (`blueprints.banner_generated_url`) and deterministic channel-default fallback.
+a22) [have] `My Feed` card footer now shows `Posted to <Channel>` only after publish; non-published/rejected items keep the `Post to Channel` action label.
+a23) [have] Search-generated saves now carry source channel context so `My Feed` subtitle row can show channel name instead of duplicated post title.
 
 ## Core Model
 b1) `Source Item`
