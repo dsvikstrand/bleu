@@ -72,7 +72,9 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 9 My Feed status-row refinement adds subscription details popup and footer-driven post-to-channel actions.
 - Step 10 async auto-banner policy adds queue processing (`auto_banner_jobs`) and generated-banner cap fallback with deterministic channel defaults.
 - Step 11 manual refresh adds `/subscriptions` scan popup + selected async background generation for new subscription videos.
+- Step 12 gotcha hardening adds refresh rate caps, manual-job concurrency lock, failed-video cooldown suppression, and lightweight background job status on `/subscriptions`.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
+- Added user endpoint `GET /api/ingestion/jobs/:id` for owner-scoped manual refresh progress.
 - Keep sync/deactivate and pending accept/skip endpoints as compatibility/operator paths.
 - Keep debug simulation endpoint env-gated (`ENABLE_DEBUG_ENDPOINTS`) for non-prod ingestion testing.
 - Debug simulation auth contract: `x-service-token` only (no user bearer required).

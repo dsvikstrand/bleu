@@ -85,12 +85,18 @@ Required runtime variables:
 - `INGESTION_SERVICE_TOKEN` (shared secret for `/api/ingestion/jobs/trigger`)
 - `ENABLE_DEBUG_ENDPOINTS` (`false` by default; must be `true` to enable debug simulation endpoint)
 - `INGESTION_MAX_PER_SUBSCRIPTION` (default `5`)
+- `REFRESH_SCAN_COOLDOWN_MS` (default `30000`)
+- `REFRESH_GENERATE_COOLDOWN_MS` (default `120000`)
+- `REFRESH_GENERATE_MAX_ITEMS` (default `20`)
+- `REFRESH_FAILURE_COOLDOWN_HOURS` (default `6`)
+- `INGESTION_STALE_RUNNING_MS` (default `1800000`)
 - `SUBSCRIPTION_AUTO_BANNER_MODE` (`off|async|sync`)
 - `SUBSCRIPTION_AUTO_BANNER_CAP` (default `1000`)
 - `SUBSCRIPTION_AUTO_BANNER_MAX_ATTEMPTS` (default `3`)
 - `SUBSCRIPTION_AUTO_BANNER_TIMEOUT_MS` (default `12000`)
 - `SUBSCRIPTION_AUTO_BANNER_BATCH_SIZE` (default `20`)
 - `SUBSCRIPTION_AUTO_BANNER_CONCURRENCY` (default `1`)
+- `AUTO_BANNER_STALE_RUNNING_MS` (default `1200000`)
 
 Safe defaults:
 - `YT2BP_ENABLED=true`
@@ -103,12 +109,18 @@ Safe defaults:
 - `CHANNEL_GATES_MODE=bypass`
 - `ENABLE_DEBUG_ENDPOINTS=false`
 - `INGESTION_MAX_PER_SUBSCRIPTION=5`
+- `REFRESH_SCAN_COOLDOWN_MS=30000`
+- `REFRESH_GENERATE_COOLDOWN_MS=120000`
+- `REFRESH_GENERATE_MAX_ITEMS=20`
+- `REFRESH_FAILURE_COOLDOWN_HOURS=6`
+- `INGESTION_STALE_RUNNING_MS=1800000`
 - `SUBSCRIPTION_AUTO_BANNER_MODE=off`
 - `SUBSCRIPTION_AUTO_BANNER_CAP=1000`
 - `SUBSCRIPTION_AUTO_BANNER_MAX_ATTEMPTS=3`
 - `SUBSCRIPTION_AUTO_BANNER_TIMEOUT_MS=12000`
 - `SUBSCRIPTION_AUTO_BANNER_BATCH_SIZE=20`
 - `SUBSCRIPTION_AUTO_BANNER_CONCURRENCY=1`
+- `AUTO_BANNER_STALE_RUNNING_MS=1200000`
 
 ## Failure playbooks
 
@@ -150,6 +162,13 @@ Safe defaults:
   1) Inspect `yt2bp-quality` logs for failing criteria.
   2) Verify `OPENAI_API_KEY` and model availability.
   3) If incident pressure: use fallback profile below.
+
+### `JOB_ALREADY_RUNNING`
+- Meaning: a manual refresh generation job is already active for this user.
+- Action:
+  1) Use `GET /api/ingestion/jobs/<job_id>` (user auth) to track completion.
+  2) Wait for terminal state (`succeeded|failed`) before launching a new refresh-generate run.
+  3) If job appears stuck, inspect stale recovery settings (`INGESTION_STALE_RUNNING_MS`).
 
 ### `candidate_pending_manual_review` growth
 - Meaning: gate pipeline is producing warn outcomes (fit/quality) and routing to manual review.
@@ -246,6 +265,9 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions/refresh-scan 
   -H 'Content-Type: application/json' \
   --data '{"max_per_subscription":5,"max_total":50}'
 ```
+Expected behavior:
+- response includes candidate rows and `cooldown_filtered` count (failed items hidden during retry cooldown).
+- rate-limited retries return `RATE_LIMITED`.
 
 Manual refresh enqueue (auth required):
 ```bash
@@ -258,6 +280,16 @@ Expected behavior:
 - request returns quickly with `job_id` and `queued_count`
 - generation continues asynchronously in background
 - progress is visible via `ingestion_jobs` (scope `manual_refresh_selection`) and resulting My Feed inserts
+- route guardrails:
+  - max selected items per run = `20` (`MAX_ITEMS_EXCEEDED`)
+  - one active manual refresh job per user (`JOB_ALREADY_RUNNING`)
+  - per-user cooldown (`REFRESH_GENERATE_COOLDOWN_MS`)
+
+Manual refresh job status (user auth):
+```bash
+curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/<job_id> \
+  -H "Authorization: Bearer $TOKEN"
+```
 
 User-triggered sync (operator/debug path):
 ```bash

@@ -42,11 +42,13 @@ type ApiEnvelope<T> = {
 class ApiRequestError extends Error {
   status: number;
   errorCode: string | null;
+  data: unknown;
 
-  constructor(status: number, message: string, errorCode: string | null = null) {
+  constructor(status: number, message: string, errorCode: string | null = null, data: unknown = null) {
     super(message);
     this.status = status;
     this.errorCode = errorCode;
+    this.data = data;
   }
 }
 
@@ -80,10 +82,20 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<ApiEnvel
 
   const json = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
   if (!response.ok || !json) {
-    throw new ApiRequestError(response.status, json?.message || `Request failed (${response.status})`, json?.error_code || null);
+    throw new ApiRequestError(
+      response.status,
+      json?.message || `Request failed (${response.status})`,
+      json?.error_code || null,
+      json?.data ?? null,
+    );
   }
   if (!json.ok) {
-    throw new ApiRequestError(response.status, json.message || 'Request failed.', json.error_code || null);
+    throw new ApiRequestError(
+      response.status,
+      json.message || 'Request failed.',
+      json.error_code || null,
+      json.data ?? null,
+    );
   }
   return json;
 }
@@ -168,12 +180,38 @@ export async function scanSubscriptionRefreshCandidates(input?: {
     candidates_total: number;
     candidates: SubscriptionRefreshCandidate[];
     scan_errors: Array<{ subscription_id: string; error: string }>;
+    cooldown_filtered?: number;
   }>('/source-subscriptions/refresh-scan', {
     method: 'POST',
     body: JSON.stringify({
       max_per_subscription: input?.maxPerSubscription,
       max_total: input?.maxTotal,
     }),
+  });
+  return response.data;
+}
+
+export type IngestionJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+
+export type IngestionJob = {
+  job_id: string;
+  trigger: string;
+  scope: string;
+  status: IngestionJobStatus;
+  started_at: string | null;
+  finished_at: string | null;
+  processed_count: number;
+  inserted_count: number;
+  skipped_count: number;
+  error_code: string | null;
+  error_message: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export async function getIngestionJob(jobId: string) {
+  const response = await apiRequest<IngestionJob>(`/ingestion/jobs/${jobId}`, {
+    method: 'GET',
   });
   return response.data;
 }

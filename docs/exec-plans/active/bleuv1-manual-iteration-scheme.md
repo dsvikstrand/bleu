@@ -40,6 +40,7 @@ Execution mode:
 21. [have] Step 20 - Search channel-title persistence hardening for My Feed subtitle row
 22. [have] Step 21 - `/youtube` core-first async attach + timeout control hardening
 23. [have] Step 22 - Subscription manual refresh popup + async selected generation
+24. [have] Step 23 - Refresh/poll gotcha hardening (caps + cooldown + job status)
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -532,6 +533,35 @@ Completion evidence (2026-02-18)
 - Updated `src/pages/Subscriptions.tsx` with refresh popup UX, candidate selection, and async generate trigger.
 - Added `POST /api/source-subscriptions/refresh-scan` in `server/index.ts`.
 - Added `POST /api/source-subscriptions/refresh-generate` in `server/index.ts` with detached background job processing.
+
+### Step 23 - Refresh/poll gotcha hardening
+Scope
+- add reliability guardrails for manual refresh and auto ingestion overlap
+- hide repeatedly failing videos temporarily to reduce scan noise
+- expose lightweight manual refresh background-job status in `/subscriptions`
+
+Definition of done
+- refresh endpoints enforce per-user cooldown caps (`scan=30s`, `generate=120s`)
+- manual refresh generation enforces max 20 selected videos and one active job per user
+- failed manual-refresh videos are suppressed from scan for 6 hours
+- `/subscriptions` shows active refresh job status card with inserted/skipped/failed counts
+- stale `running` ingestion and auto-banner jobs are auto-recovered by backend
+
+Evaluation
+- manual smoke: rapid scan/generate clicks produce deterministic rate-limit/lock behavior
+- manual smoke: failed refresh video is hidden from next scan and reappears after cooldown
+- manual smoke: status card transitions `Queued -> Running -> Succeeded|Failed`
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+Completion evidence (2026-02-18)
+- Updated `server/index.ts` with route-specific refresh rate limiters, manual job lock, stale job recovery, and cooldown-backed scan filtering.
+- Added owner-scoped endpoint `GET /api/ingestion/jobs/:id`.
+- Added migration `supabase/migrations/20260219001500_refresh_video_attempts_v1.sql`.
+- Updated `src/lib/subscriptionsApi.ts` with `getIngestionJob` and richer API error payload handling.
+- Updated `src/pages/Subscriptions.tsx` with live background-generation status card + error mapping.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

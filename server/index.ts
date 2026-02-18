@@ -84,12 +84,18 @@ const yt2bpEnabled = !(yt2bpEnabledRaw === 'false' || yt2bpEnabledRaw === '0' ||
 const yt2bpCoreTimeoutMs = clampInt(process.env.YT2BP_CORE_TIMEOUT_MS, 120_000, 30_000, 300_000);
 const ingestionServiceToken = String(process.env.INGESTION_SERVICE_TOKEN || '').trim();
 const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX_PER_SUBSCRIPTION) || 5);
+const refreshScanCooldownMs = clampInt(process.env.REFRESH_SCAN_COOLDOWN_MS, 30_000, 5_000, 300_000);
+const refreshGenerateCooldownMs = clampInt(process.env.REFRESH_GENERATE_COOLDOWN_MS, 120_000, 10_000, 900_000);
+const refreshGenerateMaxItems = clampInt(process.env.REFRESH_GENERATE_MAX_ITEMS, 20, 1, 200);
+const refreshFailureCooldownHours = clampInt(process.env.REFRESH_FAILURE_COOLDOWN_HOURS, 6, 1, 168);
+const ingestionStaleRunningMs = clampInt(process.env.INGESTION_STALE_RUNNING_MS, 30 * 60 * 1000, 60_000, 24 * 60 * 60 * 1000);
 const autoBannerMode = normalizeAutoBannerMode(process.env.SUBSCRIPTION_AUTO_BANNER_MODE);
 const autoBannerCap = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_CAP, 1000, 1, 25_000);
 const autoBannerMaxAttempts = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_MAX_ATTEMPTS, 3, 1, 10);
 const autoBannerTimeoutMs = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_TIMEOUT_MS, 12_000, 1_000, 120_000);
 const autoBannerBatchSize = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_BATCH_SIZE, 20, 1, 200);
 const autoBannerConcurrency = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_CONCURRENCY, 1, 1, 5);
+const autoBannerStaleRunningMs = clampInt(process.env.AUTO_BANNER_STALE_RUNNING_MS, 20 * 60 * 1000, 60_000, 24 * 60 * 60 * 1000);
 const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
 const debugEndpointsEnabled = debugEndpointsEnabledRaw === 'true' || debugEndpointsEnabledRaw === '1' || debugEndpointsEnabledRaw === 'on';
 const youtubeDataApiKey = String(process.env.YOUTUBE_DATA_API_KEY || '').trim();
@@ -157,6 +163,43 @@ const yt2bpIpHourlyLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => req.ip,
   handler: (req, res) => yt2bpRateLimitHandler('ip_hourly', req, res),
+});
+
+function getUserOrIpRateLimitKey(req: express.Request, res: express.Response) {
+  const user = res.locals.user as { id?: string } | undefined;
+  return user?.id ? `user:${user.id}` : req.ip;
+}
+
+function refreshRateLimitHandler(kind: 'scan' | 'generate', req: express.Request, res: express.Response) {
+  const retryAfter = getRetryAfterSeconds(req);
+  const message = kind === 'scan'
+    ? 'Refresh scan is cooling down. Please retry shortly.'
+    : 'Background generation is cooling down. Please retry shortly.';
+  return res.status(429).json({
+    ok: false,
+    error_code: 'RATE_LIMITED',
+    message,
+    retry_after_seconds: retryAfter,
+    data: null,
+  });
+}
+
+const refreshScanLimiter = rateLimit({
+  windowMs: refreshScanCooldownMs,
+  max: 1,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
+  handler: (req, res) => refreshRateLimitHandler('scan', req, res),
+});
+
+const refreshGenerateLimiter = rateLimit({
+  windowMs: refreshGenerateCooldownMs,
+  max: 1,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
+  handler: (req, res) => refreshRateLimitHandler('generate', req, res),
 });
 
 app.use((req, res, next) => {
@@ -1638,10 +1681,64 @@ async function processAutoBannerJob(db: ReturnType<typeof createClient>, job: Au
   };
 }
 
+async function recoverStaleAutoBannerJobs(db: ReturnType<typeof createClient>) {
+  const staleBeforeIso = new Date(Date.now() - autoBannerStaleRunningMs).toISOString();
+  const { data: staleRows, error } = await db
+    .from('auto_banner_jobs')
+    .select('id, blueprint_id, status, attempts, max_attempts, available_at, source_item_id, subscription_id, run_id, last_error')
+    .eq('status', 'running')
+    .not('started_at', 'is', null)
+    .lt('started_at', staleBeforeIso)
+    .order('started_at', { ascending: true })
+    .limit(500);
+  if (error) throw error;
+
+  const recovered: Array<{ id: string; next_status: string; next_available_at: string | null }> = [];
+  for (const row of staleRows || []) {
+    const transition = getFailureTransition({
+      attempts: Number(row.attempts || 0),
+      maxAttempts: Math.max(1, Number(row.max_attempts || autoBannerMaxAttempts)),
+      now: new Date(),
+    });
+    const { data: updated } = await db
+      .from('auto_banner_jobs')
+      .update({
+        status: transition.status,
+        available_at: transition.availableAt,
+        finished_at: transition.status === 'dead' ? new Date().toISOString() : null,
+        last_error: 'Recovered stale running job',
+      })
+      .eq('id', row.id)
+      .eq('status', 'running')
+      .select('id')
+      .maybeSingle();
+    if (!updated?.id) continue;
+
+    recovered.push({
+      id: row.id,
+      next_status: transition.status,
+      next_available_at: transition.availableAt,
+    });
+
+    console.log('[auto_banner_stale_recovered]', JSON.stringify({
+      job_id: row.id,
+      blueprint_id: row.blueprint_id,
+      attempts: Number(row.attempts || 0),
+      timeout_ms: autoBannerTimeoutMs,
+      transition_reason: 'stale_running_timeout',
+      next_status: transition.status,
+      next_available_at: transition.availableAt,
+    }));
+  }
+  return recovered;
+}
+
 async function processAutoBannerQueue(db: ReturnType<typeof createClient>, input?: { maxJobs?: number }) {
   const nowIso = new Date().toISOString();
   const maxJobs = Math.max(1, Math.min(200, input?.maxJobs || autoBannerBatchSize));
   const claimScanLimit = Math.max(maxJobs * 4, maxJobs);
+
+  await recoverStaleAutoBannerJobs(db);
 
   const { data: queueCandidates, error: queueError } = await db
     .from('auto_banner_jobs')
@@ -1703,6 +1800,9 @@ async function processAutoBannerQueue(db: ReturnType<typeof createClient>, input
         source_item_id: job.source_item_id,
         subscription_id: job.subscription_id,
         run_id: job.run_id,
+        attempts: Number(job.attempts || 0),
+        timeout_ms: autoBannerTimeoutMs,
+        transition_reason: 'completed',
       }));
     } catch (error) {
       const transition = getFailureTransition({
@@ -1726,6 +1826,9 @@ async function processAutoBannerQueue(db: ReturnType<typeof createClient>, input
       console.log('[auto_banner_job_failed]', JSON.stringify({
         job_id: job.id,
         blueprint_id: job.blueprint_id,
+        attempts: Number(job.attempts || 0),
+        timeout_ms: autoBannerTimeoutMs,
+        transition_reason: 'process_error',
         status: transition.status,
         next_available_at: transition.availableAt,
         error: message,
@@ -1874,6 +1977,12 @@ type RefreshScanCandidate = {
   thumbnail_url: string | null;
 };
 
+type RefreshVideoAttemptRow = {
+  subscription_id: string;
+  video_id: string;
+  cooldown_until: string | null;
+};
+
 const RefreshSubscriptionsScanSchema = z.object({
   max_per_subscription: z.coerce.number().int().min(1).max(20).optional(),
   max_total: z.coerce.number().int().min(1).max(200).optional(),
@@ -1895,6 +2004,118 @@ const RefreshSubscriptionsGenerateSchema = z.object({
   ).min(1).max(200),
 });
 
+function getSupabaseErrorCode(error: unknown) {
+  return String((error as { code?: string } | null)?.code || '').trim();
+}
+
+function isMissingTableError(error: unknown) {
+  return getSupabaseErrorCode(error) === '42P01';
+}
+
+async function recoverStaleIngestionJobs(
+  db: ReturnType<typeof createClient>,
+  input?: { scope?: string; requestedByUserId?: string; olderThanMs?: number },
+) {
+  const nowIso = new Date().toISOString();
+  const olderThanMs = Math.max(60_000, input?.olderThanMs || ingestionStaleRunningMs);
+  const staleBeforeIso = new Date(Date.now() - olderThanMs).toISOString();
+
+  let query = db
+    .from('ingestion_jobs')
+    .update({
+      status: 'failed',
+      finished_at: nowIso,
+      error_code: 'STALE_RUNNING_RECOVERY',
+      error_message: 'Recovered stale running job',
+    })
+    .eq('status', 'running')
+    .not('started_at', 'is', null)
+    .lt('started_at', staleBeforeIso);
+
+  if (input?.scope) query = query.eq('scope', input.scope);
+  if (input?.requestedByUserId) query = query.eq('requested_by_user_id', input.requestedByUserId);
+
+  const { data, error } = await query.select('id, scope, requested_by_user_id');
+  if (error) {
+    if (isMissingTableError(error)) return [];
+    throw error;
+  }
+  return data || [];
+}
+
+async function getActiveManualRefreshJob(db: ReturnType<typeof createClient>, userId: string) {
+  const { data, error } = await db
+    .from('ingestion_jobs')
+    .select('id, status, started_at')
+    .eq('requested_by_user_id', userId)
+    .eq('scope', 'manual_refresh_selection')
+    .eq('status', 'running')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    if (isMissingTableError(error)) return null;
+    throw error;
+  }
+  return data || null;
+}
+
+async function markRefreshVideoFailureCooldown(
+  db: ReturnType<typeof createClient>,
+  input: { userId: string; subscriptionId: string; videoId: string; errorCode: string; errorMessage: string },
+) {
+  const now = new Date();
+  const cooldownUntil = new Date(now.getTime() + refreshFailureCooldownHours * 60 * 60 * 1000);
+  const { error } = await db.from('refresh_video_attempts').upsert(
+    {
+      user_id: input.userId,
+      subscription_id: input.subscriptionId,
+      video_id: input.videoId,
+      last_attempt_at: now.toISOString(),
+      last_result: 'failed',
+      error_code: input.errorCode,
+      error_message: input.errorMessage.slice(0, 500),
+      cooldown_until: cooldownUntil.toISOString(),
+    },
+    { onConflict: 'user_id,subscription_id,video_id' },
+  );
+  if (error && !isMissingTableError(error)) throw error;
+}
+
+async function clearRefreshVideoFailureCooldown(
+  db: ReturnType<typeof createClient>,
+  input: { userId: string; subscriptionId: string; videoId: string },
+) {
+  const { error } = await db
+    .from('refresh_video_attempts')
+    .delete()
+    .eq('user_id', input.userId)
+    .eq('subscription_id', input.subscriptionId)
+    .eq('video_id', input.videoId);
+  if (error && !isMissingTableError(error)) throw error;
+}
+
+async function fetchActiveRefreshCooldownRows(
+  db: ReturnType<typeof createClient>,
+  input: { userId: string; subscriptionIds: string[]; videoIds: string[] },
+) {
+  if (!input.subscriptionIds.length || !input.videoIds.length) return [] as RefreshVideoAttemptRow[];
+  const nowIso = new Date().toISOString();
+  const { data, error } = await db
+    .from('refresh_video_attempts')
+    .select('subscription_id, video_id, cooldown_until')
+    .eq('user_id', input.userId)
+    .in('subscription_id', input.subscriptionIds)
+    .in('video_id', input.videoIds)
+    .not('cooldown_until', 'is', null)
+    .gt('cooldown_until', nowIso);
+  if (error) {
+    if (isMissingTableError(error)) return [] as RefreshVideoAttemptRow[];
+    throw error;
+  }
+  return (data || []) as RefreshVideoAttemptRow[];
+}
+
 async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClient>, userId: string, options?: {
   maxPerSubscription?: number;
   maxTotal?: number;
@@ -1913,6 +2134,7 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
 
   const scanErrors: Array<{ subscription_id: string; error: string }> = [];
   const rawCandidates: RefreshScanCandidate[] = [];
+  let cooldownFiltered = 0;
 
   for (const subscription of subscriptions || []) {
     try {
@@ -1982,6 +2204,20 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
     candidates = candidates.filter((candidate) => !canonicalKeysWithFeedItems.has(`youtube:${candidate.video_id}`));
   }
 
+  if (candidates.length > 0) {
+    const cooldownRows = await fetchActiveRefreshCooldownRows(db, {
+      userId,
+      subscriptionIds: Array.from(new Set(candidates.map((candidate) => candidate.subscription_id))),
+      videoIds: Array.from(new Set(candidates.map((candidate) => candidate.video_id))),
+    });
+    const cooldownKeys = new Set(
+      cooldownRows.map((row) => `${String(row.subscription_id || '').trim()}:${String(row.video_id || '').trim()}`),
+    );
+    const beforeCooldown = candidates.length;
+    candidates = candidates.filter((candidate) => !cooldownKeys.has(`${candidate.subscription_id}:${candidate.video_id}`));
+    cooldownFiltered = Math.max(0, beforeCooldown - candidates.length);
+  }
+
   candidates = candidates
     .sort((a, b) => {
       const aTs = a.published_at ? Date.parse(a.published_at) : 0;
@@ -1994,6 +2230,7 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
     subscriptionsTotal: (subscriptions || []).length,
     candidates,
     scanErrors,
+    cooldownFiltered,
   };
 }
 
@@ -2010,7 +2247,7 @@ async function processManualRefreshGenerateJob(input: {
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
-  const failures: Array<{ subscription_id: string; video_id: string; error: string }> = [];
+  const failures: Array<{ subscription_id: string; video_id: string; error_code: string; error: string }> = [];
 
   const subscriptionIds = Array.from(new Set(input.items.map((item) => item.subscription_id)));
   const { data: subscriptions, error: subscriptionsError } = await db
@@ -2070,12 +2307,45 @@ async function processManualRefreshGenerateJob(input: {
       });
       if (insertedItem) inserted += 1;
       else skipped += 1;
+      await clearRefreshVideoFailureCooldown(db, {
+        userId: input.userId,
+        subscriptionId: item.subscription_id,
+        videoId: item.video_id,
+      });
+      console.log('[subscription_refresh_generate_item_succeeded]', JSON.stringify({
+        job_id: input.jobId,
+        user_id: input.userId,
+        subscription_id: item.subscription_id,
+        video_id: item.video_id,
+        blueprint_id: generated.blueprintId,
+        source_item_id: source.id,
+      }));
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const errorCode = error instanceof PipelineError
+        ? error.errorCode
+        : getSupabaseErrorCode(error) || 'GENERATION_FAILED';
       failures.push({
         subscription_id: item.subscription_id,
         video_id: item.video_id,
-        error: error instanceof Error ? error.message : String(error),
+        error_code: errorCode,
+        error: message,
       });
+      await markRefreshVideoFailureCooldown(db, {
+        userId: input.userId,
+        subscriptionId: item.subscription_id,
+        videoId: item.video_id,
+        errorCode,
+        errorMessage: message,
+      });
+      console.log('[subscription_refresh_generate_item_failed]', JSON.stringify({
+        job_id: input.jobId,
+        user_id: input.userId,
+        subscription_id: item.subscription_id,
+        video_id: item.video_id,
+        error_code: errorCode,
+        error: message.slice(0, 220),
+      }));
     }
   }
 
@@ -2377,7 +2647,7 @@ app.get('/api/source-subscriptions', async (_req, res) => {
   });
 });
 
-app.post('/api/source-subscriptions/refresh-scan', async (req, res) => {
+app.post('/api/source-subscriptions/refresh-scan', refreshScanLimiter, async (req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId || !authToken) {
@@ -2397,6 +2667,13 @@ app.post('/api/source-subscriptions/refresh-scan', async (req, res) => {
       maxPerSubscription: parsed.data.max_per_subscription,
       maxTotal: parsed.data.max_total,
     });
+    console.log('[subscription_refresh_scan_done]', JSON.stringify({
+      user_id: userId,
+      subscriptions_total: scanned.subscriptionsTotal,
+      candidates_total: scanned.candidates.length,
+      scan_errors: scanned.scanErrors.length,
+      cooldown_filtered: scanned.cooldownFiltered,
+    }));
     return res.json({
       ok: true,
       error_code: null,
@@ -2406,6 +2683,7 @@ app.post('/api/source-subscriptions/refresh-scan', async (req, res) => {
         candidates_total: scanned.candidates.length,
         candidates: scanned.candidates,
         scan_errors: scanned.scanErrors,
+        cooldown_filtered: scanned.cooldownFiltered,
       },
     });
   } catch (error) {
@@ -2414,7 +2692,7 @@ app.post('/api/source-subscriptions/refresh-scan', async (req, res) => {
   }
 });
 
-app.post('/api/source-subscriptions/refresh-generate', async (req, res) => {
+app.post('/api/source-subscriptions/refresh-generate', refreshGenerateLimiter, async (req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId || !authToken) {
@@ -2425,11 +2703,44 @@ app.post('/api/source-subscriptions/refresh-generate', async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'Invalid generate request', data: null });
   }
+  if (parsed.data.items.length > refreshGenerateMaxItems) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'MAX_ITEMS_EXCEEDED',
+      message: `Select up to ${refreshGenerateMaxItems} videos per generation run.`,
+      data: null,
+    });
+  }
 
   const db = getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
   if (!getServiceSupabaseClient()) {
     return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+  }
+
+  const recoveredJobs = await recoverStaleIngestionJobs(db, {
+    scope: 'manual_refresh_selection',
+    requestedByUserId: userId,
+  });
+  if (recoveredJobs.length > 0) {
+    console.log('[ingestion_stale_recovered]', JSON.stringify({
+      scope: 'manual_refresh_selection',
+      user_id: userId,
+      recovered_count: recoveredJobs.length,
+      recovered_job_ids: recoveredJobs.map((row) => row.id),
+    }));
+  }
+
+  const activeManualJob = await getActiveManualRefreshJob(db, userId);
+  if (activeManualJob?.id) {
+    return res.status(409).json({
+      ok: false,
+      error_code: 'JOB_ALREADY_RUNNING',
+      message: 'Background generation is already running for this account.',
+      data: {
+        job_id: activeManualJob.id,
+      },
+    });
   }
 
   const subscriptionIds = Array.from(new Set(parsed.data.items.map((item) => item.subscription_id)));
@@ -2691,12 +3002,89 @@ app.post('/api/source-subscriptions/:id/sync', async (req, res) => {
   }
 });
 
+app.get('/api/ingestion/jobs/:id([0-9a-fA-F-]{36})', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const { data, error } = await db
+    .from('ingestion_jobs')
+    .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, created_at, updated_at')
+    .eq('id', req.params.id)
+    .eq('requested_by_user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
+  }
+  if (!data) {
+    return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Ingestion job not found', data: null });
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'ingestion job fetched',
+    data: {
+      job_id: data.id,
+      trigger: data.trigger,
+      scope: data.scope,
+      status: data.status,
+      started_at: data.started_at,
+      finished_at: data.finished_at,
+      processed_count: data.processed_count,
+      inserted_count: data.inserted_count,
+      skipped_count: data.skipped_count,
+      error_code: data.error_code,
+      error_message: data.error_message,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+    },
+  });
+});
+
 app.post('/api/ingestion/jobs/trigger', async (req, res) => {
   if (!isServiceRequestAuthorized(req)) {
     return res.status(401).json({ ok: false, error_code: 'SERVICE_AUTH_REQUIRED', message: 'Missing or invalid service token', data: null });
   }
   const db = getServiceSupabaseClient();
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  const recoveredJobs = await recoverStaleIngestionJobs(db, {
+    scope: 'all_active_subscriptions',
+  });
+  if (recoveredJobs.length > 0) {
+    console.log('[ingestion_stale_recovered]', JSON.stringify({
+      scope: 'all_active_subscriptions',
+      recovered_count: recoveredJobs.length,
+      recovered_job_ids: recoveredJobs.map((row) => row.id),
+    }));
+  }
+
+  const { data: runningJob, error: runningJobError } = await db
+    .from('ingestion_jobs')
+    .select('id, started_at')
+    .eq('scope', 'all_active_subscriptions')
+    .eq('status', 'running')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (runningJobError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: runningJobError.message, data: null });
+  }
+  if (runningJob?.id) {
+    return res.status(409).json({
+      ok: false,
+      error_code: 'JOB_ALREADY_RUNNING',
+      message: 'A subscription ingestion job is already running.',
+      data: { job_id: runningJob.id },
+    });
+  }
 
   const { data: job, error: jobCreateError } = await db
     .from('ingestion_jobs')

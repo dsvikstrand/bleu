@@ -97,12 +97,19 @@ Rules:
 - Subscription and ingestion lifecycle (2026-02-18):
   - `POST|GET|PATCH|DELETE /api/source-subscriptions` live for user-managed channel follows.
   - `POST /api/source-subscriptions/:id/sync` live for user-initiated sync.
+  - `GET /api/ingestion/jobs/:id` live for owner-scoped background refresh status.
   - `POST /api/ingestion/jobs/trigger` live for Oracle cron/service trigger.
   - debug simulation endpoint available behind env gate: `POST /api/debug/subscriptions/:id/simulate-new-uploads`.
   - pending-card My Feed actions live: `POST /api/my-feed/items/:id/accept|skip`.
   - MVP UX is auto-only; create/reactivate sets checkpoint and skips initial old-video prefill.
   - successful create/reactivate inserts one persistent `subscription_notice` feed card per user/channel.
   - future uploads after checkpoint ingest directly into `my_feed_published`.
+  - refresh hardening:
+    - scan/generate endpoints enforce per-user cooldown limits.
+    - manual refresh enforces max 20 selected videos per run.
+    - manual refresh rejects overlapping active jobs (`JOB_ALREADY_RUNNING`).
+    - failed manual-refresh videos enter a 6-hour cooldown (`refresh_video_attempts`) before reappearing in scans.
+    - stale `running` ingestion jobs are auto-recovered (`STALE_RUNNING_RECOVERY`) before new trigger runs.
   - UI hides legacy no-blueprint pending/skipped feed rows to keep My Feed migration-safe.
   - auto-ingestion now runs with AI review enabled and banner generation disabled by default.
 - Subscriptions surface foundation (2026-02-17):
@@ -161,3 +168,4 @@ Rules:
 5. Add richer ingestion observability dashboards from `ingestion_jobs` + `mvp_events`.
 6. Keep gate behavior in `bypass` until dedicated enforcement cycle approval.
 7. Add pagination and quota guardrails iteration for `/api/youtube-search` based on production usage.
+8. Add optional user-facing toggle to include cooldown-suppressed refresh failures in scan results (post-MVP).

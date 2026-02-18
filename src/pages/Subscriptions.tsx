@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
@@ -16,9 +16,11 @@ import {
   ApiRequestError,
   createSourceSubscription,
   deactivateSourceSubscription,
+  getIngestionJob,
   generateSubscriptionRefreshBlueprints,
   listSourceSubscriptions,
   scanSubscriptionRefreshCandidates,
+  type IngestionJobStatus,
   type SubscriptionRefreshCandidate,
   type SourceSubscription,
 } from '@/lib/subscriptionsApi';
@@ -107,11 +109,14 @@ export default function Subscriptions() {
   const [refreshSelected, setRefreshSelected] = useState<Record<string, boolean>>({});
   const [refreshScanErrors, setRefreshScanErrors] = useState<Array<{ subscription_id: string; error: string }>>([]);
   const [refreshErrorText, setRefreshErrorText] = useState<string | null>(null);
+  const [activeRefreshJobId, setActiveRefreshJobId] = useState<string | null>(null);
+  const [queuedRefreshCount, setQueuedRefreshCount] = useState<number>(0);
+  const [terminalHandledJobId, setTerminalHandledJobId] = useState<string | null>(null);
 
-  const invalidateSubscriptionViews = () => {
+  const invalidateSubscriptionViews = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
     queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
-  };
+  }, [queryClient, user?.id]);
 
   const resetSearchDialogState = () => {
     setChannelSearchQuery('');
@@ -240,7 +245,11 @@ export default function Subscriptions() {
       setRefreshSelected(next);
     },
     onError: (error) => {
-      setRefreshErrorText(error instanceof Error ? error.message : 'Could not scan subscriptions.');
+      if (error instanceof ApiRequestError && error.errorCode === 'RATE_LIMITED') {
+        setRefreshErrorText(error.message || 'Refresh scan is cooling down. Please retry shortly.');
+      } else {
+        setRefreshErrorText(error instanceof Error ? error.message : 'Could not scan subscriptions.');
+      }
       setRefreshCandidates([]);
       setRefreshScanErrors([]);
       setRefreshSelected({});
@@ -254,6 +263,9 @@ export default function Subscriptions() {
     },
     onSuccess: (payload) => {
       invalidateSubscriptionViews();
+      setActiveRefreshJobId(payload.job_id);
+      setQueuedRefreshCount(payload.queued_count);
+      setTerminalHandledJobId(null);
       toast({
         title: 'Background generation started',
         description: `Queued ${payload.queued_count} video(s). You can keep using the app while blueprints are generated.`,
@@ -261,11 +273,52 @@ export default function Subscriptions() {
       setIsRefreshDialogOpen(false);
     },
     onError: (error) => {
+      if (error instanceof ApiRequestError) {
+        if (error.errorCode === 'JOB_ALREADY_RUNNING') {
+          const jobId = (error.data as { job_id?: string } | null)?.job_id || null;
+          if (jobId) {
+            setActiveRefreshJobId(jobId);
+            setTerminalHandledJobId(null);
+          }
+          toast({
+            title: 'Generation already in progress',
+            description: 'Please wait for the current background generation to finish.',
+          });
+          return;
+        }
+        if (error.errorCode === 'MAX_ITEMS_EXCEEDED') {
+          toast({
+            title: 'Selection too large',
+            description: 'Select up to 20 videos per generation run.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        if (error.errorCode === 'RATE_LIMITED') {
+          toast({
+            title: 'Please wait before generating again',
+            description: error.message || 'Generation is temporarily rate-limited.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
       toast({
         title: 'Generate failed',
         description: error instanceof Error ? error.message : 'Could not start background generation.',
         variant: 'destructive',
       });
+    },
+  });
+
+  const refreshJobQuery = useQuery({
+    queryKey: ['ingestion-job', activeRefreshJobId, user?.id],
+    enabled: Boolean(activeRefreshJobId) && Boolean(user) && subscriptionsEnabled,
+    queryFn: () => getIngestionJob(activeRefreshJobId as string),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status as IngestionJobStatus | undefined;
+      if (!status || status === 'queued' || status === 'running') return 4000;
+      return false;
     },
   });
 
@@ -342,6 +395,21 @@ export default function Subscriptions() {
     () => refreshCandidates.filter((item) => refreshSelected[getRefreshCandidateKey(item)]),
     [refreshCandidates, refreshSelected],
   );
+  const refreshJobStatus = (refreshJobQuery.data?.status || (activeRefreshJobId ? 'queued' : null)) as IngestionJobStatus | null;
+  const refreshJobProcessed = refreshJobQuery.data?.processed_count || 0;
+  const refreshJobInserted = refreshJobQuery.data?.inserted_count || 0;
+  const refreshJobSkipped = refreshJobQuery.data?.skipped_count || 0;
+  const refreshJobFailed = Math.max(0, refreshJobProcessed - refreshJobInserted - refreshJobSkipped);
+  const refreshJobRunning = refreshJobStatus === 'queued' || refreshJobStatus === 'running';
+  const refreshJobLabel = refreshJobStatus === 'succeeded'
+    ? 'Succeeded'
+    : refreshJobStatus === 'failed'
+      ? 'Failed'
+      : refreshJobStatus === 'running'
+        ? 'Running'
+        : refreshJobStatus === 'queued'
+          ? 'Queued'
+          : null;
 
   useEffect(() => {
     if (!isRefreshDialogOpen) return;
@@ -349,6 +417,31 @@ export default function Subscriptions() {
     if (refreshCandidates.length > 0 || refreshErrorText) return;
     refreshScanMutation.mutate();
   }, [isRefreshDialogOpen, refreshCandidates.length, refreshErrorText, refreshScanMutation]);
+
+  useEffect(() => {
+    const job = refreshJobQuery.data;
+    if (!job?.job_id) return;
+    if (job.status !== 'succeeded' && job.status !== 'failed') return;
+    if (terminalHandledJobId === job.job_id) return;
+
+    setTerminalHandledJobId(job.job_id);
+    invalidateSubscriptionViews();
+
+    if (job.status === 'succeeded') {
+      const failedCount = Math.max(0, Number(job.processed_count || 0) - Number(job.inserted_count || 0) - Number(job.skipped_count || 0));
+      toast({
+        title: 'Background generation finished',
+        description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${failedCount}.`,
+      });
+      return;
+    }
+
+    toast({
+      title: 'Background generation failed',
+      description: job.error_message || 'Could not complete background generation.',
+      variant: 'destructive',
+    });
+  }, [invalidateSubscriptionViews, refreshJobQuery.data, terminalHandledJobId, toast]);
 
   const handleRefreshDialogChange = (nextOpen: boolean) => {
     setIsRefreshDialogOpen(nextOpen);
@@ -420,6 +513,55 @@ export default function Subscriptions() {
             ) : null}
           </div>
         </PageSection>
+
+        {activeRefreshJobId ? (
+          <Card className="border-border/40">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-base">Background generation</CardTitle>
+                {refreshJobLabel ? (
+                  <Badge variant={refreshJobStatus === 'failed' ? 'destructive' : 'secondary'}>
+                    {refreshJobLabel}
+                  </Badge>
+                ) : null}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p className="text-xs text-muted-foreground break-all">Job: {activeRefreshJobId}</p>
+              {refreshJobStatus === 'queued' && !refreshJobQuery.data ? (
+                <p className="text-muted-foreground">
+                  Queued {queuedRefreshCount} video(s). This can take a bit depending on transcript and model latency.
+                </p>
+              ) : null}
+              {refreshJobQuery.data ? (
+                <p className="text-muted-foreground">
+                  Inserted {refreshJobInserted}, skipped {refreshJobSkipped}, failed {refreshJobFailed}.
+                </p>
+              ) : null}
+              {refreshJobQuery.data?.error_message ? (
+                <p className="text-xs text-destructive">
+                  {refreshJobQuery.data.error_code ? `${refreshJobQuery.data.error_code}: ` : ''}{refreshJobQuery.data.error_message}
+                </p>
+              ) : null}
+              {refreshJobQuery.error ? (
+                <p className="text-xs text-destructive">
+                  Could not fetch latest job status. Try refreshing status.
+                </p>
+              ) : null}
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => refreshJobQuery.refetch()}
+                  disabled={refreshJobQuery.isFetching}
+                >
+                  {refreshJobQuery.isFetching ? 'Refreshing...' : 'Refresh status'}
+                </Button>
+                {refreshJobRunning ? <p className="text-xs text-muted-foreground">Updates every ~4 seconds.</p> : null}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Dialog open={isAddSubscriptionOpen} onOpenChange={handleAddSubscriptionDialogChange}>
           <DialogContent className="sm:max-w-2xl">
@@ -519,7 +661,7 @@ export default function Subscriptions() {
                   size="sm"
                   variant="outline"
                   onClick={() => refreshScanMutation.mutate()}
-                  disabled={refreshScanMutation.isPending || refreshGenerateMutation.isPending || !subscriptionsEnabled}
+                  disabled={refreshScanMutation.isPending || refreshGenerateMutation.isPending || refreshJobRunning || !subscriptionsEnabled}
                 >
                   {refreshScanMutation.isPending ? 'Scanning...' : 'Scan again'}
                 </Button>
@@ -617,7 +759,7 @@ export default function Subscriptions() {
                 <Button
                   size="sm"
                   onClick={handleStartBackgroundGeneration}
-                  disabled={selectedRefreshItems.length === 0 || refreshGenerateMutation.isPending || refreshScanMutation.isPending}
+                  disabled={selectedRefreshItems.length === 0 || refreshGenerateMutation.isPending || refreshScanMutation.isPending || refreshJobRunning}
                 >
                   {refreshGenerateMutation.isPending ? 'Starting...' : 'Generate blueprints'}
                 </Button>

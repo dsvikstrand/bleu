@@ -31,6 +31,9 @@ a24) [have] `My Feed` source subtitle resolution now falls back to source metada
 a25) [have] `/youtube` now runs core generation first and performs review/banner as async post-steps; `Save to My Feed` is non-blocking while enhancements continue.
 a26) [have] Banner generation prompt is now explicitly visual-only (no readable text/typography/logos/watermarks) to keep card backgrounds clean.
 a27) [have] `/subscriptions` now includes `Refresh` popup flow: scan new videos from active subscriptions, select videos, and start background blueprint generation async.
+a28) [have] Manual refresh endpoints now enforce per-user cooldown limits and background-job concurrency guards to prevent duplicate/overlapping runs.
+a29) [have] Failed manual refresh videos enter a 6-hour retry cooldown and are temporarily hidden from follow-up scans.
+a30) [have] `/subscriptions` now displays lightweight background-generation job status (`Queued/Running/Succeeded/Failed`) with inserted/skipped/failed counts.
 
 ## Core Model
 b1) `Source Item`
@@ -61,6 +64,11 @@ b5) Subscription behavior (MVP simplified)
 - A persistent notice card is inserted into `My Feed` with state `subscription_notice`.
 - Notice cards are visualized with channel avatar and optional banner background when metadata is available.
 - API compatibility note: `mode` is accepted on subscription endpoints but coerced/treated as `auto`.
+- Manual refresh reliability policy:
+  - `refresh-scan` rate limit: 1 request per 30 seconds per user.
+  - `refresh-generate` rate limit: 1 request per 120 seconds per user.
+  - max selected items per generation run: `20`.
+  - if generation fails for a selected video, that `(subscription_id, video_id)` is hidden from scan results for `6h` and then automatically retryable.
 
 ## MVP Lifecycle Contract
 c1) Pull/ingest -> generate blueprint -> publish to `My Feed`.
@@ -163,6 +171,10 @@ si16) service-ops endpoint: `GET /api/auto-banner/jobs/latest` (service auth; qu
 si17) Backend core timeout control: `YT2BP_CORE_TIMEOUT_MS` (applies to `/api/youtube-to-blueprint` request budget).
 si18) user endpoint: `POST /api/source-subscriptions/refresh-scan` (scan active subscriptions for new videos; no blueprint generation)
 si19) user endpoint: `POST /api/source-subscriptions/refresh-generate` (enqueue selected videos for async background blueprint generation)
+si20) user endpoint: `GET /api/ingestion/jobs/:id` (owner-scoped status for manual refresh background jobs)
+si21) `POST /api/source-subscriptions/refresh-generate` returns `409 JOB_ALREADY_RUNNING` if a manual refresh job is already active for the user.
+si22) `POST /api/source-subscriptions/refresh-generate` returns `400 MAX_ITEMS_EXCEEDED` if selected item count exceeds `20`.
+si23) refresh candidate cooldown table is active: `refresh_video_attempts` (tracks failed manual refresh attempts with retry hold window).
 
 ## Next Milestone (Hardening)
 n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.

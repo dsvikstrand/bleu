@@ -37,6 +37,7 @@
     - `POST /api/source-subscriptions/:id/sync`
     - `POST /api/source-subscriptions/refresh-scan` (auth-only scan, returns candidate videos; no blueprint generation side effects)
     - `POST /api/source-subscriptions/refresh-generate` (auth-only enqueue for selected videos; starts async background generation job)
+    - `GET /api/ingestion/jobs/:id` (auth-only, owner-scoped status for manual refresh background jobs)
     - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
     - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
     - `POST /api/ingestion/jobs/trigger` (service auth)
@@ -82,6 +83,12 @@
    - cap rebalance enforces newest generated banners up to `SUBSCRIPTION_AUTO_BANNER_CAP`; older generated banners fall back to deterministic channel defaults or `null`.
    - subscription health state is derived in UI from `last_polled_at` + `last_sync_error` (`healthy`, `delayed`, `error`, `never_polled`).
    - manual refresh flow can scan candidate videos and enqueue selected generation in a detached background job (`ingestion_jobs.scope = manual_refresh_selection`), so UI stays responsive.
+   - manual refresh hardening:
+     - per-user route cooldowns on refresh endpoints (`scan=30s`, `generate=120s`)
+     - selected-item cap for manual generation (`max=20`)
+     - active-job lock (`JOB_ALREADY_RUNNING`) for manual generation
+     - failed item cooldown (6h) via `refresh_video_attempts` so noisy failures do not reappear immediately.
+   - stale running ingestion jobs are recovered before new service/manual trigger paths execute (`STALE_RUNNING_RECOVERY`).
 4. Optional user remix/insight.
 5. Channel candidate evaluation (all-gates-run default, aggregated decision).
 6. Gate decision:
@@ -135,6 +142,7 @@ Current production behavior note:
 - `bleuV1` distribution classes:
   - `CHANNEL_FIT_BLOCKED`, `QUALITY_BLOCKED`, `DUPLICATE_INGEST`.
   - `EVAL_BYPASSED` (expected in bypass mode).
+  - `JOB_ALREADY_RUNNING`, `MAX_ITEMS_EXCEEDED`, `STALE_RUNNING_RECOVERY`.
 - Recovery authority:
   - Logs-first triage in `docs/ops/yt2bp_runbook.md`.
   - Feature/env toggles for fast rollback.
