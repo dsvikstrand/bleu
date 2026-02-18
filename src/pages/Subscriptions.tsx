@@ -412,13 +412,6 @@ export default function Subscriptions() {
           : null;
 
   useEffect(() => {
-    if (!isRefreshDialogOpen) return;
-    if (refreshScanMutation.isPending) return;
-    if (refreshCandidates.length > 0 || refreshErrorText) return;
-    refreshScanMutation.mutate();
-  }, [isRefreshDialogOpen, refreshCandidates.length, refreshErrorText, refreshScanMutation]);
-
-  useEffect(() => {
     const job = refreshJobQuery.data;
     if (!job?.job_id) return;
     if (job.status !== 'succeeded' && job.status !== 'failed') return;
@@ -445,12 +438,11 @@ export default function Subscriptions() {
 
   const handleRefreshDialogChange = (nextOpen: boolean) => {
     setIsRefreshDialogOpen(nextOpen);
-    if (!nextOpen) {
-      setRefreshErrorText(null);
-      setRefreshCandidates([]);
-      setRefreshSelected({});
-      setRefreshScanErrors([]);
-    }
+    setRefreshErrorText(null);
+    setRefreshCandidates([]);
+    setRefreshSelected({});
+    setRefreshScanErrors([]);
+    refreshScanMutation.reset();
   };
 
   const toggleRefreshCandidate = (item: SubscriptionRefreshCandidate, nextChecked: boolean) => {
@@ -663,7 +655,7 @@ export default function Subscriptions() {
                   onClick={() => refreshScanMutation.mutate()}
                   disabled={refreshScanMutation.isPending || refreshGenerateMutation.isPending || refreshJobRunning || !subscriptionsEnabled}
                 >
-                  {refreshScanMutation.isPending ? 'Scanning...' : 'Scan again'}
+                  {refreshScanMutation.isPending ? 'Scanning...' : 'Scan'}
                 </Button>
                 {refreshCandidates.length > 0 ? (
                   <>
@@ -705,7 +697,11 @@ export default function Subscriptions() {
               ) : null}
 
               {!refreshScanMutation.isPending && !refreshErrorText && refreshCandidates.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No new videos found.</p>
+                <p className="text-sm text-muted-foreground">
+                  {refreshScanMutation.status === 'success'
+                    ? 'No new videos found.'
+                    : 'Click Scan to check your subscriptions for new videos.'}
+                </p>
               ) : null}
 
               {refreshCandidates.length > 0 ? (
