@@ -31,6 +31,7 @@
 - 2026-02-18 note: save-to-feed now preserves channel-title metadata across source upserts so My Feed subtitle mapping stays stable; YT2BP endpoint envelope remains unchanged.
 - 2026-02-18 note: `/youtube` UI now forces core endpoint calls with `generate_review=false` and `generate_banner=false`; toggles run async post-steps and attach results after save when available.
 - 2026-02-18 note: endpoint timeout is now env-configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`, bounded server-side).
+- 2026-02-18 note: banner prompt hardening now enforces visual-only imagery and explicitly blocks readable text/typography/logos/watermarks in generated backgrounds.
 
 ## Request
 ```json

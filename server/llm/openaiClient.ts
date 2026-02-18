@@ -190,7 +190,7 @@ function buildBannerPrompt(input: BannerRequest) {
     .slice(0, 6);
 
   const parts = [
-    `A clean, modern banner image for a community blueprint titled "${title}".`,
+    `A clean, modern, purely visual landscape banner for a community blueprint inspired by this topic: ${title}.`,
   ];
 
   if (inventoryTitle) {
@@ -202,7 +202,9 @@ function buildBannerPrompt(input: BannerRequest) {
   }
 
   parts.push(
-    'Wide landscape composition, minimal, tasteful gradients, soft lighting, no text, no logos, no watermarks.'
+    'Strict constraints: no readable text, no letters, no words, no numbers, no typography, no logos, no watermarks, no UI screenshots, no signage.',
+    'Never render the title or keywords as text. Interpret them as visual concepts only.',
+    'Wide landscape composition, minimal, tasteful gradients, soft lighting, clean abstract/iconic visuals only.'
   );
 
   return parts.join(' ');

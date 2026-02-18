@@ -505,6 +505,7 @@ Completion evidence (2026-02-18)
 - Updated `src/pages/YouTubeToBlueprint.tsx` to force core payload review/banner off, run async post-steps, and allow non-blocking save.
 - Updated `src/pages/YouTubeToBlueprint.tsx` to persist late review/banner results onto already-saved blueprints.
 - Updated `server/index.ts` to use env-controlled `YT2BP_CORE_TIMEOUT_MS` (bounded `30000..300000`, default `120000`).
+- Updated `server/llm/openaiClient.ts` banner prompt rules to enforce visual-only output (no readable text/typography/logos/watermarks).
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

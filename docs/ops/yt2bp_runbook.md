@@ -13,6 +13,7 @@
   - channel visibility is a second-step candidate flow, not direct YT2BP publish.
   - `/youtube` runs core generation first and executes optional review/banner asynchronously after core success.
   - `Save to My Feed` is non-blocking while optional review/banner complete and attach later.
+  - banner prompts are visual-only by policy (no readable text/typography/logos/watermarks).
 - Gate runtime mode:
   - `CHANNEL_GATES_MODE=bypass` is the current production default (`EVAL_BYPASSED`).
   - `shadow` and `enforce` modes are non-prod hardening modes.

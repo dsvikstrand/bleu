@@ -18,6 +18,7 @@
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
     - `/youtube` runs a core-first request (`generate_review=false`, `generate_banner=false`) and executes optional review/banner as async post-steps.
     - `Save to My Feed` is intentionally non-blocking while optional post-steps finish; completed review/banner updates are attached to the saved blueprint later.
+    - banner prompt path is constrained to visual-only output (no readable text/typography/logos/watermarks).
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
     - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status actions (`Post to Channel` until published, then `Posted to <Channel>`).
