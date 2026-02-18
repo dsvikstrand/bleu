@@ -52,7 +52,7 @@ export default function ChannelPage() {
                 <Link to="/channels">Back to Channels</Link>
               </Button>
               <Button asChild variant="outline">
-                <Link to="/wall">Go to Feed</Link>
+                <Link to="/wall">Go Home</Link>
               </Button>
             </div>
           </div>

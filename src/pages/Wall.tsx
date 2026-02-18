@@ -400,7 +400,7 @@ export default function Wall() {
       <main className="max-w-3xl mx-auto px-0 pb-24">
         <section className="mb-6 px-3 sm:px-4">
           <div className="flex flex-col gap-2">
-            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Community Feed</p>
+            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
             <h1 className="text-2xl font-semibold">See what the community is building</h1>
             <p className="text-sm text-muted-foreground">
               Browse public blueprints, join channels you care about, and save ideas for your next routine.

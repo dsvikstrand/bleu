@@ -6,7 +6,7 @@
 - Product scope:
   - Source-first blueprint app.
   - Personal unfiltered feed (`My Feed`) as primary lane.
-  - Channel feeds as shared lanes with classifier-driven auto-channel publishing.
+  - Home feed (`/wall`) as shared lane with classifier-driven auto-channel publishing.
 - Current adapter baseline:
   - YouTube adapter is production-ready for direct URL generation and subscription ingestion.
 - Non-goals in current MVP:
@@ -17,6 +17,7 @@
 ## 2) Runtime Topology
 - Frontend:
   - React + Vite app (`src/pages/*`).
+  - Signed-in primary nav uses `Home / Search / Channels / Explore`; `My Feed` remains accessible via user menu shortcut and direct `/my-feed` route.
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
     - `/youtube` runs a core-first request (`generate_review=false`, `generate_banner=false`) and executes optional review/banner as async post-steps.
     - `Save to My Feed` is intentionally non-blocking while optional post-steps finish; completed review/banner updates are attached to the saved blueprint later.
@@ -106,7 +107,7 @@
      - `general_placeholder`: rollback mode, routes everything to fallback slug.
    - `llm_labeler_v1` invalid output handling: retry once, then fallback slug (`AUTO_CHANNEL_FALLBACK_SLUG`, default `general`).
 6. Gate decision:
-   - pass -> publish to channel feed
+   - pass -> publish to Home feed (`/wall`)
    - warn/block -> remain personal-only
 
 Current production behavior note:

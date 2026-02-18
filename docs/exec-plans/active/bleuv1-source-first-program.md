@@ -17,7 +17,7 @@ Ship a coherent MVP that users can explain in one sentence:
 ## 3) Direction Lock
 1. Source-first content supply (YouTube adapter first).
 2. Personal-first `My Feed` as unfiltered lane.
-3. Channel feeds are shared, auto-published lanes with classifier-driven checks.
+3. Home feed (`/wall`) is the shared, auto-published lane with classifier-driven checks.
 4. User contribution is remix/insight on imported blueprints (not standalone free-form posting in MVP).
 
 ## 4) Scope
@@ -149,6 +149,10 @@ Rules:
   - blueprint detail header now prefers source-channel attribution for imported YouTube blueprints.
   - default MVP detail view no longer exposes edit CTA.
   - subscription detail popup and active rows are simplified for lower cognitive load.
+- Home naming + nav de-emphasis (2026-02-18):
+  - signed-in top navigation now uses `Home / Search / Channels / Explore`.
+  - `My Feed` is moved out of top nav and remains available through the user menu shortcut.
+  - shared-lane copy now consistently references `Home` while route stays `/wall`.
 - Subscription notice UX refresh (2026-02-18):
   - notice cards now render channel avatar and optional profile-banner background metadata when available.
   - notice cards show relative time in top-right and `Subscription` badge in status row.

@@ -9,7 +9,7 @@ Status: `canonical`
 1. Source-first product identity.
 2. YouTube is the only required adapter in MVP.
 3. `My Feed` is the personal default lane.
-4. Channel feed is automatically populated from `My Feed` via auto-channel checks.
+4. Home feed (`/wall`) is automatically populated from `My Feed` via auto-channel checks.
 5. Community value is comments/votes/insights on blueprint content.
 6. Channel routing mode is env-driven (`deterministic_v1` default, `llm_labeler_v1` optional) and falls back to `general` on ambiguous/invalid label output.
 7. Feed/detail surfaces prioritize source-channel context for imported media over creator-edit workflows in MVP UI.
@@ -18,7 +18,7 @@ Status: `canonical`
 1. Subscribe to a YouTube channel or search/select a video.
 2. Generate/import blueprint into `My Feed`.
 3. System auto-evaluates and posts eligible blueprints to channels.
-4. Engage through community interactions in channel feed.
+4. Engage through community interactions in Home feed.
 
 ## What is not core right now
 1. Library-first creation is deprecated as primary identity.

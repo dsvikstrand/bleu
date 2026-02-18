@@ -61,7 +61,7 @@ b3) `User Insight/Remix` (secondary content type)
 
 b4) Feed surfaces
 - `My Feed`: personal timeline for all imported items and auto-channel outcomes.
-- `Channel Feed`: shared lane with voting/comments and auto-published items that pass checks.
+- `Home` (`/wall`): shared lane with voting/comments and auto-published items that pass checks.
 
 b5) Subscription behavior (MVP simplified)
 - UI behavior is auto-only.
@@ -88,7 +88,7 @@ c2) Optional user remix/insight.
 c3) Auto-channel pipeline runs per item (classifier mode is env-driven: deterministic or post-artifact LLM labeler).
 c4) Channel gate contract remains (`channel_fit`, `quality`, `safety`, `pii`); in `llm_labeler_v1`, channel-fit is pass-by-design for the selected label while quality/safety/pii stay enforced.
 c5) Result:
-- pass -> publish to channel feed
+- pass -> publish to Home feed (`/wall`)
 - fail/warn/block -> remain in `My Feed` (personal-only)
 c6) Legacy manual candidate endpoints remain behind rollback controls and are not primary UI flow.
 c7) Subscription notice flow:
@@ -123,13 +123,13 @@ f5) User can subscribe to a result’s channel from the same search card.
 f6) On subscribe/reactivate, user gets one subscription notice card and future uploads ingest automatically into `My Feed`.
 f7) Auto-channel pipeline publishes eligible items automatically and labels My Feed cards with posted channel outcomes.
 f8) User scans, remixes, and adds insights.
-f9) Eligible items are promoted to channel feeds after gates.
+f9) Eligible items are promoted to Home feed channels after gates.
 f10) Community votes/comments to surface higher-value items.
 f11) User can manually refresh subscriptions from `/subscriptions`, preview new videos, and launch async background generation without blocking app usage.
 
 ## Route and IA Snapshot
 r1) [have] Home: `/`
-r2) [have] Feed: `/wall`
+r2) [have] Home feed: `/wall`
 r3) [have] Explore: `/explore`
 r4) [have] Channels index: `/channels`
 r5) [have] Channel page: `/b/:channelSlug`
@@ -139,6 +139,7 @@ r8) [have] My Feed first-class route: `/my-feed`
 r9) [have] Subscriptions route: `/subscriptions`
 r10) [have] Search route: `/search` (auth-only)
 r11) [have] Compatibility redirects: `/tags` -> `/channels`, `/blueprints` -> `/wall`
+r12) [have] Signed-in primary nav is community-first: `Home / Search / Channels / Explore`; `My Feed` remains one-click from user menu.
 
 ## Scope Boundaries (MVP)
 s1) In scope

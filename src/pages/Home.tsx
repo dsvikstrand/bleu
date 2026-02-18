@@ -57,7 +57,7 @@ export default function Home() {
             Automated YouTube to blueprint feed, with community publishing.
           </h1>
           <p className="text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Search videos or paste a URL, generate a blueprint into My Feed, then post the best ones to channel feeds.
+            Search videos or paste a URL, generate into My Feed, and let the app auto-route eligible items to Home.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <Link to={user ? '/search' : '/auth'}>
@@ -107,9 +107,9 @@ export default function Home() {
             <Card className="border-border/40">
               <CardContent className="p-4 space-y-2">
                 <Users className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold">3) Post to channels</h3>
+                <h3 className="font-semibold">3) Auto-publish to Home</h3>
                 <p className="text-sm text-muted-foreground">
-                  Share selected items to channel feeds for votes, comments, and discussion.
+                  Eligible items are posted into channels automatically for votes, comments, and discussion.
                 </p>
               </CardContent>
             </Card>
@@ -121,7 +121,7 @@ export default function Home() {
               </Link>
             ) : null}
             <Link to="/wall">
-              <Button size="sm" variant="outline">Browse Channel Feed</Button>
+              <Button size="sm" variant="outline">Browse Home</Button>
             </Link>
             <Link to="/channels">
               <Button size="sm" variant="outline">Explore Channels</Button>

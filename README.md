@@ -6,7 +6,7 @@ A React + Supabase app for turning media into bite-sized blueprints and discussi
 - Source-first: media ingestion is the primary content supply (YouTube first).
 - Personal-first: users get a personal `My Feed` lane from pulled content.
 - Subscription-ready: users can follow YouTube channels, and new uploads are ingested automatically.
-- Community layer: channel feeds are shared lanes where users vote/comment/add insights.
+- Community layer: Home feed (`/wall`) is the shared lane where users vote/comment/add insights.
 - Automated distribution: blueprints are auto-channeled and auto-published when checks pass; non-pass items stay in `My Feed`.
 
 ## Current Delivery Mode
@@ -16,7 +16,7 @@ A React + Supabase app for turning media into bite-sized blueprints and discussi
 
 ## Current Runtime Surfaces
 - Home: `/`
-- Feed: `/wall`
+- Home feed: `/wall`
 - Explore: `/explore`
 - Channels: `/channels`
 - Channel page: `/b/:channelSlug`

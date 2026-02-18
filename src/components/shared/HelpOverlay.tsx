@@ -13,8 +13,8 @@ const FLOW_STEPS = [
   { label: 'Pull From YouTube', hint: 'Use a single video URL to generate a blueprint draft.' },
   { label: 'Save To My Feed', hint: 'Personal intake lane keeps content private by default.' },
   { label: 'Add Insight or Remix', hint: 'Refine and add context before sharing.' },
-  { label: 'Submit To Channel', hint: 'Run quality/safety checks before public distribution.' },
-  { label: 'Community Feedback', hint: 'Votes and comments keep channel feeds relevant.' },
+  { label: 'Auto Channel Publish', hint: 'Quality/safety checks run before public distribution.' },
+  { label: 'Community Feedback', hint: 'Votes and comments keep Home relevant.' },
 ];
 
 const FEATURE_CARDS = [
@@ -28,7 +28,7 @@ const FEATURE_CARDS = [
     title: 'Blueprints',
     description: 'Blueprints are step-by-step summaries from source content, with optional user remix.',
     icon: Layers,
-    bullets: ['Generated from media sources', 'Attach insight/remix', 'Submit to channels as second step'],
+    bullets: ['Generated from media sources', 'Attach insight/remix', 'Auto-routed to channels when eligible'],
   },
   {
     title: 'Tags',
@@ -38,7 +38,7 @@ const FEATURE_CARDS = [
   },
   {
     title: 'Community',
-    description: 'Channel feeds are shared lanes for evaluated blueprints and community opinions.',
+    description: 'Home is the shared lane for evaluated blueprints and community opinions.',
     icon: Users,
     bullets: ['Vote and comment', 'Promote high-signal content', 'Discuss practical value'],
   },
@@ -78,8 +78,8 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <p className="text-sm font-semibold">Let’s get oriented</p>
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       Here’s the goal: turn source content into actionable blueprints you can consume
-                      in bite-sized form. My Feed is your personal intake lane, and Channels are the
-                      shared lane after quality checks. You can remix insights, submit what is useful,
+                      in bite-sized form. My Feed is your personal intake lane, and Home is the
+                      shared lane after quality checks. You can remix insights, and auto-publish keeps useful items moving,
                       and learn from community feedback.
                     </p>
                   </CardContent>
@@ -93,7 +93,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                       </div>
                       <div>
                         <p className="text-sm font-semibold">The Flow</p>
-                        <p className="text-xs text-muted-foreground">Source pull → My Feed → submit → channel feed</p>
+                        <p className="text-xs text-muted-foreground">Source pull → My Feed → auto checks → Home</p>
                       </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -140,7 +140,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <div>
                       <p className="text-sm font-semibold">Tip for first‑time users</p>
                       <p className="text-xs text-muted-foreground">
-                        Start with YouTube pull, save to My Feed, and submit only the best items.
+                        Start with YouTube pull, save to My Feed, and let auto-publish route eligible items to Home.
                       </p>
                     </div>
                     <Button

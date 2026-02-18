@@ -46,6 +46,7 @@ Execution mode:
 27. [have] Step 26 - Deterministic real-channel classification (tag+alias mapper with `general` fallback)
 28. [have] Step 27 - Two-step LLM channel labeler (post-artifact sync, retry+fallback)
 29. [have] Step 28 - Attribution + subscription-surface cleanup (source-channel-first detail header and simplified subscription UI)
+30. [have] Step 29 - Home naming + profile-oriented nav (`/wall` labeled Home, `My Feed` moved to user menu)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -701,6 +702,25 @@ Evaluation
 - manual smoke: blueprint detail shows source channel instead of creator on imported YouTube blueprint
 - manual smoke: My Feed subscription popup shows relative added time and unsubscribe only
 - manual smoke: subscriptions rows are simplified and avatar opens channel
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+### Step 29 - Home naming + profile-oriented nav
+Scope
+- rename signed-in shared lane label from `Channel Feed` to `Home` while keeping route `/wall`
+- remove `My Feed` from top/floating nav and keep it accessible from user menu
+- align core surface copy and canonical docs to Home terminology
+
+Definition of done
+- signed-in nav shows `Home / Search / Channels / Explore`
+- user menu includes one-click `My Feed` shortcut
+- core feed surfaces and docs call `/wall` the Home feed
+
+Evaluation
+- manual smoke: signed-in header and floating nav labels/order are correct
+- manual smoke: user menu routes correctly to `/my-feed`
+- manual smoke: `/wall` and channel-page CTA copy reference Home
 - `npm run build`
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
