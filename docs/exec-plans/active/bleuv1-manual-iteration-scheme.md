@@ -14,7 +14,7 @@ Execution mode:
 1. Do not start a new step until the current step is validated.
 2. Every step must define clear acceptance evidence.
 3. If validation fails, fix in the same step before moving on.
-4. Keep identity stable: source-first, My Feed first, deterministic auto-channel publish with rollback-safe legacy path.
+4. Keep identity stable: source-first, My Feed first, auto-channel publish with rollback-safe legacy path.
 
 ## Step Tracker
 1. [have] Step 0 - Contract lock and naming alignment

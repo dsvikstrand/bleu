@@ -17,7 +17,7 @@ Ship a coherent MVP that users can explain in one sentence:
 ## 3) Direction Lock
 1. Source-first content supply (YouTube adapter first).
 2. Personal-first `My Feed` as unfiltered lane.
-3. Channel feeds are shared, auto-published lanes with deterministic checks.
+3. Channel feeds are shared, auto-published lanes with classifier-driven checks.
 4. User contribution is remix/insight on imported blueprints (not standalone free-form posting in MVP).
 
 ## 4) Scope

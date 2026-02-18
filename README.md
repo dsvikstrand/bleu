@@ -5,9 +5,9 @@ A React + Supabase app for turning media into bite-sized blueprints and discussi
 ## Current Product Direction (`bleuV1`)
 - Source-first: media ingestion is the primary content supply (YouTube first).
 - Personal-first: users get a personal `My Feed` lane from pulled content.
-- Subscription-ready: users can follow YouTube channels in `manual` (pending cards) or `auto` (new uploads) mode.
+- Subscription-ready: users can follow YouTube channels, and new uploads are ingested automatically.
 - Community layer: channel feeds are shared lanes where users vote/comment/add insights.
-- Gated distribution: channel publish is a second-step after quality/safety/channel-fit checks.
+- Automated distribution: blueprints are auto-channeled and auto-published when checks pass; non-pass items stay in `My Feed`.
 
 ## Current Delivery Mode
 - Active mode: manual iterative delivery.
@@ -21,6 +21,9 @@ A React + Supabase app for turning media into bite-sized blueprints and discussi
 - Channels: `/channels`
 - Channel page: `/b/:channelSlug`
 - YouTube adapter (manual v0): `/youtube`
+- My Feed: `/my-feed`
+- Subscriptions: `/subscriptions`
+- Search: `/search`
 - Blueprint detail: `/blueprint/:blueprintId`
 
 ## Tech Stack

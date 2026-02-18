@@ -6,7 +6,7 @@
 - Service unit: `agentic-backend.service`
 - Primary owner: app backend maintainers
 
-## bleuV1 dual-feed integration context
+## bleuV1 source-first integration context
 - YT2BP remains the ingestion/generation entrypoint only.
 - Personal-first routing is now expected:
   - generated draft is saved to `My Feed` (`user_feed_items.state = my_feed_published`).

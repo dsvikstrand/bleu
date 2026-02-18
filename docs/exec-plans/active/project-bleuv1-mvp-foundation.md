@@ -24,7 +24,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ## Product Defaults (Locked)
 1. YouTube-only adapter scope for MVP.
 2. My Feed default visibility is personal/private until channel promotion.
-3. Channel promotion default mode is deterministic auto-publish after checks.
+3. Channel promotion default mode is classifier-driven auto-publish after checks.
 4. User value-add is insight/remix on imported blueprints; no standalone free-form post model in MVP core.
 5. Non-pass auto-channel outcomes are blocked from channel and retained in My Feed.
 6. Legacy manual gate runtime remains `CHANNEL_GATES_MODE=bypass`; auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

@@ -6,7 +6,7 @@
 - Product scope:
   - Source-first blueprint app.
   - Personal unfiltered feed (`My Feed`) as primary lane.
-  - Channel feeds as shared lanes with deterministic auto-channel publishing.
+  - Channel feeds as shared lanes with classifier-driven auto-channel publishing.
 - Current adapter baseline:
   - YouTube adapter is production-ready for direct URL generation and subscription ingestion.
 - Non-goals in current MVP:
