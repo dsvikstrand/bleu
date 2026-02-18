@@ -91,6 +91,51 @@ Troubleshooting
 - If you see `Permission denied (publickey)`: confirm the key path and that `/root/.ssh/id_ed25519_codex_agentic` exists in this environment, and that the public key is in `~/.ssh/authorized_keys` on the server.
 - First connect may prompt to accept the host key; answer `yes` once.
 
+## Supabase Access / Update Workflow
+
+Purpose
+- Use this repo as the source of truth for Supabase schema/function updates.
+
+Required env (local, not committed)
+- `SUPABASE_ACCESS_TOKEN`
+- `VITE_SUPABASE_PROJECT_ID`
+- `SUPABASE_DB_PASSWORD` (for DB push / direct SQL tooling)
+- `SUPABASE_SERVICE_ROLE_KEY` (only when needed for server-side scripts)
+
+Safe preflight
+- `npx supabase --version`
+- `npx supabase login --token "$SUPABASE_ACCESS_TOKEN"`
+- `npx supabase link --project-ref "$VITE_SUPABASE_PROJECT_ID"`
+- `npx supabase migration list`
+
+Common update flows
+- Schema migrations:
+  - add/edit SQL under `supabase/migrations/`
+  - apply: `npx supabase db push`
+- Edge functions:
+  - deploy one: `npx supabase functions deploy <fn_name> --project-ref "$VITE_SUPABASE_PROJECT_ID"`
+  - deploy all: `npx supabase functions deploy --project-ref "$VITE_SUPABASE_PROJECT_ID"`
+- Remote SQL checks:
+  - `npx supabase db remote commit` (only when explicitly needed)
+  - use SQL editor or scripted checks for validation queries
+
+Verification after updates
+- `npm run build` (when runtime-impacting)
+- run targeted smoke tests for changed flow
+- verify expected tables/columns/policies/functions exist
+
+Supabase execution shortcut
+- `UDS` -> run Supabase maintenance pass:
+  - preflight auth/link checks
+  - apply pending migrations/functions (if requested)
+  - run verification queries/smoke checks
+  - summarize exactly what changed
+
+Safety rules
+- Never commit `.env` secrets.
+- Prefer additive migrations; avoid destructive changes unless explicitly requested.
+- If project-link/ref mismatch is detected, stop and confirm before applying changes.
+
 ## [have]/[todo] status tags
 
 Use `[have]` and `[todo]` at the start of bullet items when describing project state, plans, and reviews (especially for ASS/DAS work).
