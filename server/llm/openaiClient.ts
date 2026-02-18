@@ -6,6 +6,8 @@ import type {
   BlueprintAnalysisRequest,
   BlueprintGenerationRequest,
   BlueprintGenerationResult,
+  ChannelLabelRequest,
+  ChannelLabelResult,
   InventoryRequest,
   InventorySchema,
   LLMClient,
@@ -15,10 +17,12 @@ import type {
 import {
   BLUEPRINT_SYSTEM_PROMPT,
   BLUEPRINT_GENERATION_SYSTEM_PROMPT,
+  CHANNEL_LABEL_SYSTEM_PROMPT,
   INVENTORY_SYSTEM_PROMPT,
   YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
   buildBlueprintUserPrompt,
   buildBlueprintGenerationUserPrompt,
+  buildChannelLabelUserPrompt,
   buildYouTubeBlueprintUserPrompt,
   buildInventoryUserPrompt,
   extractJson,
@@ -64,6 +68,12 @@ const YouTubeBlueprintValidator = z.object({
       timestamp: z.string().nullable().optional(),
     })
   ).min(1),
+});
+
+const ChannelLabelValidator = z.object({
+  channel_slug: z.string().min(1),
+  reason: z.string().nullable().optional(),
+  confidence: z.number().min(0).max(1).nullable().optional(),
 });
 
 export function createOpenAIClient(): LLMClient {
@@ -167,6 +177,26 @@ export function createOpenAIClient(): LLMClient {
       }
       const parsed = JSON.parse(extractJson(outputText));
       return YouTubeBlueprintValidator.parse(parsed);
+    },
+    async generateChannelLabel(input: ChannelLabelRequest): Promise<ChannelLabelResult> {
+      const response = await client.responses.create({
+        model,
+        instructions: CHANNEL_LABEL_SYSTEM_PROMPT,
+        input: buildChannelLabelUserPrompt(input),
+      });
+
+      const outputText = response.output_text?.trim();
+      if (!outputText) {
+        throw new Error('No output text from OpenAI');
+      }
+
+      const parsed = JSON.parse(extractJson(outputText));
+      const validated = ChannelLabelValidator.parse(parsed);
+      return {
+        channelSlug: String(validated.channel_slug || '').trim().toLowerCase(),
+        reason: validated.reason || null,
+        confidence: validated.confidence ?? null,
+      };
     },
   };
 }

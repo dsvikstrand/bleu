@@ -8,6 +8,7 @@ export type CandidateContext = {
   channelSlug: string;
   tagSlugs: string[];
   stepCount: number;
+  classificationMode?: 'deterministic_v1' | 'general_placeholder' | 'llm_labeler_v1';
 };
 
 export type CandidateGateDecision = {

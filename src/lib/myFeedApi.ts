@@ -480,8 +480,9 @@ export async function autoPublishMyFeedItem(input: {
     channel_slug: string;
     decision: 'published' | 'held';
     reason_code: string;
-    classifier_mode?: 'deterministic_v1' | 'general_placeholder';
-    classifier_reason?: 'tag_match' | 'alias_match' | 'fallback_general';
+    classifier_mode?: 'deterministic_v1' | 'general_placeholder' | 'llm_labeler_v1';
+    classifier_reason?: 'tag_match' | 'alias_match' | 'fallback_general' | 'llm_valid' | 'llm_retry_valid';
+    classifier_confidence?: number | null;
   }>(`/my-feed/items/${input.userFeedItemId}/auto-publish`, {
     method: 'POST',
     body: JSON.stringify({
@@ -497,5 +498,8 @@ export async function autoPublishMyFeedItem(input: {
     reasonCode: response.data.reason_code,
     classifierMode: response.data.classifier_mode || null,
     classifierReason: response.data.classifier_reason || null,
+    classifierConfidence: typeof response.data.classifier_confidence === 'number'
+      ? response.data.classifier_confidence
+      : null,
   };
 }

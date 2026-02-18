@@ -170,6 +170,51 @@ ${extra ? `Additional instructions:\n${extra}\n` : ''}
 Generate a usable blueprint now.`;
 }
 
+export const CHANNEL_LABEL_SYSTEM_PROMPT = `You assign exactly one channel label to a generated blueprint.
+
+Rules:
+- Output STRICT JSON only.
+- Choose exactly one channel slug from the allowed list provided by the user.
+- Do not invent new slugs.
+- Prefer the best semantic fit based on title, tags, review summary, and step hints.
+- If context is weak or ambiguous, choose the provided fallback slug.
+
+Response format:
+{
+  "channel_slug": "string",
+  "reason": "short string",
+  "confidence": 0.0
+}`;
+
+export function buildChannelLabelUserPrompt(input: {
+  title: string;
+  llmReview?: string | null;
+  tags?: string[];
+  stepHints?: string[];
+  fallbackSlug: string;
+  allowedChannels: Array<{ slug: string; name: string; description: string; aliases?: string[] }>;
+}) {
+  const tags = (input.tags || []).map((tag) => tag.trim()).filter(Boolean).slice(0, 12);
+  const hints = (input.stepHints || []).map((hint) => hint.trim()).filter(Boolean).slice(0, 8);
+  const allowed = input.allowedChannels
+    .map((channel) => {
+      const aliases = (channel.aliases || []).slice(0, 12).join(', ');
+      return `- slug: ${channel.slug}\n  name: ${channel.name}\n  description: ${channel.description}\n  aliases: ${aliases || 'none'}`;
+    })
+    .join('\n');
+
+  return `Blueprint title: ${input.title.trim()}
+Review summary: ${(input.llmReview || '').trim() || 'none'}
+Tags: ${tags.length > 0 ? tags.join(', ') : 'none'}
+Step hints: ${hints.length > 0 ? hints.join(' | ') : 'none'}
+Fallback slug: ${input.fallbackSlug}
+
+Allowed channels:
+${allowed}
+
+Choose exactly one channel slug from the allowed list and return valid JSON only.`;
+}
+
 export function extractJson(text: string) {
   let jsonContent = text.trim();
   if (jsonContent.startsWith('```json')) {

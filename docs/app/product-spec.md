@@ -14,7 +14,7 @@ a2) [have] Public feed/channel/community primitives are live (`/wall`, `/channel
 a3) [have] `My Feed` personal unfiltered lane is available as `/my-feed` (feature-flagged rollout).
 a4) [have] Auto-ingestion from followed YouTube channels is available with auto-only UX and new-uploads-only behavior (no initial old-video prefill).
 a5) [have] Auto-channel pipeline contract is implemented for all source paths and can auto-publish to channels after deterministic checks.
-a6) [have] Auto-channel assignment is deterministic tag+alias mapping to real curated channels, with safe fallback to `general` when ambiguous.
+a6) [have] Auto-channel assignment supports deterministic mapping and post-artifact LLM labeling (`llm_labeler_v1`) with safe fallback to `general` on invalid output.
 a7) [have] Legacy pending/skipped feed rows without blueprints are hidden in `My Feed` UI to reduce migration noise.
 a8) [have] `/subscriptions` is simplified for MVP to two visible actions: `Add Subscription` (popup search) and per-row `Unsubscribe`.
 a9) [have] `/subscriptions` hides the aggregate ingestion-health summary box to reduce new-user confusion.
@@ -82,8 +82,8 @@ b5) Subscription behavior (MVP simplified)
 ## MVP Lifecycle Contract
 c1) Pull/ingest -> generate blueprint -> publish to `My Feed`.
 c2) Optional user remix/insight.
-c3) Auto-channel pipeline runs per item (deterministic tag+alias channel assignment in MVP).
-c4) Channel gate contract remains (`channel_fit`, `quality`, `safety`, `pii`) and auto-channel path uses deterministic checks in enforced mode.
+c3) Auto-channel pipeline runs per item (classifier mode is env-driven: deterministic or post-artifact LLM labeler).
+c4) Channel gate contract remains (`channel_fit`, `quality`, `safety`, `pii`); in `llm_labeler_v1`, channel-fit is pass-by-design for the selected label while quality/safety/pii stay enforced.
 c5) Result:
 - pass -> publish to channel feed
 - fail/warn/block -> remain in `My Feed` (personal-only)
@@ -104,7 +104,7 @@ p5) Explainable in one sentence.
 ## MVP Default Policies (Lock)
 m1) Adapter scope default: YouTube-only.
 m2) My Feed default visibility: personal/private lane until channel promotion.
-m3) Channel promotion default mode: automatic publish to deterministically resolved channel after deterministic checks.
+m3) Channel promotion default mode: automatic publish to classifier-resolved channel after checks (default env mode is still `deterministic_v1`).
 m4) User contribution default: insights/remixes attached to imported blueprints (no standalone free-form posting in MVP core).
 m5) Non-pass auto-channel outcomes default action: blocked from channel, retained in My Feed.
 m6) Evaluator default mode: all-gates-run with aggregated decision evidence.
@@ -184,8 +184,9 @@ si21) `POST /api/source-subscriptions/refresh-generate` returns `409 JOB_ALREADY
 si22) `POST /api/source-subscriptions/refresh-generate` returns `400 MAX_ITEMS_EXCEEDED` if selected item count exceeds `20`.
 si23) refresh candidate cooldown table is active: `refresh_video_attempts` (tracks failed manual refresh attempts with retry hold window).
 si24) user endpoint: `GET /api/ingestion/jobs/latest-mine?scope=manual_refresh_selection` (restore active manual-refresh status after page reload).
-si25) user endpoint: `POST /api/my-feed/items/:id/auto-publish` (run deterministic auto-channel publish for a saved My Feed blueprint).
-si26) `POST /api/my-feed/items/:id/auto-publish` now returns additive classifier metadata (`classifier_mode`, `classifier_reason`) for audit/debug.
+si25) user endpoint: `POST /api/my-feed/items/:id/auto-publish` (run auto-channel publish for a saved My Feed blueprint).
+si26) `POST /api/my-feed/items/:id/auto-publish` returns additive classifier metadata (`classifier_mode`, `classifier_reason`, optional `classifier_confidence`) for audit/debug.
+si27) `AUTO_CHANNEL_CLASSIFIER_MODE` now supports `llm_labeler_v1` (artifact-only input, sync before publish, retry once on invalid output, fallback to `general`).
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

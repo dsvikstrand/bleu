@@ -105,7 +105,11 @@ const autoChannelPipelineEnabledRaw = String(process.env.AUTO_CHANNEL_PIPELINE_E
 const autoChannelPipelineEnabled = autoChannelPipelineEnabledRaw === 'true' || autoChannelPipelineEnabledRaw === '1' || autoChannelPipelineEnabledRaw === 'on';
 const autoChannelDefaultSlug = String(process.env.AUTO_CHANNEL_DEFAULT_SLUG || 'general').trim().toLowerCase() || 'general';
 const autoChannelClassifierModeRaw = String(process.env.AUTO_CHANNEL_CLASSIFIER_MODE || 'deterministic_v1').trim().toLowerCase();
-const autoChannelClassifierMode = autoChannelClassifierModeRaw === 'general_placeholder' ? 'general_placeholder' : 'deterministic_v1';
+const autoChannelClassifierMode = autoChannelClassifierModeRaw === 'general_placeholder'
+  ? 'general_placeholder'
+  : autoChannelClassifierModeRaw === 'llm_labeler_v1'
+    ? 'llm_labeler_v1'
+    : 'deterministic_v1';
 const autoChannelFallbackSlug = String(process.env.AUTO_CHANNEL_FALLBACK_SLUG || autoChannelDefaultSlug).trim().toLowerCase() || 'general';
 const autoChannelLegacyManualFlowEnabledRaw = String(process.env.AUTO_CHANNEL_LEGACY_MANUAL_FLOW_ENABLED || 'true').trim().toLowerCase();
 const autoChannelLegacyManualFlowEnabled = !(autoChannelLegacyManualFlowEnabledRaw === 'false' || autoChannelLegacyManualFlowEnabledRaw === '0' || autoChannelLegacyManualFlowEnabledRaw === 'off');
@@ -1270,6 +1274,7 @@ async function runAutoChannelForFeedItem(input: {
     gate_mode: result.gateMode,
     classifier_mode: result.classifierMode,
     classifier_reason: result.classifierReason,
+    classifier_confidence: result.classifierConfidence ?? null,
     idempotent: result.idempotent,
     source_tag: input.sourceTag,
   }));
@@ -3946,6 +3951,7 @@ app.post('/api/my-feed/items/:id/auto-publish', async (req, res) => {
         reason_code: result.reasonCode,
         classifier_mode: result.classifierMode,
         classifier_reason: result.classifierReason,
+        classifier_confidence: result.classifierConfidence ?? null,
       },
     });
   } catch (error) {

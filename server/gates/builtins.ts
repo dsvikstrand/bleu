@@ -5,6 +5,16 @@ export class ChannelFitGate implements Gate {
   id = 'channel_fit' as const;
 
   evaluate(context: CandidateContext): CandidateGateDecision {
+    if (context.classificationMode === 'llm_labeler_v1') {
+      return {
+        gate_id: this.id,
+        outcome: 'pass',
+        reason_code: 'FIT_LLM_LABEL_PASS',
+        score: 1,
+        method_version: 'fit-v3',
+      };
+    }
+
     const channelToken = context.channelSlug.toLowerCase();
     const fallbackSlug = String(process.env.AUTO_CHANNEL_FALLBACK_SLUG || 'general').trim().toLowerCase() || 'general';
     const resolved = getChannelResolutionMeta({

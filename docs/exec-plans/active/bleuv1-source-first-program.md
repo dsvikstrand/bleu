@@ -40,7 +40,7 @@ Rules:
 - `My Feed` is allowed to be broader/noisier.
 - Channel feeds must pass channel-fit + quality + safety + PII checks.
 - Gate failures stay personal-only.
-- Auto-channel assignment uses deterministic tag+alias mapping in MVP with safe fallback to `general`, and is designed for future LLM replacement.
+- Auto-channel assignment is mode-driven in MVP: deterministic tag+alias by default, with optional post-artifact `llm_labeler_v1` and safe fallback to `general`.
 
 ## 6) Execution Defaults (Lock)
 1. Channel promotion default mode: deterministic auto-publish after checks.
@@ -73,7 +73,7 @@ Rules:
 ## 10) Decision Log
 - D-001: Codename for direction is `bleuV1`.
 - D-002: MVP adapter scope starts with YouTube only.
-- D-003: Channel publish is deterministic auto pipeline in MVP (tag+alias mapper with `general` fallback, swappable later).
+- D-003: Channel publish uses auto pipeline in MVP with env-selectable classifier (`deterministic_v1` default, `llm_labeler_v1` rollout option, `general_placeholder` rollback).
 - D-004: User value-add in MVP is insight/remix on imported blueprints.
 
 ## 11) Implementation Snapshot (2026-02-17)
@@ -165,6 +165,10 @@ Rules:
   - fallback remains `general` for ambiguous/no-match cases.
   - channel-fit gate now uses the same deterministic mapper to keep fit checks aligned with routing decisions.
   - Wall channel label now prefers latest published candidate channel; tag mapper is fallback only.
+- LLM labeler rollout prep (2026-02-18):
+  - added `llm_labeler_v1` mode for post-artifact sync channel labeling with allowed-slug whitelist.
+  - valid label output is trusted; invalid output retries once and then falls back to `general`.
+  - auto-publish metadata now includes optional `classifier_confidence` for diagnostics.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

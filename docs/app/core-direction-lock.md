@@ -9,9 +9,9 @@ Status: `canonical`
 1. Source-first product identity.
 2. YouTube is the only required adapter in MVP.
 3. `My Feed` is the personal default lane.
-4. Channel feed is automatically populated from `My Feed` via deterministic auto-channel checks.
+4. Channel feed is automatically populated from `My Feed` via auto-channel checks.
 5. Community value is comments/votes/insights on blueprint content.
-6. Deterministic channel routing resolves real curated channels from tags/aliases and falls back to `general` when ambiguous.
+6. Channel routing mode is env-driven (`deterministic_v1` default, `llm_labeler_v1` optional) and falls back to `general` on ambiguous/invalid label output.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.

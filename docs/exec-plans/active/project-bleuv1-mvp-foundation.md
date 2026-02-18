@@ -43,6 +43,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Run deterministic auto-channel checks for all source paths.
 - Preserve quality/safety/channel-fit constraints while keeping legacy manual endpoints as rollback-safe fallback.
 - Use deterministic tag+alias classifier for real channel resolution with `general` fallback, and keep channel-fit gate logic aligned with the same mapper.
+- Add rollout-ready `llm_labeler_v1` classifier mode (artifact-only sync labeling with retry-once then `general` fallback) without schema churn.
 
 ### W3 - YouTube Pull And Caching
 - Keep YouTube-first ingestion flow stable.

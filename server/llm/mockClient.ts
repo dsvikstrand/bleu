@@ -4,6 +4,8 @@ import type {
   BlueprintAnalysisRequest,
   BlueprintGenerationRequest,
   BlueprintGenerationResult,
+  ChannelLabelRequest,
+  ChannelLabelResult,
   InventoryRequest,
   InventorySchema,
   LLMClient,
@@ -108,6 +110,32 @@ export function createMockClient(): LLMClient {
           { name: 'Step 1', notes: 'Review the key ideas in the video.', timestamp: null },
           { name: 'Step 2', notes: 'Apply the main action item.', timestamp: null },
         ],
+      };
+    },
+    async generateChannelLabel(input: ChannelLabelRequest): Promise<ChannelLabelResult> {
+      const text = [
+        input.title,
+        input.llmReview || '',
+        ...(input.tags || []),
+        ...(input.stepHints || []),
+      ].join(' ').toLowerCase();
+
+      let preferred = input.fallbackSlug;
+      if (/\b(llm|prompt|automation|agent|ai)\b/.test(text)) {
+        preferred = 'ai-tools-automation';
+      } else if (/\b(skin|acne|moistur|spf|serum|cleanser)\b/.test(text)) {
+        preferred = 'skincare-personal-care';
+      } else if (/\b(meal|nutrition|diet|protein|cook)\b/.test(text)) {
+        preferred = 'nutrition-meal-planning';
+      }
+
+      const allowed = new Set((input.allowedChannels || []).map((channel) => channel.slug));
+      const channelSlug = allowed.has(preferred) ? preferred : input.fallbackSlug;
+
+      return {
+        channelSlug,
+        reason: 'mock-channel-label',
+        confidence: channelSlug === input.fallbackSlug ? 0.55 : 0.82,
       };
     },
   };

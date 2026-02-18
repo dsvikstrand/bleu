@@ -29,4 +29,19 @@ describe('ChannelFitGate deterministic alignment (backend)', () => {
     expect(result.outcome).toBe('warn');
     expect(result.reason_code).toBe('FIT_AMBIGUOUS');
   });
+
+  it('passes by design for llm labeler classification mode', () => {
+    const gate = new ChannelFitGate();
+    const result = gate.evaluate({
+      title: 'LLM quantization guide',
+      llmReview: 'Overview of 4-bit quantization and deployment pitfalls.',
+      channelSlug: 'general',
+      tagSlugs: ['unknown-tag'],
+      stepCount: 4,
+      classificationMode: 'llm_labeler_v1',
+    });
+
+    expect(result.outcome).toBe('pass');
+    expect(result.reason_code).toBe('FIT_LLM_LABEL_PASS');
+  });
 });

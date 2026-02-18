@@ -44,6 +44,7 @@ Execution mode:
 25. [have] Step 24 - Refresh checkpoint + reload-resume hardening
 26. [have] Step 25 - Auto-channel pipeline cutover (general-first deterministic publish)
 27. [have] Step 26 - Deterministic real-channel classification (tag+alias mapper with `general` fallback)
+28. [have] Step 27 - Two-step LLM channel labeler (post-artifact sync, retry+fallback)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -655,6 +656,34 @@ Completion evidence (2026-02-18)
 - Updated `server/gates/builtins.ts` channel-fit gate to use the same deterministic resolver.
 - Updated `server/index.ts` with `AUTO_CHANNEL_CLASSIFIER_MODE`, `AUTO_CHANNEL_FALLBACK_SLUG`, and additive auto-publish metadata.
 - Updated `src/pages/Wall.tsx` to prefer published candidate channel labels and `src/pages/MyFeed.tsx` to hide held-state technical reason text in auto mode.
+
+### Step 27 - Two-step LLM channel labeler (post-artifact sync, retry+fallback)
+Scope
+- keep generation/artifact creation unchanged, then run sync channel-label pass before auto publish decision
+- add `llm_labeler_v1` classifier mode using artifact-only context and allowed channel list
+- trust valid label output, retry once on invalid output, and fallback to `general` if still invalid
+
+Definition of done
+- backend LLM interface includes `generateChannelLabel(...)` with strict JSON parsing
+- auto-channel resolver supports `llm_labeler_v1` and returns additive classifier metadata including optional confidence
+- channel-fit gate passes by design in `llm_labeler_v1` mode (`FIT_LLM_LABEL_PASS`), while quality/safety/pii remain unchanged
+- `/api/my-feed/items/:id/auto-publish` response includes `classifier_mode`, `classifier_reason`, and optional `classifier_confidence`
+
+Evaluation
+- unit test: first valid label accepted (`llm_valid`)
+- unit test: invalid then valid on retry (`llm_retry_valid`)
+- unit test: invalid twice falls back to `general` (`fallback_general`)
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+Completion evidence (2026-02-18)
+- Added `server/services/channelLabeler.ts` with whitelist validation, one retry, and fallback handling.
+- Extended `server/llm/*` client contract with `generateChannelLabel` (OpenAI + mock).
+- Updated `server/services/autoChannelPipeline.ts` and `server/gates/builtins.ts` for `llm_labeler_v1` classifier-aware routing.
+- Updated `server/index.ts` and `src/lib/myFeedApi.ts` to include additive classifier confidence metadata in auto-publish responses.
+- Added backend tests in `src/test/channelLabelerBackend.test.ts` and expanded channel-fit backend tests for llm mode.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

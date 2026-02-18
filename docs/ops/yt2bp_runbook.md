@@ -85,7 +85,7 @@ Required runtime variables:
 - `CHANNEL_GATES_MODE` (`bypass` | `shadow` | `enforce`)
 - `AUTO_CHANNEL_PIPELINE_ENABLED` (`true|false`)
 - `AUTO_CHANNEL_DEFAULT_SLUG` (default `general`)
-- `AUTO_CHANNEL_CLASSIFIER_MODE` (`deterministic_v1|general_placeholder`)
+- `AUTO_CHANNEL_CLASSIFIER_MODE` (`deterministic_v1|llm_labeler_v1|general_placeholder`)
 - `AUTO_CHANNEL_FALLBACK_SLUG` (default `general`)
 - `AUTO_CHANNEL_GATE_MODE` (`bypass|shadow|enforce`)
 - `AUTO_CHANNEL_LEGACY_MANUAL_FLOW_ENABLED` (`true` default)
@@ -195,11 +195,13 @@ Safe defaults:
   3) If noisy channel-fit warns dominate, tune fit policy before enabling broader auto paths.
 
 ### Misclassification / too many `general` publishes
-- Meaning: deterministic channel mapper is falling back too often or tag extraction quality dropped.
+- Meaning: channel labeling is falling back too often or classifier signal quality dropped.
 - Action:
-  1) Verify classifier env: `AUTO_CHANNEL_CLASSIFIER_MODE=deterministic_v1`.
+  1) Verify classifier env: `AUTO_CHANNEL_CLASSIFIER_MODE` is expected for this rollout (`deterministic_v1` or `llm_labeler_v1`).
   2) Verify fallback slug is valid: `AUTO_CHANNEL_FALLBACK_SLUG=general` (or another curated slug that exists).
-  3) Inspect auto-publish response/log metadata (`classifier_reason`) to split `tag_match|alias_match|fallback_general`.
+  3) Inspect auto-publish response/log metadata (`classifier_reason`) to split:
+     - deterministic mode: `tag_match|alias_match|fallback_general`
+     - llm mode: `llm_valid|llm_retry_valid|fallback_general`
   4) If emergency rollback needed, temporarily set `AUTO_CHANNEL_CLASSIFIER_MODE=general_placeholder`.
 
 ### `channel_rejected` spike

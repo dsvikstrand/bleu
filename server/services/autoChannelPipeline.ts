@@ -3,32 +3,44 @@ import { evaluateCandidateForChannel } from '../gates';
 import type { GateMode } from '../gates/types';
 import {
   getChannelResolutionMeta,
-  type ChannelClassifierReason,
+  type ChannelClassifierReason as DeterministicClassifierReason,
 } from './deterministicChannelClassifier';
+import {
+  labelChannelFromArtifact,
+  type LlmChannelClassifierReason,
+} from './channelLabeler';
 
 type DbClient = ReturnType<typeof createClient>;
 
 export interface AutoChannelResolver {
   resolveChannelSlugForBlueprint(input: {
     blueprintId: string;
+    title: string;
+    llmReview?: string | null;
     tagSlugs: string[];
+    stepHints: string[];
     defaultChannelSlug: string;
     classifierMode: AutoChannelClassifierMode;
   }): AutoChannelResolution | Promise<AutoChannelResolution>;
 }
 
-export type AutoChannelClassifierMode = 'deterministic_v1' | 'general_placeholder';
+export type AutoChannelClassifierMode = 'deterministic_v1' | 'general_placeholder' | 'llm_labeler_v1';
+export type ChannelClassifierReason = DeterministicClassifierReason | LlmChannelClassifierReason;
 
 export type AutoChannelResolution = {
   channelSlug: string;
   classifierMode: AutoChannelClassifierMode;
   classifierReason: ChannelClassifierReason;
+  classifierConfidence?: number | null;
 };
 
 class DeterministicAutoChannelResolver implements AutoChannelResolver {
   resolveChannelSlugForBlueprint(input: {
     blueprintId: string;
+    title: string;
+    llmReview?: string | null;
     tagSlugs: string[];
+    stepHints: string[];
     defaultChannelSlug: string;
     classifierMode: AutoChannelClassifierMode;
   }) {
@@ -38,7 +50,22 @@ class DeterministicAutoChannelResolver implements AutoChannelResolver {
         channelSlug: fallbackSlug,
         classifierMode: input.classifierMode,
         classifierReason: 'fallback_general',
+        classifierConfidence: null,
       };
+    }
+    if (input.classifierMode === 'llm_labeler_v1') {
+      return labelChannelFromArtifact({
+        title: input.title,
+        llmReview: input.llmReview || null,
+        tagSlugs: input.tagSlugs,
+        stepHints: input.stepHints,
+        fallbackSlug,
+      }).then((result) => ({
+        channelSlug: result.channelSlug,
+        classifierMode: input.classifierMode,
+        classifierReason: result.classifierReason,
+        classifierConfidence: result.rawConfidence,
+      }));
     }
     const meta = getChannelResolutionMeta({
       tagSlugs: input.tagSlugs,
@@ -48,6 +75,7 @@ class DeterministicAutoChannelResolver implements AutoChannelResolver {
       channelSlug: meta.resolvedSlug,
       classifierMode: input.classifierMode,
       classifierReason: meta.reason,
+      classifierConfidence: null,
     };
   }
 }
@@ -76,6 +104,7 @@ export type AutoChannelPipelineResult = {
   idempotent: boolean;
   classifierMode: AutoChannelClassifierMode;
   classifierReason: ChannelClassifierReason;
+  classifierConfidence?: number | null;
 };
 
 function toTagSlug(raw: string) {
@@ -129,6 +158,21 @@ async function getBlueprintTagSlugs(db: DbClient, blueprintId: string): Promise<
   return Array.from(new Set(tagSlugs));
 }
 
+function getBlueprintStepHints(rawSteps: unknown): string[] {
+  if (!Array.isArray(rawSteps)) return [];
+  const hints: string[] = [];
+  for (const step of rawSteps) {
+    if (!step || typeof step !== 'object') continue;
+    const record = step as Record<string, unknown>;
+    const title = String(record.title || record.name || '').trim();
+    const description = String(record.description || record.notes || '').trim();
+    const hint = [title, description].filter(Boolean).join(' — ');
+    if (hint) hints.push(hint);
+    if (hints.length >= 8) break;
+  }
+  return hints;
+}
+
 export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): Promise<AutoChannelPipelineResult> {
   const resolver = input.resolver || new DeterministicAutoChannelResolver();
 
@@ -142,12 +186,35 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
   }
 
   const tagSlugs = await getBlueprintTagSlugs(input.db, input.blueprintId);
+  const stepHints = getBlueprintStepHints(blueprint.steps);
+  if (input.classifierMode === 'llm_labeler_v1') {
+    console.log('[auto_channel_label_started]', JSON.stringify({
+      blueprint_id: input.blueprintId,
+      user_feed_item_id: input.userFeedItemId,
+      fallback_slug: input.defaultChannelSlug,
+      tag_count: tagSlugs.length,
+      step_hint_count: stepHints.length,
+    }));
+  }
   const resolution = await resolver.resolveChannelSlugForBlueprint({
     blueprintId: input.blueprintId,
+    title: blueprint.title,
+    llmReview: blueprint.llm_review,
     tagSlugs,
+    stepHints,
     defaultChannelSlug: input.defaultChannelSlug,
     classifierMode: input.classifierMode,
   });
+  if (input.classifierMode === 'llm_labeler_v1') {
+    console.log('[auto_channel_label_result]', JSON.stringify({
+      blueprint_id: input.blueprintId,
+      user_feed_item_id: input.userFeedItemId,
+      classifier_mode: resolution.classifierMode,
+      classifier_reason: resolution.classifierReason,
+      classifier_confidence: resolution.classifierConfidence ?? null,
+      channel_slug: resolution.channelSlug,
+    }));
+  }
   const channelSlug = String(resolution.channelSlug || input.defaultChannelSlug || 'general').trim().toLowerCase() || 'general';
 
   const { data: existingCandidate } = await input.db
@@ -170,6 +237,7 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
       idempotent: true,
       classifierMode: resolution.classifierMode,
       classifierReason: resolution.classifierReason,
+      classifierConfidence: resolution.classifierConfidence ?? null,
     };
   }
 
@@ -198,6 +266,7 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
       channelSlug,
       tagSlugs,
       stepCount,
+      classificationMode: resolution.classifierMode,
     },
     {
       modeOverride: input.gateMode,
@@ -260,6 +329,7 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
       idempotent: false,
       classifierMode: resolution.classifierMode,
       classifierReason: resolution.classifierReason,
+      classifierConfidence: resolution.classifierConfidence ?? null,
     };
   }
 
@@ -288,5 +358,6 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
     idempotent: false,
     classifierMode: resolution.classifierMode,
     classifierReason: resolution.classifierReason,
+    classifierConfidence: resolution.classifierConfidence ?? null,
   };
 }

@@ -97,7 +97,11 @@
    - stale running ingestion jobs are recovered before new service/manual trigger paths execute (`STALE_RUNNING_RECOVERY`).
 4. Optional user remix/insight.
 5. Channel candidate evaluation (all-gates-run default, aggregated decision).
-   - channel resolution uses deterministic tag+alias classifier (`AUTO_CHANNEL_CLASSIFIER_MODE=deterministic_v1`) with fallback slug (`AUTO_CHANNEL_FALLBACK_SLUG=general` by default).
+   - channel resolution mode is env-driven via `AUTO_CHANNEL_CLASSIFIER_MODE`:
+     - `deterministic_v1`: tag+alias mapping with deterministic tie-break.
+     - `llm_labeler_v1`: post-artifact sync label pass using title/review/tags/step hints against allowed channel list.
+     - `general_placeholder`: rollback mode, routes everything to fallback slug.
+   - `llm_labeler_v1` invalid output handling: retry once, then fallback slug (`AUTO_CHANNEL_FALLBACK_SLUG`, default `general`).
 6. Gate decision:
    - pass -> publish to channel feed
    - warn/block -> remain personal-only
@@ -105,7 +109,9 @@
 Current production behavior note:
 - Legacy manual candidate flow remains bypass-first by default (`CHANNEL_GATES_MODE=bypass`) for rollback compatibility.
 - Auto-channel flow can enforce deterministic checks independently via `AUTO_CHANNEL_GATE_MODE`.
-- Channel-fit gate uses the same deterministic mapper as classifier output so route and fit checks stay aligned.
+- Channel-fit behavior is classifier-aware:
+  - deterministic modes: fit checks use deterministic mapper alignment.
+  - `llm_labeler_v1`: fit gate returns pass-by-design (`FIT_LLM_LABEL_PASS`) for selected label.
 
 ## 4) Contracts And Policy Surfaces
 - API contract (adapter v0):

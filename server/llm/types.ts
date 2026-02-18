@@ -83,10 +83,33 @@ export interface YouTubeBlueprintResult {
   tags?: string[];
 }
 
+export interface ChannelLabelOption {
+  slug: string;
+  name: string;
+  description: string;
+  aliases?: string[];
+}
+
+export interface ChannelLabelRequest {
+  title: string;
+  llmReview?: string | null;
+  tags?: string[];
+  stepHints?: string[];
+  fallbackSlug: string;
+  allowedChannels: ChannelLabelOption[];
+}
+
+export interface ChannelLabelResult {
+  channelSlug: string;
+  reason?: string | null;
+  confidence?: number | null;
+}
+
 export interface LLMClient {
   generateInventory(input: InventoryRequest): Promise<InventorySchema>;
   analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string>;
   generateBanner(input: BannerRequest): Promise<BannerResult>;
   generateBlueprint(input: BlueprintGenerationRequest): Promise<BlueprintGenerationResult>;
   generateYouTubeBlueprint(input: YouTubeBlueprintRequest): Promise<YouTubeBlueprintResult>;
+  generateChannelLabel(input: ChannelLabelRequest): Promise<ChannelLabelResult>;
 }
