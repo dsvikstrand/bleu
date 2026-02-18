@@ -34,6 +34,9 @@ a27) [have] `/subscriptions` now includes `Refresh` popup flow: scan new videos 
 a28) [have] Manual refresh endpoints now enforce per-user cooldown limits and background-job concurrency guards to prevent duplicate/overlapping runs.
 a29) [have] Failed manual refresh videos enter a 6-hour retry cooldown and are temporarily hidden from follow-up scans.
 a30) [have] `/subscriptions` now displays lightweight background-generation job status (`Queued/Running/Succeeded/Failed`) with inserted/skipped/failed counts.
+a31) [have] Successful manual refresh generation now advances subscription checkpoints forward so those videos are not picked up again by later auto polling.
+a32) [have] `/subscriptions` now restores active manual-refresh status on reload via latest user job lookup.
+a33) [have] Refresh scan dialog now shows `cooldown_filtered` count for videos hidden by the 6-hour retry window.
 
 ## Core Model
 b1) `Source Item`
@@ -68,6 +71,7 @@ b5) Subscription behavior (MVP simplified)
   - `refresh-scan` rate limit: 1 request per 30 seconds per user.
   - `refresh-generate` rate limit: 1 request per 120 seconds per user.
   - max selected items per generation run: `20`.
+  - successful generation updates per-subscription checkpoint (`last_seen_published_at` / `last_seen_video_id`) forward.
   - if generation fails for a selected video, that `(subscription_id, video_id)` is hidden from scan results for `6h` and then automatically retryable.
 
 ## MVP Lifecycle Contract
@@ -175,6 +179,7 @@ si20) user endpoint: `GET /api/ingestion/jobs/:id` (owner-scoped status for manu
 si21) `POST /api/source-subscriptions/refresh-generate` returns `409 JOB_ALREADY_RUNNING` if a manual refresh job is already active for the user.
 si22) `POST /api/source-subscriptions/refresh-generate` returns `400 MAX_ITEMS_EXCEEDED` if selected item count exceeds `20`.
 si23) refresh candidate cooldown table is active: `refresh_video_attempts` (tracks failed manual refresh attempts with retry hold window).
+si24) user endpoint: `GET /api/ingestion/jobs/latest-mine?scope=manual_refresh_selection` (restore active manual-refresh status after page reload).
 
 ## Next Milestone (Hardening)
 n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.

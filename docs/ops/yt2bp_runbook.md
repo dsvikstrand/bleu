@@ -280,6 +280,7 @@ Expected behavior:
 - request returns quickly with `job_id` and `queued_count`
 - generation continues asynchronously in background
 - progress is visible via `ingestion_jobs` (scope `manual_refresh_selection`) and resulting My Feed inserts
+- successful generation advances subscription checkpoint forward (`last_seen_published_at` / `last_seen_video_id`) for touched subscriptions
 - route guardrails:
   - max selected items per run = `20` (`MAX_ITEMS_EXCEEDED`)
   - one active manual refresh job per user (`JOB_ALREADY_RUNNING`)
@@ -288,6 +289,12 @@ Expected behavior:
 Manual refresh job status (user auth):
 ```bash
 curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/<job_id> \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Latest manual refresh job for current user (user auth):
+```bash
+curl -sS "https://bapi.vdsai.cloud/api/ingestion/jobs/latest-mine?scope=manual_refresh_selection" \
   -H "Authorization: Bearer $TOKEN"
 ```
 

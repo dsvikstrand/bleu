@@ -2060,6 +2060,27 @@ async function getActiveManualRefreshJob(db: ReturnType<typeof createClient>, us
   return data || null;
 }
 
+function shouldAdvanceSubscriptionCheckpoint(
+  currentPublishedAt: string | null,
+  currentVideoId: string | null,
+  nextPublishedAt: string | null,
+  nextVideoId: string | null,
+) {
+  const candidateVideoId = String(nextVideoId || '').trim();
+  if (!candidateVideoId) return false;
+  if (!currentPublishedAt) return true;
+  if (!nextPublishedAt) return false;
+
+  const currentTs = Date.parse(currentPublishedAt);
+  const nextTs = Date.parse(nextPublishedAt);
+  if (Number.isNaN(currentTs)) return true;
+  if (Number.isNaN(nextTs)) return false;
+  if (nextTs > currentTs) return true;
+  if (nextTs < currentTs) return false;
+  if (!currentVideoId) return true;
+  return candidateVideoId !== String(currentVideoId || '').trim();
+}
+
 async function markRefreshVideoFailureCooldown(
   db: ReturnType<typeof createClient>,
   input: { userId: string; subscriptionId: string; videoId: string; errorCode: string; errorMessage: string },
@@ -2248,11 +2269,38 @@ async function processManualRefreshGenerateJob(input: {
   let inserted = 0;
   let skipped = 0;
   const failures: Array<{ subscription_id: string; video_id: string; error_code: string; error: string }> = [];
+  const checkpointBySubscription = new Map<string, { publishedAt: string | null; videoId: string }>();
+
+  const recordCheckpointCandidate = (item: RefreshScanCandidate) => {
+    const videoId = String(item.video_id || '').trim();
+    if (!videoId) return;
+    const current = checkpointBySubscription.get(item.subscription_id);
+    if (!current) {
+      checkpointBySubscription.set(item.subscription_id, {
+        publishedAt: item.published_at || null,
+        videoId,
+      });
+      return;
+    }
+    if (
+      shouldAdvanceSubscriptionCheckpoint(
+        current.publishedAt,
+        current.videoId,
+        item.published_at || null,
+        videoId,
+      )
+    ) {
+      checkpointBySubscription.set(item.subscription_id, {
+        publishedAt: item.published_at || null,
+        videoId,
+      });
+    }
+  };
 
   const subscriptionIds = Array.from(new Set(input.items.map((item) => item.subscription_id)));
   const { data: subscriptions, error: subscriptionsError } = await db
     .from('user_source_subscriptions')
-    .select('id, user_id, source_channel_id, source_channel_title')
+    .select('id, user_id, source_channel_id, source_channel_title, last_seen_published_at, last_seen_video_id')
     .eq('user_id', input.userId)
     .eq('is_active', true)
     .in('id', subscriptionIds);
@@ -2287,6 +2335,7 @@ async function processManualRefreshGenerateJob(input: {
       const existingFeedItem = await getExistingFeedItem(db, input.userId, source.id);
       if (existingFeedItem) {
         skipped += 1;
+        recordCheckpointCandidate(item);
         continue;
       }
 
@@ -2307,6 +2356,7 @@ async function processManualRefreshGenerateJob(input: {
       });
       if (insertedItem) inserted += 1;
       else skipped += 1;
+      recordCheckpointCandidate(item);
       await clearRefreshVideoFailureCooldown(db, {
         userId: input.userId,
         subscriptionId: item.subscription_id,
@@ -2345,6 +2395,39 @@ async function processManualRefreshGenerateJob(input: {
         video_id: item.video_id,
         error_code: errorCode,
         error: message.slice(0, 220),
+      }));
+    }
+  }
+
+  const checkpointUpdatedAt = new Date().toISOString();
+  for (const [subscriptionId, checkpoint] of checkpointBySubscription.entries()) {
+    const subscription = subscriptionById.get(subscriptionId);
+    if (!subscription) continue;
+
+    const shouldAdvance = shouldAdvanceSubscriptionCheckpoint(
+      subscription.last_seen_published_at || null,
+      subscription.last_seen_video_id || null,
+      checkpoint.publishedAt,
+      checkpoint.videoId,
+    );
+    if (!shouldAdvance) continue;
+
+    const { error: checkpointError } = await db
+      .from('user_source_subscriptions')
+      .update({
+        last_seen_published_at: checkpoint.publishedAt,
+        last_seen_video_id: checkpoint.videoId,
+        last_polled_at: checkpointUpdatedAt,
+        last_sync_error: null,
+      })
+      .eq('id', subscriptionId)
+      .eq('user_id', input.userId);
+    if (checkpointError) {
+      console.log('[subscription_manual_refresh_checkpoint_update_failed]', JSON.stringify({
+        job_id: input.jobId,
+        user_id: input.userId,
+        subscription_id: subscriptionId,
+        error: checkpointError.message,
       }));
     }
   }
@@ -3045,6 +3128,73 @@ app.get('/api/ingestion/jobs/:id([0-9a-fA-F-]{36})', async (req, res) => {
       created_at: data.created_at,
       updated_at: data.updated_at,
     },
+  });
+});
+
+app.get('/api/ingestion/jobs/latest-mine', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const scopeRaw = String(req.query.scope || '').trim();
+  const scope = scopeRaw || 'manual_refresh_selection';
+  const selectColumns = 'id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, created_at, updated_at';
+
+  const { data: activeData, error: activeError } = await db
+    .from('ingestion_jobs')
+    .select(selectColumns)
+    .eq('requested_by_user_id', userId)
+    .eq('scope', scope)
+    .in('status', ['queued', 'running'])
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (activeError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: activeError.message, data: null });
+  }
+
+  let data = activeData;
+  if (!data) {
+    const { data: latestData, error: latestError } = await db
+      .from('ingestion_jobs')
+      .select(selectColumns)
+      .eq('requested_by_user_id', userId)
+      .eq('scope', scope)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestError) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestError.message, data: null });
+    }
+    data = latestData;
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: data ? 'latest user ingestion job fetched' : 'no ingestion jobs found',
+    data: data
+      ? {
+          job_id: data.id,
+          trigger: data.trigger,
+          scope: data.scope,
+          status: data.status,
+          started_at: data.started_at,
+          finished_at: data.finished_at,
+          processed_count: data.processed_count,
+          inserted_count: data.inserted_count,
+          skipped_count: data.skipped_count,
+          error_code: data.error_code,
+          error_message: data.error_message,
+          created_at: data.created_at,
+          updated_at: data.updated_at,
+        }
+      : null,
   });
 });
 

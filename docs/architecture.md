@@ -38,6 +38,7 @@
     - `POST /api/source-subscriptions/refresh-scan` (auth-only scan, returns candidate videos; no blueprint generation side effects)
     - `POST /api/source-subscriptions/refresh-generate` (auth-only enqueue for selected videos; starts async background generation job)
     - `GET /api/ingestion/jobs/:id` (auth-only, owner-scoped status for manual refresh background jobs)
+    - `GET /api/ingestion/jobs/latest-mine` (auth-only, user-scoped latest refresh job; used to restore in-flight status after reload)
     - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
     - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
     - `POST /api/ingestion/jobs/trigger` (service auth)
@@ -88,6 +89,8 @@
      - selected-item cap for manual generation (`max=20`)
      - active-job lock (`JOB_ALREADY_RUNNING`) for manual generation
      - failed item cooldown (6h) via `refresh_video_attempts` so noisy failures do not reappear immediately.
+     - successful manual generation advances subscription checkpoint forward to prevent future auto-poll duplicates.
+     - frontend restores active manual refresh status after reload via `GET /api/ingestion/jobs/latest-mine`.
    - stale running ingestion jobs are recovered before new service/manual trigger paths execute (`STALE_RUNNING_RECOVERY`).
 4. Optional user remix/insight.
 5. Channel candidate evaluation (all-gates-run default, aggregated decision).

@@ -216,6 +216,15 @@ export async function getIngestionJob(jobId: string) {
   return response.data;
 }
 
+export async function getLatestMyIngestionJob(scope = 'manual_refresh_selection') {
+  const query = new URLSearchParams();
+  if (scope) query.set('scope', scope);
+  const response = await apiRequest<IngestionJob | null>(`/ingestion/jobs/latest-mine?${query.toString()}`, {
+    method: 'GET',
+  });
+  return response.data;
+}
+
 export async function generateSubscriptionRefreshBlueprints(input: {
   items: SubscriptionRefreshCandidate[];
 }) {

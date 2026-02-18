@@ -34,6 +34,7 @@
 - 2026-02-18 note: banner prompt hardening now enforces visual-only imagery and explicitly blocks readable text/typography/logos/watermarks in generated backgrounds.
 - 2026-02-18 note: subscription manual-refresh endpoints (`/api/source-subscriptions/refresh-scan`, `/api/source-subscriptions/refresh-generate`) are additive and do not alter the YT2BP endpoint envelope.
 - 2026-02-18 note: refresh hardening (`GET /api/ingestion/jobs/:id`, refresh endpoint rate caps, `MAX_ITEMS_EXCEEDED`, `JOB_ALREADY_RUNNING`, failed-video cooldown via `refresh_video_attempts`) is additive and does not alter the YT2BP endpoint envelope.
+- 2026-02-18 note: refresh hardening follow-up (`GET /api/ingestion/jobs/latest-mine`, manual-refresh checkpoint-forward updates, cooldown-filter visibility) is additive and does not alter the YT2BP endpoint envelope.
 
 ## Request
 ```json
@@ -119,6 +120,7 @@
 - Optional review/banner post-processing (`/api/analyze-blueprint`, `/api/generate-banner`) and save-time attach behavior are intentionally outside this endpoint contract.
 - Subscription manual scan/enqueue flows are intentionally outside this endpoint contract.
 - Manual refresh owner-status endpoint (`GET /api/ingestion/jobs/:id`) is intentionally outside this endpoint contract.
+- Manual refresh latest-user-status endpoint (`GET /api/ingestion/jobs/latest-mine`) is intentionally outside this endpoint contract.
 - Refresh endpoint concurrency/rate/cooldown controls are intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)

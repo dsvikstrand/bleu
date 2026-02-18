@@ -109,6 +109,8 @@ Rules:
     - manual refresh enforces max 20 selected videos per run.
     - manual refresh rejects overlapping active jobs (`JOB_ALREADY_RUNNING`).
     - failed manual-refresh videos enter a 6-hour cooldown (`refresh_video_attempts`) before reappearing in scans.
+    - successful manual refresh generation advances per-subscription checkpoint forward.
+    - user can restore active refresh status after reload via `GET /api/ingestion/jobs/latest-mine`.
     - stale `running` ingestion jobs are auto-recovered (`STALE_RUNNING_RECOVERY`) before new trigger runs.
   - UI hides legacy no-blueprint pending/skipped feed rows to keep My Feed migration-safe.
   - auto-ingestion now runs with AI review enabled and banner generation disabled by default.

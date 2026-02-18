@@ -17,6 +17,7 @@ import {
   createSourceSubscription,
   deactivateSourceSubscription,
   getIngestionJob,
+  getLatestMyIngestionJob,
   generateSubscriptionRefreshBlueprints,
   listSourceSubscriptions,
   scanSubscriptionRefreshCandidates,
@@ -108,6 +109,7 @@ export default function Subscriptions() {
   const [refreshCandidates, setRefreshCandidates] = useState<SubscriptionRefreshCandidate[]>([]);
   const [refreshSelected, setRefreshSelected] = useState<Record<string, boolean>>({});
   const [refreshScanErrors, setRefreshScanErrors] = useState<Array<{ subscription_id: string; error: string }>>([]);
+  const [refreshCooldownFiltered, setRefreshCooldownFiltered] = useState<number>(0);
   const [refreshErrorText, setRefreshErrorText] = useState<string | null>(null);
   const [activeRefreshJobId, setActiveRefreshJobId] = useState<string | null>(null);
   const [queuedRefreshCount, setQueuedRefreshCount] = useState<number>(0);
@@ -238,6 +240,7 @@ export default function Subscriptions() {
       setRefreshErrorText(null);
       setRefreshCandidates(payload.candidates || []);
       setRefreshScanErrors(payload.scan_errors || []);
+      setRefreshCooldownFiltered(Math.max(0, Number(payload.cooldown_filtered || 0)));
       const next: Record<string, boolean> = {};
       for (const candidate of payload.candidates || []) {
         next[getRefreshCandidateKey(candidate)] = true;
@@ -252,6 +255,7 @@ export default function Subscriptions() {
       }
       setRefreshCandidates([]);
       setRefreshScanErrors([]);
+      setRefreshCooldownFiltered(0);
       setRefreshSelected({});
     },
   });
@@ -320,6 +324,14 @@ export default function Subscriptions() {
       if (!status || status === 'queued' || status === 'running') return 4000;
       return false;
     },
+  });
+
+  const latestManualRefreshJobQuery = useQuery({
+    queryKey: ['ingestion-job-latest-mine', user?.id],
+    enabled: Boolean(user) && subscriptionsEnabled && !activeRefreshJobId,
+    queryFn: () => getLatestMyIngestionJob('manual_refresh_selection'),
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
   });
 
   const handleUnsubscribe = (subscription: SourceSubscription) => {
@@ -436,12 +448,30 @@ export default function Subscriptions() {
     });
   }, [invalidateSubscriptionViews, refreshJobQuery.data, terminalHandledJobId, toast]);
 
+  useEffect(() => {
+    if (activeRefreshJobId) return;
+    const latestJob = latestManualRefreshJobQuery.data;
+    if (!latestJob?.job_id) return;
+    if (latestJob.status !== 'queued' && latestJob.status !== 'running') return;
+
+    setActiveRefreshJobId(latestJob.job_id);
+    setTerminalHandledJobId(null);
+    const queuedEstimate = Math.max(
+      0,
+      Number(latestJob.processed_count || 0) + Number(latestJob.inserted_count || 0) + Number(latestJob.skipped_count || 0),
+    );
+    if (queuedEstimate > 0) {
+      setQueuedRefreshCount(queuedEstimate);
+    }
+  }, [activeRefreshJobId, latestManualRefreshJobQuery.data]);
+
   const handleRefreshDialogChange = (nextOpen: boolean) => {
     setIsRefreshDialogOpen(nextOpen);
     setRefreshErrorText(null);
     setRefreshCandidates([]);
     setRefreshSelected({});
     setRefreshScanErrors([]);
+    setRefreshCooldownFiltered(0);
     refreshScanMutation.reset();
   };
 
@@ -463,6 +493,14 @@ export default function Subscriptions() {
 
   const handleStartBackgroundGeneration = () => {
     if (selectedRefreshItems.length === 0) return;
+    if (selectedRefreshItems.length > 20) {
+      toast({
+        title: 'Selection too large',
+        description: 'Select up to 20 videos per generation run.',
+        variant: 'destructive',
+      });
+      return;
+    }
     refreshGenerateMutation.mutate(selectedRefreshItems);
   };
 
@@ -689,6 +727,12 @@ export default function Subscriptions() {
                 </p>
               ) : null}
 
+              {refreshScanMutation.status === 'success' && refreshCooldownFiltered > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Hidden due to recent failures: {refreshCooldownFiltered} (retry window: 6 hours).
+                </p>
+              ) : null}
+
               {refreshScanMutation.isPending ? (
                 <div className="space-y-2">
                   <Skeleton className="h-16 rounded-md" />
@@ -755,7 +799,13 @@ export default function Subscriptions() {
                 <Button
                   size="sm"
                   onClick={handleStartBackgroundGeneration}
-                  disabled={selectedRefreshItems.length === 0 || refreshGenerateMutation.isPending || refreshScanMutation.isPending || refreshJobRunning}
+                  disabled={
+                    selectedRefreshItems.length === 0
+                    || selectedRefreshItems.length > 20
+                    || refreshGenerateMutation.isPending
+                    || refreshScanMutation.isPending
+                    || refreshJobRunning
+                  }
                 >
                   {refreshGenerateMutation.isPending ? 'Starting...' : 'Generate blueprints'}
                 </Button>

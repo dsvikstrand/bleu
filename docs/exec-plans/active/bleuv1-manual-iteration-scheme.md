@@ -41,6 +41,7 @@ Execution mode:
 22. [have] Step 21 - `/youtube` core-first async attach + timeout control hardening
 23. [have] Step 22 - Subscription manual refresh popup + async selected generation
 24. [have] Step 23 - Refresh/poll gotcha hardening (caps + cooldown + job status)
+25. [have] Step 24 - Refresh checkpoint + reload-resume hardening
 
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
@@ -562,6 +563,32 @@ Completion evidence (2026-02-18)
 - Added migration `supabase/migrations/20260219001500_refresh_video_attempts_v1.sql`.
 - Updated `src/lib/subscriptionsApi.ts` with `getIngestionJob` and richer API error payload handling.
 - Updated `src/pages/Subscriptions.tsx` with live background-generation status card + error mapping.
+
+### Step 24 - Refresh checkpoint + reload-resume hardening
+Scope
+- prevent manual-generated videos from reappearing in subsequent auto polls
+- restore active manual refresh status card after `/subscriptions` reload
+- surface cooldown-filtered count in refresh dialog
+
+Definition of done
+- successful manual refresh generation advances per-subscription checkpoint forward
+- `/subscriptions` can recover in-progress manual refresh jobs after reload
+- scan dialog shows how many candidates are hidden by failure cooldown
+
+Evaluation
+- manual smoke: generate selected videos, then run auto/manual scan and verify those videos are not re-listed
+- manual smoke: start refresh generate, reload `/subscriptions`, verify status card resumes
+- manual smoke: failed video suppression count appears in scan dialog
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+Completion evidence (2026-02-18)
+- Updated `server/index.ts` to advance `last_seen_*` checkpoint on successful manual refresh generation.
+- Added owner-scoped endpoint `GET /api/ingestion/jobs/latest-mine` for refresh-status restore on reload.
+- Updated `src/lib/subscriptionsApi.ts` with `getLatestMyIngestionJob`.
+- Updated `src/pages/Subscriptions.tsx` to hydrate running job status and show `cooldown_filtered` scan count.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary
