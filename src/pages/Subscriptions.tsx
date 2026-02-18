@@ -836,8 +836,8 @@ export default function Subscriptions() {
                   activeSubscriptions.map((subscription) => {
                     return (
                       <div key={subscription.id} className="rounded-md border border-border/40 p-3 space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
                             <a href={getChannelUrl(subscription)} target="_blank" rel="noreferrer" className="shrink-0">
                               {subscription.source_channel_avatar_url ? (
                                 <img
@@ -851,15 +851,10 @@ export default function Subscriptions() {
                                 </div>
                               )}
                             </a>
-                            <p className="text-sm font-medium truncate">
+                            <p className="text-sm font-medium truncate min-w-0">
                               {subscription.source_channel_title || subscription.source_channel_id}
                             </p>
                           </div>
-                        </div>
-                        {subscription.last_sync_error ? (
-                          <p className="text-xs text-red-600/90">Sync issue: {subscription.last_sync_error}</p>
-                        ) : null}
-                        <div className="flex flex-wrap justify-end gap-2 pt-1">
                           <Button
                             size="sm"
                             variant="destructive"
@@ -869,6 +864,9 @@ export default function Subscriptions() {
                             {isRowPending(subscription.id) ? 'Unsubscribing...' : 'Unsubscribe'}
                           </Button>
                         </div>
+                        {subscription.last_sync_error ? (
+                          <p className="text-xs text-red-600/90">Sync issue: {subscription.last_sync_error}</p>
+                        ) : null}
                       </div>
                     );
                   })
