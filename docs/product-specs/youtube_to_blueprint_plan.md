@@ -1,5 +1,14 @@
 # YouTube To Blueprint MVP Plan
 
+Status: `reference/historical-detail`
+
+Interpretation
+- This document preserves detailed implementation history and rationale.
+- Canonical runtime/API truth is defined in:
+  - `docs/product-specs/yt2bp_v0_contract.md`
+  - `docs/app/product-spec.md`
+  - `docs/architecture.md`
+
 ## Status
 a1) [have] Clear wedge: `YouTube URL -> editable blueprint draft`.
 a2) [have] Strict MVP path is implemented for single-video YouTube flows.

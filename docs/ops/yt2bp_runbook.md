@@ -390,7 +390,7 @@ curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/latest -H "x-service-token:
 ```bash
 ssh oracle-free 'sudo journalctl -u agentic-backend.service -n 200 --no-pager'
 ```
-4. Spot-check subscription error rows in app UI (`/subscriptions`) via `Sync issue` and health badges.
+4. Spot-check subscription rows in app UI (`/subscriptions`) via `Sync issue`, `Last polled`, and health detail text.
 
 ## Traceability keys and expected logs
 Required IDs for triage:

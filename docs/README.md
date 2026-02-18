@@ -6,6 +6,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 - Active: manual iterative build loop.
 - Protocol: propose update -> planning pass -> `PA` -> implement + evaluate.
 - Agentic orchestration docs are reference material and not the active execution path.
+- Historical plan/reference docs may describe superseded intermediate states. Current runtime truth is always anchored in canonical docs below.
 
 ## Read Order For Current Work
 1. `docs/architecture.md`
@@ -25,6 +26,10 @@ This folder is the source of truth for product, architecture, planning, and oper
 - Active stepwise execution scheme: `docs/exec-plans/active/bleuv1-manual-iteration-scheme.md`
 - YT2BP API contract (adapter v0): `docs/product-specs/yt2bp_v0_contract.md`
 - YT2BP runbook: `docs/ops/yt2bp_runbook.md`
+
+## Interpretation Rule
+- If a detailed plan/reference file conflicts with canonical docs, follow canonical docs.
+- Treat `docs/product-specs/youtube_to_blueprint_plan.md` as detailed historical/reference context; use `docs/product-specs/yt2bp_v0_contract.md` for runtime API truth.
 
 ## Reference-Only (Paused)
 - Agentic foundation pack: `docs/agentic/foundation/`

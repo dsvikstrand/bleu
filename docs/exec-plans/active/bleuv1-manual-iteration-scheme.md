@@ -43,6 +43,11 @@ Execution mode:
 24. [have] Step 23 - Refresh/poll gotcha hardening (caps + cooldown + job status)
 25. [have] Step 24 - Refresh checkpoint + reload-resume hardening
 
+Interpretation note
+- Step entries capture execution timeline.
+- Some early completed steps describe intermediate states that were later refined by newer steps.
+- For current runtime behavior, use canonical docs: `docs/app/product-spec.md`, `docs/architecture.md`, and `docs/ops/yt2bp_runbook.md`.
+
 ## Step Definitions
 ### Step 0 - Contract lock and naming alignment
 Scope
