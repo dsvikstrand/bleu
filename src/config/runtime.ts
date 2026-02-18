@@ -23,6 +23,7 @@ export const config = {
     sourceAdapterV1: toBool(import.meta.env.VITE_FEATURE_SOURCE_ADAPTER_V1, true),
     channelSubmitV1: toBool(import.meta.env.VITE_FEATURE_CHANNEL_SUBMIT_V1, true),
     gatePipelineV1: toBool(import.meta.env.VITE_FEATURE_GATE_PIPELINE_V1, true),
+    autoChannelPipelineV1: toBool(import.meta.env.VITE_FEATURE_AUTO_CHANNEL_PIPELINE_V1, true),
   },
 } as const;
 

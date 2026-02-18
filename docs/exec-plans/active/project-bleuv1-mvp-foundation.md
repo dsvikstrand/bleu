@@ -24,24 +24,24 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ## Product Defaults (Locked)
 1. YouTube-only adapter scope for MVP.
 2. My Feed default visibility is personal/private until channel promotion.
-3. Channel promotion default mode is selected/manual approve.
+3. Channel promotion default mode is deterministic auto-publish after checks.
 4. User value-add is insight/remix on imported blueprints; no standalone free-form post model in MVP core.
-5. Low-confidence channel candidates are blocked from channel and retained in My Feed.
-6. Current production gate runtime mode is `CHANNEL_GATES_MODE=bypass` until enforcement rollout is explicitly approved.
+5. Non-pass auto-channel outcomes are blocked from channel and retained in My Feed.
+6. Legacy manual gate runtime remains `CHANNEL_GATES_MODE=bypass`; auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.
 
 ## Current Workstreams
 ### W1 - My Feed As First-Class Surface
 - Introduce/finish personal unfiltered feed lane behavior.
 - Ensure channel fail does not remove personal access.
 - Hide legacy no-blueprint pending/skipped rows during migration cleanup.
-- Align My Feed card presentation to channel-feed style and move submission entry to footer `Post to Channel` action flow.
-- Show `Posted to <Channel>` only for channel-published items; keep `Post to Channel` wording for non-published states.
+- Align My Feed card presentation to channel-feed style and show read-only auto-channel status labels.
+- Show `Posted to <Channel>` only for channel-published items; held items remain visible with reason labels.
 - Ensure full-card banner fill on My Feed blueprint cards (no transparent edge gap).
 - Harden Search-generated source channel-title persistence + metadata fallback so My Feed subtitle row consistently shows channel name.
 
 ### W2 - Channel Candidate Gating
-- Keep promotion as explicit second step from My Feed.
-- Preserve quality/safety/channel-fit constraints while production mode remains bypass-first.
+- Run deterministic auto-channel checks for all source paths.
+- Preserve quality/safety/channel-fit constraints while keeping legacy manual endpoints as rollback-safe fallback.
 
 ### W3 - YouTube Pull And Caching
 - Keep YouTube-first ingestion flow stable.

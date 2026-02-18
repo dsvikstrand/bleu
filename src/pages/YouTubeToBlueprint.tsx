@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { config, getFunctionUrl } from '@/config/runtime';
 import { logMvpEvent } from '@/lib/logEvent';
-import { ensureSourceItemForYouTube, getExistingUserFeedItem, upsertUserFeedItem } from '@/lib/myFeedApi';
+import { autoPublishMyFeedItem, ensureSourceItemForYouTube, getExistingUserFeedItem, upsertUserFeedItem } from '@/lib/myFeedApi';
 import { apiFetch } from '@/lib/api';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
@@ -646,6 +646,22 @@ export default function YouTubeToBlueprint() {
         state: 'my_feed_published',
       });
 
+      let autoPublishResult: Awaited<ReturnType<typeof autoPublishMyFeedItem>> | null = null;
+      if (config.features.autoChannelPipelineV1 && feedItem?.id) {
+        try {
+          autoPublishResult = await autoPublishMyFeedItem({
+            userFeedItemId: feedItem.id,
+            sourceTag: String(searchParams.get('source') || 'youtube_manual_save'),
+          });
+        } catch (autoPublishError) {
+          console.log('[auto_channel_frontend_trigger_failed]', {
+            user_feed_item_id: feedItem.id,
+            blueprint_id: created.id,
+            error: autoPublishError instanceof Error ? autoPublishError.message : String(autoPublishError),
+          });
+        }
+      }
+
       await logMvpEvent({
         eventName: 'my_feed_publish_succeeded',
         userId: user.id,
@@ -661,9 +677,11 @@ export default function YouTubeToBlueprint() {
 
       toast({
         title: 'Saved to My Feed',
-        description: config.features.channelSubmitV1
-          ? 'You can submit this to channels from My Feed.'
-          : 'Personal copy saved successfully.',
+        description: autoPublishResult
+          ? autoPublishResult.decision === 'published'
+            ? `Posted to ${autoPublishResult.channelSlug}.`
+            : `Saved in My Feed. Auto channel checks held this item (${autoPublishResult.reasonCode}).`
+          : 'Saved successfully.',
       });
       navigate('/my-feed');
     } catch (error) {
@@ -812,7 +830,11 @@ export default function YouTubeToBlueprint() {
                     <Button onClick={saveToMyFeed} disabled={isSaving}>
                       {isSaving ? 'Saving...' : 'Save to My Feed'}
                     </Button>
-                    {config.features.channelSubmitV1 && (
+                    {config.features.autoChannelPipelineV1 ? (
+                      <Button asChild variant="outline">
+                        <Link to="/my-feed">Open My Feed</Link>
+                      </Button>
+                    ) : config.features.channelSubmitV1 && (
                       <Button asChild variant="outline">
                         <Link to="/my-feed">Manage channel submissions in My Feed</Link>
                       </Button>
@@ -821,7 +843,9 @@ export default function YouTubeToBlueprint() {
                   <p className="text-xs text-muted-foreground">
                     {isPostProcessing
                       ? 'Optional enhancements are still running. You can save now and they will attach when finished.'
-                      : 'Channel publishing is handled after submit and gate checks in My Feed.'}
+                      : config.features.autoChannelPipelineV1
+                        ? 'Channel publishing runs automatically after save.'
+                        : 'Channel publishing is handled after submit and gate checks in My Feed.'}
                   </p>
                 </div>
               )}

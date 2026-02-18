@@ -5,7 +5,7 @@
 
 ## Core Direction Lock
 - Canonical identity lock: `docs/app/core-direction-lock.md`.
-- Primary MVP journey: source input -> `My Feed` -> optional channel publish.
+- Primary MVP journey: source input -> `My Feed` -> auto channel evaluation/publish.
 - Library/inventory routes are compatibility-only and not part of the core user journey.
 
 ## Status Snapshot
@@ -13,24 +13,24 @@ a1) [have] YouTube to Blueprint generation is live (`/youtube` + `/api/youtube-t
 a2) [have] Public feed/channel/community primitives are live (`/wall`, `/channels`, `/b/:channelSlug`, likes/comments).
 a3) [have] `My Feed` personal unfiltered lane is available as `/my-feed` (feature-flagged rollout).
 a4) [have] Auto-ingestion from followed YouTube channels is available with auto-only UX and new-uploads-only behavior (no initial old-video prefill).
-a5) [have] Channel publish is an explicit second-stage lifecycle from personal feed candidates.
-a6) [have] Channel gate runtime is currently bypass-first (`EVAL_BYPASSED`) while gate-mode framework hardening is completed.
+a5) [have] Auto-channel pipeline contract is implemented for all source paths and can auto-publish to channels after deterministic checks.
+a6) [have] Auto-channel assignment is deterministic MVP placeholder (`general`) and is intentionally swappable with a future LLM classifier.
 a7) [have] Legacy pending/skipped feed rows without blueprints are hidden in `My Feed` UI to reduce migration noise.
 a8) [have] `/subscriptions` is simplified for MVP to two visible actions: `Add Subscription` (popup search) and per-row `Unsubscribe`.
 a9) [have] `/subscriptions` hides the aggregate ingestion-health summary box to reduce new-user confusion.
 a10) [have] Auth-only `Search` route (`/search`) now supports YouTube query discovery with one-click `Generate Blueprint` and `Subscribe Channel`.
 a11) [have] `/subscriptions` now supports auth-only YouTube channel search with popup-based subscribe flow (manual paste fallback removed in UI).
 a12) [have] Subscription rows now render channel avatar thumbnails (when available) and hide technical status/mode badges from row UI.
-a13) [have] `My Feed` blueprint rows now use channel-feed-style visual cards with footer-driven `Post to Channel` actions.
+a13) [have] `My Feed` blueprint rows now use channel-feed-style visual cards with status-driven auto-channel outcomes.
 a14) [have] Manual/search YouTube generation defaults to review+banner enabled for My Feed-bound content.
 a15) [have] `My Feed` subscription notice cards now support channel avatar rendering and optional profile-banner background (when available from YouTube).
 a16) [have] `My Feed` subscription notice cards open a detailed popup with `Unsubscribe` confirmation; successful unsubscribe removes the notice card.
-a17) [have] `My Feed` blueprint cards expose `Post to Channel` in the footer status row (top-right action removed).
+a17) [have] Manual `Post to Channel` UI is feature-flagged for rollback and removed from normal auto-channel mode surfaces.
 a18) [have] `My Feed` blueprint cards now open blueprint detail by card click (dedicated `Open blueprint` link removed).
 a19) [have] `My Feed` header now includes direct `Add Subscription` shortcut in addition to `Manage subscriptions`.
 a20) [have] Auto-banner queue contract is now available for subscription auto-ingest (`/api/auto-banner/jobs/trigger`) with service-auth control and non-blocking ingestion mode.
 a21) [have] Banner-cap policy contract is now available globally with generated banner preservation (`blueprints.banner_generated_url`) and deterministic channel-default fallback.
-a22) [have] `My Feed` card footer now shows `Posted to <Channel>` only after publish; non-published/rejected items keep the `Post to Channel` action label.
+a22) [have] `My Feed` card footer now shows read-only auto-channel status (`Posted to <Channel>`, `Publishing...`, or `In My Feed` with reason).
 a23) [have] Search-generated saves now carry source channel context so `My Feed` subtitle row can show channel name instead of duplicated post title.
 a24) [have] `My Feed` source subtitle resolution now falls back to source metadata channel title when `source_channel_title` is missing, preventing title duplication for search-generated content.
 a25) [have] `/youtube` now runs core generation first and performs review/banner as async post-steps; `Save to My Feed` is non-blocking while enhancements continue.
@@ -57,8 +57,8 @@ b3) `User Insight/Remix` (secondary content type)
 - Not a standalone free-form post type in `bleuV1` MVP.
 
 b4) Feed surfaces
-- `My Feed`: personal unfiltered lane from user pulls/subscriptions.
-- `Channel Feed`: shared lane with voting/comments and quality-controlled channel posting.
+- `My Feed`: personal timeline for all imported items and auto-channel outcomes.
+- `Channel Feed`: shared lane with voting/comments and auto-published items that pass checks.
 
 b5) Subscription behavior (MVP simplified)
 - UI behavior is auto-only.
@@ -82,13 +82,12 @@ b5) Subscription behavior (MVP simplified)
 ## MVP Lifecycle Contract
 c1) Pull/ingest -> generate blueprint -> publish to `My Feed`.
 c2) Optional user remix/insight.
-c3) Candidate to channel publish.
-c4) Channel gate contract remains (`channel_fit`, `quality`, `safety`, `pii`) with production default mode currently `bypass`.
+c3) Auto-channel pipeline runs per item (deterministic `general` assignment in MVP).
+c4) Channel gate contract remains (`channel_fit`, `quality`, `safety`, `pii`) and auto-channel path uses deterministic checks in enforced mode.
 c5) Result:
 - pass -> publish to channel feed
-- fail -> remain in `My Feed` (personal-only)
-c6) Warn-path result in selected mode:
-- `channel_fit`/`quality` warn routes candidate to `candidate_pending_manual_review` before terminal publish/reject.
+- fail/warn/block -> remain in `My Feed` (personal-only)
+c6) Legacy manual candidate endpoints remain behind rollback controls and are not primary UI flow.
 c7) Subscription notice flow:
 - successful subscribe/reactivate inserts one persistent notice card per user/channel.
 - notice canonical key: `subscription:youtube:<channel_id>`.
@@ -105,12 +104,12 @@ p5) Explainable in one sentence.
 ## MVP Default Policies (Lock)
 m1) Adapter scope default: YouTube-only.
 m2) My Feed default visibility: personal/private lane until channel promotion.
-m3) Channel promotion default mode: selected/manual approve path.
+m3) Channel promotion default mode: automatic publish after deterministic checks.
 m4) User contribution default: insights/remixes attached to imported blueprints (no standalone free-form posting in MVP core).
-m5) Low-confidence channel candidates default action: blocked from channel, retained in My Feed.
+m5) Non-pass auto-channel outcomes default action: blocked from channel, retained in My Feed.
 m6) Evaluator default mode: all-gates-run with aggregated decision evidence.
 m7) Planned mutable interfaces use explicit auth scope + idempotency mode and unified response envelope.
-m8) Runtime default `CHANNEL_GATES_MODE=bypass`; non-prod may run `shadow` or `enforce`.
+m8) Runtime default for legacy manual gates remains `CHANNEL_GATES_MODE=bypass`; auto-channel path can enforce independently via `AUTO_CHANNEL_GATE_MODE`.
 
 ## Primary User Flows (`bleuV1`)
 f1) User follows YouTube channels from `/subscriptions` by clicking `Add Subscription`, searching channels, and clicking `Subscribe`.
@@ -119,7 +118,7 @@ f3) User can search YouTube from `/search` and get transient result suggestions 
 f4) User selects `Generate Blueprint` on a result to generate and save directly into `My Feed`.
 f5) User can subscribe to a result’s channel from the same search card.
 f6) On subscribe/reactivate, user gets one subscription notice card and future uploads ingest automatically into `My Feed`.
-f7) From `My Feed`, user clicks footer `Post to Channel` to submit a blueprint to channels (candidate second-step flow).
+f7) Auto-channel pipeline publishes eligible items automatically and labels My Feed cards with posted channel outcomes.
 f8) User scans, remixes, and adds insights.
 f9) Eligible items are promoted to channel feeds after gates.
 f10) Community votes/comments to surface higher-value items.
@@ -185,9 +184,10 @@ si21) `POST /api/source-subscriptions/refresh-generate` returns `409 JOB_ALREADY
 si22) `POST /api/source-subscriptions/refresh-generate` returns `400 MAX_ITEMS_EXCEEDED` if selected item count exceeds `20`.
 si23) refresh candidate cooldown table is active: `refresh_video_attempts` (tracks failed manual refresh attempts with retry hold window).
 si24) user endpoint: `GET /api/ingestion/jobs/latest-mine?scope=manual_refresh_selection` (restore active manual-refresh status after page reload).
+si25) user endpoint: `POST /api/my-feed/items/:id/auto-publish` (run deterministic auto-channel publish for a saved My Feed blueprint).
 
 ## Next Milestone (Hardening)
-n1) Keep production gate behavior stable with `CHANNEL_GATES_MODE=bypass`.
+n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.
 n2) Iterate YouTube search discovery flow before introducing multi-adapter search.
 n3) Harden ingestion reliability visibility (polling freshness + latest job checks) before adding more subscription features.
 n4) Roll out `SUBSCRIPTION_AUTO_BANNER_MODE=async` in production after channel defaults are seeded.

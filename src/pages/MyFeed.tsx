@@ -35,6 +35,7 @@ import {
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { logMvpEvent } from '@/lib/logEvent';
 import { formatRelativeShort } from '@/lib/timeFormat';
+import { config } from '@/config/runtime';
 
 const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 'active' && channel.isJoinEnabled);
 const CHANNEL_NAME_BY_SLUG = new Map(CHANNELS_CATALOG.map((channel) => [channel.slug, channel.name]));
@@ -45,6 +46,7 @@ export default function MyFeed() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: items, isLoading } = useMyFeed();
+  const autoChannelPipelineEnabled = config.features.autoChannelPipelineV1;
   const [selectedChannels, setSelectedChannels] = useState<Record<string, string>>({});
   const [submissionDialogItemId, setSubmissionDialogItemId] = useState<string | null>(null);
   const [subscriptionDialogItemId, setSubscriptionDialogItemId] = useState<string | null>(null);
@@ -303,7 +305,9 @@ export default function MyFeed() {
               <p className="text-sm font-semibold text-primary uppercase tracking-wide">My Feed</p>
               <h1 className="text-2xl font-semibold mt-1">Your personal content lane</h1>
               <p className="text-sm text-muted-foreground mt-2">
-                New items appear here first. You can post selected blueprints to channels after review.
+                {autoChannelPipelineEnabled
+                  ? 'New items appear here first. Channel publishing runs automatically in the background.'
+                  : 'New items appear here first. You can post selected blueprints to channels after review.'}
               </p>
               {pendingCount > 0 && <p className="text-xs text-amber-600">{pendingCount} item(s) need manual review.</p>}
               {pendingAcceptCount > 0 && <p className="text-xs text-sky-600">{pendingAcceptCount} pending item(s) waiting for Accept.</p>}
@@ -503,11 +507,19 @@ export default function MyFeed() {
                       </div>
                     )}
 
+                    {!isSubscriptionNotice && blueprint && item.lastDecisionCode && item.state !== 'channel_published' && (
+                      <p className="text-xs text-muted-foreground">Reason: {item.lastDecisionCode}</p>
+                    )}
+
                     {!isSubscriptionNotice && (
                       <div className="flex justify-between items-center text-xs text-muted-foreground">
                         <span>
-                          {item.state === 'channel_published' && item.candidate ? (
-                            `Posted to ${getChannelDisplayName(item.candidate.channelSlug)}`
+                          {item.state === 'channel_published' ? (
+                            `Posted to ${getChannelDisplayName(item.candidate?.channelSlug || null)}`
+                          ) : autoChannelPipelineEnabled ? (
+                            item.state === 'my_feed_generating' || item.state === 'candidate_submitted'
+                              ? 'Publishing...'
+                              : 'In My Feed'
                           ) : (
                             <button
                               type="button"
@@ -517,11 +529,11 @@ export default function MyFeed() {
                                 setSubmissionDialogItemId(item.id);
                               }}
                             >
-                              Post to Channel
+                              {item.state === 'channel_rejected' ? 'In My Feed' : 'Post to Channel'}
                             </button>
                           )}
                         </span>
-                        {item.state === 'my_feed_published' ? (
+                        {item.state === 'my_feed_published' || (autoChannelPipelineEnabled && item.state === 'channel_rejected') ? (
                           <Badge variant="secondary">In My Feed</Badge>
                         ) : (
                           <span>{getMyFeedStateLabel(item.state as MyFeedItemState)}</span>
@@ -593,129 +605,131 @@ export default function MyFeed() {
               </DialogContent>
             </Dialog>
 
-            <Dialog open={!!submissionDialogItem} onOpenChange={(open) => {
-              if (!open) setSubmissionDialogItemId(null);
-            }}>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Submit to Channel</DialogTitle>
-                  <DialogDescription>
-                    Choose a channel for this blueprint and submit it for channel review.
-                  </DialogDescription>
-                </DialogHeader>
-                {submissionDialogItem?.blueprint ? (
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium leading-tight">{submissionDialogItem.blueprint.title}</p>
-                    <Select
-                      value={defaultChannelForItem(submissionDialogItem.id, submissionDialogItem.blueprint.tags || [])}
-                      onValueChange={(value) => setSelectedChannels((prev) => ({ ...prev, [submissionDialogItem.id]: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select channel" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CHANNEL_OPTIONS.map((channel) => (
-                          <SelectItem key={channel.slug} value={channel.slug}>
-                            {channel.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {!submissionDialogItem.candidate ? (
-                      <Button
-                        className="w-full"
-                        onClick={() => {
-                          const tags = submissionDialogItem.blueprint?.tags || [];
-                          const selected = defaultChannelForItem(submissionDialogItem.id, tags);
-                          const stepCount = Array.isArray(submissionDialogItem.blueprint?.steps)
-                            ? submissionDialogItem.blueprint.steps.length
-                            : 0;
-                          submitMutation.mutate({
-                            itemId: submissionDialogItem.id,
-                            sourceItemId: submissionDialogItem.source?.id || null,
-                            blueprintId: submissionDialogItem.blueprint.id,
-                            title: submissionDialogItem.blueprint.title,
-                            llmReview: submissionDialogItem.blueprint.llmReview,
-                            tags,
-                            stepCount,
-                            channelSlug: selected,
-                          });
-                        }}
-                        disabled={submitMutation.isPending}
+            {!autoChannelPipelineEnabled && (
+              <Dialog open={!!submissionDialogItem} onOpenChange={(open) => {
+                if (!open) setSubmissionDialogItemId(null);
+              }}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Submit to Channel</DialogTitle>
+                    <DialogDescription>
+                      Choose a channel for this blueprint and submit it for channel review.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {submissionDialogItem?.blueprint ? (
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium leading-tight">{submissionDialogItem.blueprint.title}</p>
+                      <Select
+                        value={defaultChannelForItem(submissionDialogItem.id, submissionDialogItem.blueprint.tags || [])}
+                        onValueChange={(value) => setSelectedChannels((prev) => ({ ...prev, [submissionDialogItem.id]: value }))}
                       >
-                        Submit to Channel
-                      </Button>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="flex gap-2">
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select channel" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CHANNEL_OPTIONS.map((channel) => (
+                            <SelectItem key={channel.slug} value={channel.slug}>
+                              {channel.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {!submissionDialogItem.candidate ? (
+                        <Button
+                          className="w-full"
+                          onClick={() => {
+                            const tags = submissionDialogItem.blueprint?.tags || [];
+                            const selected = defaultChannelForItem(submissionDialogItem.id, tags);
+                            const stepCount = Array.isArray(submissionDialogItem.blueprint?.steps)
+                              ? submissionDialogItem.blueprint.steps.length
+                              : 0;
+                            submitMutation.mutate({
+                              itemId: submissionDialogItem.id,
+                              sourceItemId: submissionDialogItem.source?.id || null,
+                              blueprintId: submissionDialogItem.blueprint.id,
+                              title: submissionDialogItem.blueprint.title,
+                              llmReview: submissionDialogItem.blueprint.llmReview,
+                              tags,
+                              stepCount,
+                              channelSlug: selected,
+                            });
+                          }}
+                          disabled={submitMutation.isPending}
+                        >
+                          Submit to Channel
+                        </Button>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => {
+                                const tags = submissionDialogItem.blueprint?.tags || [];
+                                const selected = defaultChannelForItem(submissionDialogItem.id, tags);
+                                const stepCount = Array.isArray(submissionDialogItem.blueprint?.steps)
+                                  ? submissionDialogItem.blueprint.steps.length
+                                  : 0;
+                                submitMutation.mutate({
+                                  itemId: submissionDialogItem.id,
+                                  sourceItemId: submissionDialogItem.source?.id || null,
+                                  blueprintId: submissionDialogItem.blueprint.id,
+                                  title: submissionDialogItem.blueprint.title,
+                                  llmReview: submissionDialogItem.blueprint.llmReview,
+                                  tags,
+                                  stepCount,
+                                  channelSlug: selected,
+                                });
+                              }}
+                              disabled={submitMutation.isPending}
+                            >
+                              Re-evaluate
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="flex-1"
+                              onClick={() =>
+                                publishMutation.mutate({
+                                  itemId: submissionDialogItem.id,
+                                  sourceItemId: submissionDialogItem.source?.id || null,
+                                  candidateId: submissionDialogItem.candidate!.id,
+                                  blueprintId: submissionDialogItem.blueprint!.id,
+                                  channelSlug: submissionDialogItem.candidate?.channelSlug || defaultChannelForItem(submissionDialogItem.id, submissionDialogItem.blueprint?.tags || []),
+                                })
+                              }
+                              disabled={publishMutation.isPending || !(submissionDialogItem.candidate?.status === 'passed' || submissionDialogItem.state === 'candidate_pending_manual_review')}
+                            >
+                              Publish
+                            </Button>
+                          </div>
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="flex-1"
-                            onClick={() => {
-                              const tags = submissionDialogItem.blueprint?.tags || [];
-                              const selected = defaultChannelForItem(submissionDialogItem.id, tags);
-                              const stepCount = Array.isArray(submissionDialogItem.blueprint?.steps)
-                                ? submissionDialogItem.blueprint.steps.length
-                                : 0;
-                              submitMutation.mutate({
-                                itemId: submissionDialogItem.id,
-                                sourceItemId: submissionDialogItem.source?.id || null,
-                                blueprintId: submissionDialogItem.blueprint.id,
-                                title: submissionDialogItem.blueprint.title,
-                                llmReview: submissionDialogItem.blueprint.llmReview,
-                                tags,
-                                stepCount,
-                                channelSlug: selected,
-                              });
-                            }}
-                            disabled={submitMutation.isPending}
-                          >
-                            Re-evaluate
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="flex-1"
+                            variant="ghost"
+                            className="w-full"
                             onClick={() =>
-                              publishMutation.mutate({
+                              rejectMutation.mutate({
                                 itemId: submissionDialogItem.id,
                                 sourceItemId: submissionDialogItem.source?.id || null,
                                 candidateId: submissionDialogItem.candidate!.id,
+                                reasonCode: 'MANUAL_REJECT',
                                 blueprintId: submissionDialogItem.blueprint!.id,
                                 channelSlug: submissionDialogItem.candidate?.channelSlug || defaultChannelForItem(submissionDialogItem.id, submissionDialogItem.blueprint?.tags || []),
                               })
                             }
-                            disabled={publishMutation.isPending || !(submissionDialogItem.candidate?.status === 'passed' || submissionDialogItem.state === 'candidate_pending_manual_review')}
+                            disabled={rejectMutation.isPending}
                           >
-                            Publish
+                            Reject
                           </Button>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="w-full"
-                          onClick={() =>
-                            rejectMutation.mutate({
-                              itemId: submissionDialogItem.id,
-                              sourceItemId: submissionDialogItem.source?.id || null,
-                              candidateId: submissionDialogItem.candidate!.id,
-                              reasonCode: 'MANUAL_REJECT',
-                              blueprintId: submissionDialogItem.blueprint!.id,
-                              channelSlug: submissionDialogItem.candidate?.channelSlug || defaultChannelForItem(submissionDialogItem.id, submissionDialogItem.blueprint?.tags || []),
-                            })
-                          }
-                          disabled={rejectMutation.isPending}
-                        >
-                          Reject
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No blueprint available for submission.</p>
-                )}
-              </DialogContent>
-            </Dialog>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No blueprint available for submission.</p>
+                  )}
+                </DialogContent>
+              </Dialog>
+            )}
 
             <AlertDialog
               open={!!unsubscribeDialogItem}

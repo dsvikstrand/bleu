@@ -10,19 +10,21 @@
 - YT2BP remains the ingestion/generation entrypoint only.
 - Personal-first routing is now expected:
   - generated draft is saved to `My Feed` (`user_feed_items.state = my_feed_published`).
-  - channel visibility is a second-step candidate flow, not direct YT2BP publish.
+  - channel visibility is handled by auto-channel pipeline when enabled.
   - `/youtube` runs core generation first and executes optional review/banner asynchronously after core success.
   - `Save to My Feed` is non-blocking while optional review/banner complete and attach later.
   - banner prompts are visual-only by policy (no readable text/typography/logos/watermarks).
 - Gate runtime mode:
-  - `CHANNEL_GATES_MODE=bypass` is the current production default (`EVAL_BYPASSED`).
-  - `shadow` and `enforce` modes are non-prod hardening modes.
-- Candidate lifecycle endpoints (same backend service):
+  - legacy manual candidate flow uses `CHANNEL_GATES_MODE` (`bypass|shadow|enforce`).
+  - auto-channel flow uses `AUTO_CHANNEL_GATE_MODE` (`enforce` default recommendation).
+- Legacy candidate lifecycle endpoints (same backend service, rollback path):
   - `POST /api/channel-candidates`
   - `GET /api/channel-candidates/:id`
   - `POST /api/channel-candidates/:id/evaluate`
   - `POST /api/channel-candidates/:id/publish`
   - `POST /api/channel-candidates/:id/reject`
+- Auto-channel endpoint:
+  - `POST /api/my-feed/items/:id/auto-publish`
 
 ## Health checks
 - Local service health:
@@ -81,6 +83,10 @@ Required runtime variables:
 - `YT2BP_IP_LIMIT_PER_HOUR`
 - `YT2BP_CORE_TIMEOUT_MS` (default `120000`)
 - `CHANNEL_GATES_MODE` (`bypass` | `shadow` | `enforce`)
+- `AUTO_CHANNEL_PIPELINE_ENABLED` (`true|false`)
+- `AUTO_CHANNEL_DEFAULT_SLUG` (default `general`)
+- `AUTO_CHANNEL_GATE_MODE` (`bypass|shadow|enforce`)
+- `AUTO_CHANNEL_LEGACY_MANUAL_FLOW_ENABLED` (`true` default)
 - `SUPABASE_SERVICE_ROLE_KEY` (required for cron ingestion trigger path)
 - `INGESTION_SERVICE_TOKEN` (shared secret for `/api/ingestion/jobs/trigger`)
 - `ENABLE_DEBUG_ENDPOINTS` (`false` by default; must be `true` to enable debug simulation endpoint)
@@ -107,6 +113,10 @@ Safe defaults:
 - `YT2BP_IP_LIMIT_PER_HOUR=30`
 - `YT2BP_CORE_TIMEOUT_MS=120000`
 - `CHANNEL_GATES_MODE=bypass`
+- `AUTO_CHANNEL_PIPELINE_ENABLED=false`
+- `AUTO_CHANNEL_DEFAULT_SLUG=general`
+- `AUTO_CHANNEL_GATE_MODE=enforce`
+- `AUTO_CHANNEL_LEGACY_MANUAL_FLOW_ENABLED=true`
 - `ENABLE_DEBUG_ENDPOINTS=false`
 - `INGESTION_MAX_PER_SUBSCRIPTION=5`
 - `REFRESH_SCAN_COOLDOWN_MS=30000`

@@ -14,7 +14,7 @@
 - 2026-02-13 note: Channels IA/routing phase (`/channels`, `/b/:channelSlug`, curated slug guards, `/tags` redirect) is UI-only and does not alter this contract.
 - 2026-02-13 note: Channel-scoped `+ Create` flow routes to `/youtube?channel=<slug>&intent=post` and blocks public publish unless channel is valid and joined; this is UI/product behavior and does not alter this endpoint contract.
 - 2026-02-13 note: App-wide wall-to-wall layout migration (Run 1) updates YouTube page framing to a minimal document-like layout; UI-only and does not alter this contract.
-- 2026-02-17 note: dual-feed rollout moved post-generation behavior to personal-first (`/my-feed`) with channel submission as a separate candidate lifecycle; this does not alter the YT2BP request/response envelope.
+- 2026-02-17 note: dual-feed rollout moved post-generation behavior to personal-first (`/my-feed`); this does not alter the YT2BP request/response envelope.
 - 2026-02-17 note: optional AI review/banner are now executed as separate post-generation steps in UI (`/api/analyze-blueprint` and `/api/generate-banner`) so core YT2BP latency is lower; this does not alter the YT2BP envelope.
 - 2026-02-18 note: subscription ingestion (`/api/source-subscriptions*`, `/api/ingestion/jobs/trigger`) and pending-card accept/skip (`/api/my-feed/items/:id/accept|skip`) are separate flows and do not alter this endpoint envelope.
 - 2026-02-18 note: subscription create path now uses auto-only behavior (incoming `mode` is compatibility-only and treated as `auto`); first subscribe sets checkpoint and inserts a `subscription_notice` feed card. This remains outside this endpoint envelope.
@@ -35,6 +35,7 @@
 - 2026-02-18 note: subscription manual-refresh endpoints (`/api/source-subscriptions/refresh-scan`, `/api/source-subscriptions/refresh-generate`) are additive and do not alter the YT2BP endpoint envelope.
 - 2026-02-18 note: refresh hardening (`GET /api/ingestion/jobs/:id`, refresh endpoint rate caps, `MAX_ITEMS_EXCEEDED`, `JOB_ALREADY_RUNNING`, failed-video cooldown via `refresh_video_attempts`) is additive and does not alter the YT2BP endpoint envelope.
 - 2026-02-18 note: refresh hardening follow-up (`GET /api/ingestion/jobs/latest-mine`, manual-refresh checkpoint-forward updates, cooldown-filter visibility) is additive and does not alter the YT2BP endpoint envelope.
+- 2026-02-18 note: auto-channel publish endpoint (`POST /api/my-feed/items/:id/auto-publish`) is additive and does not alter the YT2BP endpoint envelope.
 
 ## Request
 ```json
@@ -109,8 +110,8 @@
 
 ## Integration contract (bleuV1)
 - This endpoint is responsible for source extraction + draft generation only.
-- Persisting personal feed state and channel candidate promotion happens in separate app/backend flows.
-- Channel publish/reject is intentionally out of this endpoint scope.
+- Persisting personal feed state and auto-channel publication happens in separate app/backend flows.
+- Channel publish/reject logic is intentionally out of this endpoint scope.
 - Subscription sync and manual pending-card acceptance are intentionally outside this endpoint contract.
 - Ingestion health polling (`/api/ingestion/jobs/latest`) is intentionally outside this endpoint contract.
 - YouTube query discovery (`/api/youtube-search`) is intentionally outside this endpoint contract.
@@ -122,6 +123,7 @@
 - Manual refresh owner-status endpoint (`GET /api/ingestion/jobs/:id`) is intentionally outside this endpoint contract.
 - Manual refresh latest-user-status endpoint (`GET /api/ingestion/jobs/latest-mine`) is intentionally outside this endpoint contract.
 - Refresh endpoint concurrency/rate/cooldown controls are intentionally outside this endpoint contract.
+- Auto-channel endpoint (`POST /api/my-feed/items/:id/auto-publish`) is intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: env-controlled via `YT2BP_CORE_TIMEOUT_MS` (default `120s`).

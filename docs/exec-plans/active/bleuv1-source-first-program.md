@@ -17,7 +17,7 @@ Ship a coherent MVP that users can explain in one sentence:
 ## 3) Direction Lock
 1. Source-first content supply (YouTube adapter first).
 2. Personal-first `My Feed` as unfiltered lane.
-3. Channel feeds are shared, gated lanes.
+3. Channel feeds are shared, auto-published lanes with deterministic checks.
 4. User contribution is remix/insight on imported blueprints (not standalone free-form posting in MVP).
 
 ## 4) Scope
@@ -34,17 +34,17 @@ Ship a coherent MVP that users can explain in one sentence:
 - full moderation suite
 
 ## 5) Core Lifecycle Contract
-`source_item -> imported_blueprint -> my_feed -> channel_candidate -> channel_published|channel_rejected`
+`source_item -> imported_blueprint -> my_feed -> auto_channel_evaluation -> channel_published|channel_rejected`
 
 Rules:
 - `My Feed` is allowed to be broader/noisier.
-- Channel feeds must pass channel-fit + quality + safety + PII gates.
+- Channel feeds must pass channel-fit + quality + safety + PII checks.
 - Gate failures stay personal-only.
-- Current runtime default is `CHANNEL_GATES_MODE=bypass`; enforced routing is deferred.
+- Auto-channel assignment uses deterministic `general` in MVP and is designed for future LLM replacement.
 
 ## 6) Execution Defaults (Lock)
-1. Channel promotion default mode: `selected` (manual approve path).
-2. Low-confidence channel candidates: block from channel, keep in My Feed.
+1. Channel promotion default mode: deterministic auto-publish after checks.
+2. Non-pass outcomes: block from channel, keep in My Feed.
 3. Stop-and-inspect checkpoints: maximum 3 per milestone.
 4. Orchestration control plane default: CLI-first (`codex exec`) + GitHub Actions, with VS Code for authoring/review.
 
@@ -73,23 +73,22 @@ Rules:
 ## 10) Decision Log
 - D-001: Codename for direction is `bleuV1`.
 - D-002: MVP adapter scope starts with YouTube only.
-- D-003: Channel publish is a gated second step.
+- D-003: Channel publish is deterministic auto pipeline in MVP (`general` assignment, swappable later).
 - D-004: User value-add in MVP is insight/remix on imported blueprints.
 
 ## 11) Implementation Snapshot (2026-02-17)
 - Personal lane is now first-class:
   - `/my-feed` route exists and is gated by auth.
   - YouTube pulls land in `My Feed` first (`my_feed_published`), not directly in public channels.
-- Shared lane is explicit second step:
-  - Candidate submit path exists via `POST /api/channel-candidates`.
-  - Candidate status lookup exists via `GET /api/channel-candidates/:id`.
+- Shared lane is now automatic after My Feed write:
+  - Auto publish path exists via `POST /api/my-feed/items/:id/auto-publish`.
+  - Legacy candidate endpoints remain for rollback behind env flag.
 - Gate flow is wired with all-gates-run aggregation:
-  - evaluate path: `POST /api/channel-candidates/:id/evaluate`
-  - outcomes route to `candidate_submitted | candidate_pending_manual_review | channel_rejected`.
-  - terminal moderation actions exist: publish/reject endpoints.
+  - auto path enforces deterministic checks via `AUTO_CHANNEL_GATE_MODE` (recommended `enforce`)
+  - non-pass outcomes route directly to `channel_rejected` in My Feed state.
 - Gate runtime state:
-  - production default is bypass (`EVAL_BYPASSED`) while hardening completes.
-  - gate-mode framework target: `bypass | shadow | enforce` with `bypass` as default.
+  - legacy manual path default remains bypass (`CHANNEL_GATES_MODE=bypass`) for rollback safety.
+  - auto path is independently configurable.
 - Data foundation is additive and adapter-ready:
   - new tables: `source_items`, `user_source_subscriptions`, `user_feed_items`, `channel_candidates`, `channel_gate_decisions`.
   - adapter abstraction introduced (`BaseAdapter`, `YouTubeAdapter`, registry), with YouTube as MVP implementation.
@@ -138,12 +137,12 @@ Rules:
   - `Add Subscription` popup is the only in-UI subscribe entrypoint (manual fallback input removed).
 - My Feed publishing UX refresh (2026-02-18):
   - blueprint items now render in a channel-feed-like card style for visual consistency.
-  - posting entry moved to footer status action: `Post to Channel` (when not submitted) and `Candidate: <status>` (after submit).
+  - posting controls are hidden in auto-channel mode and replaced by read-only footer status labels.
   - top-right post button removed; top-right now shows relative time only.
   - removed nested inner-card shell so blueprint rows render as a single visual card surface.
   - blueprint rows now open detail on card click (explicit `Open blueprint` link removed).
   - My Feed header now includes both `Add Subscription` and `Manage subscriptions` actions.
-  - footer status text now shows `Posted to <Channel>` only once channel-published; non-published/rejected rows keep `Post to Channel`.
+  - footer status text now shows `Posted to <Channel>` once channel-published; held items remain labeled `In My Feed` with reason code.
   - Search->YouTube generate handoff now passes channel context so My Feed subtitle row shows channel name (instead of title duplication).
   - source subtitle mapping now includes metadata fallback (`source_channel_title` from metadata) when base source row column is missing.
 - Subscription notice UX refresh (2026-02-18):
@@ -168,6 +167,6 @@ Rules:
 3. Design future “sync specific videos” flow before exposing sync controls in UI.
 4. Seed per-channel default banners before enabling async mode in production.
 5. Add richer ingestion observability dashboards from `ingestion_jobs` + `mvp_events`.
-6. Keep gate behavior in `bypass` until dedicated enforcement cycle approval.
+6. Keep legacy manual gate behavior in `bypass` until dedicated enforcement cycle approval.
 7. Add pagination and quota guardrails iteration for `/api/youtube-search` based on production usage.
 8. Add optional user-facing toggle to include cooldown-suppressed refresh failures in scan results (post-MVP).

@@ -464,3 +464,34 @@ export async function rejectCandidate(input: {
     return rejectCandidateFallback(input);
   }
 }
+
+export async function autoPublishMyFeedItem(input: {
+  userFeedItemId: string;
+  sourceTag?: string;
+}) {
+  const apiBase = getApiBase();
+  if (!apiBase) {
+    throw new Error('Backend API is not configured.');
+  }
+
+  const response = await apiRequest<{
+    user_feed_item_id: string;
+    candidate_id: string;
+    channel_slug: string;
+    decision: 'published' | 'held';
+    reason_code: string;
+  }>(`/my-feed/items/${input.userFeedItemId}/auto-publish`, {
+    method: 'POST',
+    body: JSON.stringify({
+      source_tag: input.sourceTag || 'manual_save',
+    }),
+  });
+
+  return {
+    userFeedItemId: response.data.user_feed_item_id,
+    candidateId: response.data.candidate_id,
+    channelSlug: response.data.channel_slug,
+    decision: response.data.decision,
+    reasonCode: response.data.reason_code,
+  };
+}

@@ -28,8 +28,8 @@ a15) [have] 2026-02-13 UI note: Project 3 Step 1 join-state wiring (Explore/Chan
 a16) [have] 2026-02-13 UI note: Channels IA routing foundation (`/channels`, `/b/:channelSlug`, `/tags` deprecation redirect, curated catalog guards) is frontend-only and does not change YT2BP API/runtime contract.
 a17) [have] 2026-02-13 UI note: Channel-scoped `+ Create` flow gates public publishing behind joined channels and routes to `/youtube?channel=<slug>&intent=post`; frontend-only and does not change YT2BP API/runtime contract.
 a18) [have] 2026-02-13 UI note: App-wide wall-to-wall layout migration (Run 1) updates the YouTube page framing to a minimal document-like layout (no ambient blobs/gradients, tighter gutters); frontend-only and does not change YT2BP API/runtime contract.
-a19) [have] 2026-02-17 flow update: generated YouTube drafts are saved to `My Feed` first (`my_feed_published`), then optionally promoted via channel candidate flow.
-a20) [have] 2026-02-17 backend update: channel-candidate lifecycle endpoints and gate decision persistence are available for second-step channel publication.
+a19) [have] 2026-02-17 flow update: generated YouTube drafts are saved to `My Feed` first (`my_feed_published`).
+a20) [have] 2026-02-18 backend update: auto-channel pipeline can publish saved My Feed items through deterministic channel assignment (`general`) and deterministic gate checks.
 a21) [have] 2026-02-17 UX update: optional AI review and banner run as separate post-generation steps (core draft completes first).
 a22) [have] 2026-02-17 gating note: production channel-gate runtime is currently bypass-first (`EVAL_BYPASSED`) pending enforcement rollout.
 a23) [have] 2026-02-18 default update: `/youtube` keeps `Generate AI review` and `Generate banner` toggles on by default for UX, but core endpoint calls remain forced-off (`generate_review=false`, `generate_banner=false`) to keep core generation fast.
@@ -39,6 +39,7 @@ a26) [have] 2026-02-18 search handoff now also carries channel context (`channel
 a27) [have] 2026-02-18 save-path hardening now preserves and reuses channel-title metadata on source upsert, preventing subtitle fallback to duplicated post title.
 a28) [have] 2026-02-18 save-path update: optional review/banner now continue asynchronously after core generation and can attach to a saved blueprint without blocking `Save to My Feed`.
 a29) [have] 2026-02-18 backend timeout update: core endpoint timeout is now configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
+a30) [have] 2026-02-18 save-path update: `POST /api/my-feed/items/:id/auto-publish` is used to auto-publish URL/search saves after `Save to My Feed`.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract
@@ -161,7 +162,7 @@ d2b) [have] Toggle behavior is now respected as async post-step controls in UI; 
 d3) [have] No source customization and no edit-mode branch in v1.
 d4) [have] Same-page preview is implemented.
 d5) [have] Logged-out users can preview and are prompted to log in to publish.
-d6) [have] Channel posting is now a second-step candidate submission from `My Feed` (idempotent submit + gated evaluation).
+d6) [have] Channel posting in default UX is now auto-triggered after save via deterministic auto-channel pipeline (legacy manual candidate endpoints remain rollback-only).
 d7) [have] Optional review/banner are now independent post-steps and no longer block core draft completion.
 
 ### Step 2 - Build the Core Pipeline (URL -> Blueprint)

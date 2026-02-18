@@ -6,7 +6,7 @@
 - Product scope:
   - Source-first blueprint app.
   - Personal unfiltered feed (`My Feed`) as primary lane.
-  - Channel feeds as shared lanes with gated promotion.
+  - Channel feeds as shared lanes with deterministic auto-channel publishing.
 - Current adapter baseline:
   - YouTube adapter is production-ready for direct URL generation and subscription ingestion.
 - Non-goals in current MVP:
@@ -23,7 +23,7 @@
     - banner prompt path is constrained to visual-only output (no readable text/typography/logos/watermarks).
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
-    - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status actions (`Post to Channel` until published, then `Posted to <Channel>`).
+    - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status labels (`Posted to <Channel>`, `Publishing...`, or `In My Feed` with reason).
     - `My Feed` subscription notices render avatar and optional banner background; card click opens a details popup with confirm-gated `Unsubscribe`.
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
@@ -49,6 +49,7 @@
     - `GET /api/auto-banner/jobs/latest` (service auth, queue snapshot)
     - `POST /api/debug/subscriptions/:id/simulate-new-uploads` (debug-only, service auth + `ENABLE_DEBUG_ENDPOINTS=true`; middleware allows service-token access without bearer user auth)
     - `POST /api/my-feed/items/:id/accept|skip`
+    - `POST /api/my-feed/items/:id/auto-publish`
   - Adapter abstraction in `server/adapters/*` (`BaseAdapter`, `YouTubeAdapter`, registry).
   - Subscription resolver in `server/services/youtubeSubscriptions.ts` supports `browseId` fallback extraction for YouTube handle pages.
   - Candidate gate pipeline in `server/gates/*` (`Gate` contract + ordered all-gates-run execution).
@@ -98,11 +99,11 @@
 5. Channel candidate evaluation (all-gates-run default, aggregated decision).
 6. Gate decision:
    - pass -> publish to channel feed
-   - warn in selected mode (`channel_fit`/`quality`) -> `candidate_pending_manual_review`
-   - fail/block -> remain personal-only
+   - warn/block -> remain personal-only
 
 Current production behavior note:
-- Gate contract exists, but evaluation outcome is currently bypassed in production mode (`EVAL_BYPASSED`) until hardening rollout completes.
+- Legacy manual candidate flow remains bypass-first by default (`CHANNEL_GATES_MODE=bypass`) for rollback compatibility.
+- Auto-channel flow can enforce deterministic checks independently via `AUTO_CHANNEL_GATE_MODE`.
 
 ## 4) Contracts And Policy Surfaces
 - API contract (adapter v0):
@@ -133,13 +134,13 @@ Current production behavior note:
 - Provenance invariants:
   - Imported blueprints retain source provenance metadata.
 - Distribution invariants:
-  - Channel publish is never unconditional; it is a gated second-stage action.
+  - Channel publish is never unconditional; automatic publishing is blocked on deterministic gate pass.
 - Compatibility invariants:
   - Existing public blueprint feed and channel routes remain functional while `My Feed` is introduced.
   - Legacy library/inventory surfaces remain compatibility-only (non-core) until post-MVP cleanup.
   - Legacy no-blueprint pending/skipped rows are filtered out in `My Feed` rendering.
   - Legacy pending-card endpoints (`/api/my-feed/items/:id/accept|skip`) remain available for compatibility/operator flows.
-  - Gate runtime mode remains `CHANNEL_GATES_MODE=bypass` in production for this cycle.
+  - Legacy manual candidate endpoints remain available behind `AUTO_CHANNEL_LEGACY_MANUAL_FLOW_ENABLED`.
 
 ## 6) Failure Modes And Recovery
 - Frequent classes (adapter/generation):

@@ -14,7 +14,7 @@ Execution mode:
 1. Do not start a new step until the current step is validated.
 2. Every step must define clear acceptance evidence.
 3. If validation fails, fix in the same step before moving on.
-4. Keep identity stable: source-first, My Feed first, gated channel publish second.
+4. Keep identity stable: source-first, My Feed first, deterministic auto-channel publish with rollback-safe legacy path.
 
 ## Step Tracker
 1. [have] Step 0 - Contract lock and naming alignment
@@ -42,6 +42,7 @@ Execution mode:
 23. [have] Step 22 - Subscription manual refresh popup + async selected generation
 24. [have] Step 23 - Refresh/poll gotcha hardening (caps + cooldown + job status)
 25. [have] Step 24 - Refresh checkpoint + reload-resume hardening
+26. [have] Step 25 - Auto-channel pipeline cutover (general-first deterministic publish)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -594,6 +595,36 @@ Completion evidence (2026-02-18)
 - Added owner-scoped endpoint `GET /api/ingestion/jobs/latest-mine` for refresh-status restore on reload.
 - Updated `src/lib/subscriptionsApi.ts` with `getLatestMyIngestionJob`.
 - Updated `src/pages/Subscriptions.tsx` to hydrate running job status and show `cooldown_filtered` scan count.
+
+### Step 25 - Auto-channel pipeline cutover (general-first deterministic publish)
+Scope
+- shift channel publishing from manual My Feed action to deterministic auto-channel pipeline
+- run auto-channel publish for all source paths (subscription auto-ingest, manual refresh generate, pending accept, URL/search save path)
+- remove manual `Post to Channel` controls from default My Feed UI while retaining legacy endpoints behind a rollback flag
+
+Definition of done
+- backend orchestrator auto-assigns channel (`general`) and runs deterministic gates
+- pass outcomes publish directly to channel feed and set My Feed state `channel_published`
+- non-pass outcomes stay in My Feed with `channel_rejected` + reason code
+- user endpoint `POST /api/my-feed/items/:id/auto-publish` is available for saved URL/search items
+- My Feed shows read-only status labels instead of manual submit controls when auto pipeline feature flag is enabled
+
+Evaluation
+- manual smoke: URL save path auto-publishes and shows `Posted to ...` in My Feed
+- manual smoke: search generate/save follows same auto-publish behavior
+- manual smoke: subscription auto-ingest and manual refresh auto-publish without user channel action
+- manual smoke: failed gate outcome stays visible in My Feed and is absent from Wall
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+Completion evidence (2026-02-18)
+- Added `server/services/autoChannelPipeline.ts` deterministic orchestrator and gate-evaluation bridge.
+- Updated `server/gates/index.ts` to allow mode override for auto-channel enforcement.
+- Updated `server/index.ts` with auto-channel env controls, source-path integrations, `POST /api/my-feed/items/:id/auto-publish`, and legacy-manual rollback gate.
+- Updated `src/pages/YouTubeToBlueprint.tsx` to trigger auto-publish after save.
+- Updated `src/pages/MyFeed.tsx` to default to read-only auto-channel statuses in UI.
 
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary

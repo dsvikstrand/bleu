@@ -12,6 +12,7 @@ import { getTranscriptForVideo } from './transcript/getTranscript';
 import { TranscriptProviderError } from './transcript/types';
 import { getAdapterForUrl } from './adapters/registry';
 import { evaluateCandidateForChannel } from './gates';
+import type { GateMode } from './gates/types';
 import {
   fetchYouTubeFeed,
   isNewerThanCheckpoint,
@@ -37,6 +38,7 @@ import {
   type AutoBannerMode,
   type BannerEffectiveSource,
 } from './services/autoBannerPolicy';
+import { runAutoChannelPipeline } from './services/autoChannelPipeline';
 import type {
   BlueprintAnalysisRequest,
   BlueprintGenerationRequest,
@@ -99,6 +101,12 @@ const autoBannerStaleRunningMs = clampInt(process.env.AUTO_BANNER_STALE_RUNNING_
 const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
 const debugEndpointsEnabled = debugEndpointsEnabledRaw === 'true' || debugEndpointsEnabledRaw === '1' || debugEndpointsEnabledRaw === 'on';
 const youtubeDataApiKey = String(process.env.YOUTUBE_DATA_API_KEY || '').trim();
+const autoChannelPipelineEnabledRaw = String(process.env.AUTO_CHANNEL_PIPELINE_ENABLED || 'false').trim().toLowerCase();
+const autoChannelPipelineEnabled = autoChannelPipelineEnabledRaw === 'true' || autoChannelPipelineEnabledRaw === '1' || autoChannelPipelineEnabledRaw === 'on';
+const autoChannelDefaultSlug = String(process.env.AUTO_CHANNEL_DEFAULT_SLUG || 'general').trim().toLowerCase() || 'general';
+const autoChannelLegacyManualFlowEnabledRaw = String(process.env.AUTO_CHANNEL_LEGACY_MANUAL_FLOW_ENABLED || 'true').trim().toLowerCase();
+const autoChannelLegacyManualFlowEnabled = !(autoChannelLegacyManualFlowEnabledRaw === 'false' || autoChannelLegacyManualFlowEnabledRaw === '0' || autoChannelLegacyManualFlowEnabledRaw === 'off');
+const autoChannelGateMode = normalizeGateMode(process.env.AUTO_CHANNEL_GATE_MODE, 'enforce');
 
 if (!youtubeDataApiKey) {
   console.warn('[youtube-search] YOUTUBE_DATA_API_KEY is not configured. /api/youtube-search and /api/youtube-channel-search will return SEARCH_DISABLED.');
@@ -106,6 +114,14 @@ if (!youtubeDataApiKey) {
 
 if (autoBannerMode !== 'off' && !String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) {
   console.warn('[auto-banner] SUBSCRIPTION_AUTO_BANNER_MODE is enabled but SUPABASE_SERVICE_ROLE_KEY is missing. Worker and uploads will be disabled.');
+}
+
+function normalizeGateMode(raw: unknown, fallback: GateMode): GateMode {
+  const normalized = String(raw || '').trim().toLowerCase();
+  if (normalized === 'bypass') return 'bypass';
+  if (normalized === 'shadow') return 'shadow';
+  if (normalized === 'enforce') return 'enforce';
+  return fallback;
 }
 
 function getRetryAfterSeconds(req: express.Request) {
@@ -1196,6 +1212,62 @@ function isServiceRequestAuthorized(req: express.Request) {
   const fromHeader = String(req.header('x-service-token') || '').trim();
   const fromBearer = String(req.header('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
   return fromHeader === ingestionServiceToken || fromBearer === ingestionServiceToken;
+}
+
+function rejectLegacyManualFlowIfDisabled(res: express.Response) {
+  if (autoChannelLegacyManualFlowEnabled) return false;
+  res.status(404).json({
+    ok: false,
+    error_code: 'LEGACY_FLOW_DISABLED',
+    message: 'Manual channel candidate flow is disabled.',
+    data: null,
+  });
+  return true;
+}
+
+async function runAutoChannelForFeedItem(input: {
+  db: ReturnType<typeof createClient>;
+  userId: string;
+  userFeedItemId: string;
+  blueprintId: string;
+  sourceItemId: string | null;
+  sourceTag: string;
+}) {
+  if (!autoChannelPipelineEnabled) return null;
+
+  console.log('[auto_channel_started]', JSON.stringify({
+    user_feed_item_id: input.userFeedItemId,
+    blueprint_id: input.blueprintId,
+    source_item_id: input.sourceItemId,
+    source_tag: input.sourceTag,
+    channel_default_slug: autoChannelDefaultSlug,
+    gate_mode: autoChannelGateMode,
+  }));
+
+  const result = await runAutoChannelPipeline({
+    db: input.db,
+    userId: input.userId,
+    userFeedItemId: input.userFeedItemId,
+    blueprintId: input.blueprintId,
+    defaultChannelSlug: autoChannelDefaultSlug,
+    gateMode: autoChannelGateMode,
+    sourceTag: input.sourceTag,
+  });
+
+  const logTag = result.decision === 'published' ? '[auto_channel_published]' : '[auto_channel_held]';
+  console.log(logTag, JSON.stringify({
+    user_feed_item_id: result.userFeedItemId,
+    blueprint_id: result.blueprintId,
+    candidate_id: result.candidateId,
+    channel_slug: result.channelSlug,
+    reason_code: result.reasonCode,
+    aggregate: result.aggregate,
+    gate_mode: result.gateMode,
+    idempotent: result.idempotent,
+    source_tag: input.sourceTag,
+  }));
+
+  return result;
 }
 
 function toTagSlug(raw: string) {
@@ -2356,6 +2428,29 @@ async function processManualRefreshGenerateJob(input: {
       });
       if (insertedItem) inserted += 1;
       else skipped += 1;
+
+      if (insertedItem) {
+        try {
+          await runAutoChannelForFeedItem({
+            db,
+            userId: input.userId,
+            userFeedItemId: insertedItem.id,
+            blueprintId: generated.blueprintId,
+            sourceItemId: source.id,
+            sourceTag: 'manual_refresh_generate',
+          });
+        } catch (autoChannelError) {
+          console.log('[auto_channel_pipeline_failed]', JSON.stringify({
+            user_id: input.userId,
+            user_feed_item_id: insertedItem.id,
+            blueprint_id: generated.blueprintId,
+            source_item_id: source.id,
+            source_tag: 'manual_refresh_generate',
+            error: autoChannelError instanceof Error ? autoChannelError.message : String(autoChannelError),
+          }));
+        }
+      }
+
       recordCheckpointCandidate(item);
       await clearRefreshVideoFailureCooldown(db, {
         userId: input.userId,
@@ -2535,6 +2630,29 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
     });
     if (insertedItem) inserted += 1;
     else skipped += 1;
+
+    if (insertedItem) {
+      try {
+        await runAutoChannelForFeedItem({
+          db,
+          userId: subscription.user_id,
+          userFeedItemId: insertedItem.id,
+          blueprintId: generated.blueprintId,
+          sourceItemId: source.id,
+          sourceTag: 'subscription_auto_ingest',
+        });
+      } catch (autoChannelError) {
+        console.log('[auto_channel_pipeline_failed]', JSON.stringify({
+          user_id: subscription.user_id,
+          subscription_id: subscription.id,
+          user_feed_item_id: insertedItem.id,
+          blueprint_id: generated.blueprintId,
+          source_item_id: source.id,
+          source_tag: 'subscription_auto_ingest',
+          error: autoChannelError instanceof Error ? autoChannelError.message : String(autoChannelError),
+        }));
+      }
+    }
 
     console.log('[subscription_auto_ingested]', JSON.stringify({
       subscription_id: subscription.id,
@@ -3662,6 +3780,32 @@ app.post('/api/my-feed/items/:id/accept', async (req, res) => {
       last_decision_code: null,
     }).eq('id', feedItem.id).eq('user_id', userId);
 
+    let responseState: string = 'my_feed_published';
+    let responseReasonCode: string | null = null;
+    try {
+      const autoResult = await runAutoChannelForFeedItem({
+        db,
+        userId,
+        userFeedItemId: feedItem.id,
+        blueprintId: generated.blueprintId,
+        sourceItemId: sourceRow.id,
+        sourceTag: 'subscription_accept',
+      });
+      if (autoResult) {
+        responseState = autoResult.decision === 'published' ? 'channel_published' : 'channel_rejected';
+        responseReasonCode = autoResult.reasonCode;
+      }
+    } catch (autoChannelError) {
+      console.log('[auto_channel_pipeline_failed]', JSON.stringify({
+        user_id: userId,
+        user_feed_item_id: feedItem.id,
+        blueprint_id: generated.blueprintId,
+        source_item_id: sourceRow.id,
+        source_tag: 'subscription_accept',
+        error: autoChannelError instanceof Error ? autoChannelError.message : String(autoChannelError),
+      }));
+    }
+
     console.log('[my_feed_pending_accepted]', JSON.stringify({
       user_feed_item_id: feedItem.id,
       source_item_id: sourceRow.id,
@@ -3676,7 +3820,8 @@ app.post('/api/my-feed/items/:id/accept', async (req, res) => {
       data: {
         user_feed_item_id: feedItem.id,
         blueprint_id: generated.blueprintId,
-        state: 'my_feed_published',
+        state: responseState,
+        reason_code: responseReasonCode,
       },
     });
   } catch (error) {
@@ -3727,7 +3872,90 @@ app.post('/api/my-feed/items/:id/skip', async (req, res) => {
   });
 });
 
+app.post('/api/my-feed/items/:id/auto-publish', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+
+  if (!autoChannelPipelineEnabled) {
+    return res.status(409).json({
+      ok: false,
+      error_code: 'AUTO_CHANNEL_DISABLED',
+      message: 'Auto-channel pipeline is disabled.',
+      data: null,
+    });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const { data: feedItem, error: readError } = await db
+    .from('user_feed_items')
+    .select('id, user_id, source_item_id, blueprint_id')
+    .eq('id', req.params.id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (readError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: readError.message, data: null });
+  if (!feedItem) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Feed item not found', data: null });
+  if (!feedItem.blueprint_id) {
+    return res.status(409).json({
+      ok: false,
+      error_code: 'BLUEPRINT_REQUIRED',
+      message: 'Feed item has no blueprint to auto-publish.',
+      data: null,
+    });
+  }
+
+  const sourceTag = String(req.body?.source_tag || 'manual_save').trim() || 'manual_save';
+
+  try {
+    const result = await runAutoChannelForFeedItem({
+      db,
+      userId,
+      userFeedItemId: feedItem.id,
+      blueprintId: feedItem.blueprint_id,
+      sourceItemId: feedItem.source_item_id || null,
+      sourceTag,
+    });
+
+    if (!result) {
+      return res.status(500).json({
+        ok: false,
+        error_code: 'AUTO_CHANNEL_DISABLED',
+        message: 'Auto-channel pipeline is disabled.',
+        data: null,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'auto publish complete',
+      data: {
+        user_feed_item_id: result.userFeedItemId,
+        candidate_id: result.candidateId,
+        channel_slug: result.channelSlug,
+        decision: result.decision,
+        reason_code: result.reasonCode,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({
+      ok: false,
+      error_code: 'AUTO_CHANNEL_FAILED',
+      message,
+      data: {
+        user_feed_item_id: feedItem.id,
+      },
+    });
+  }
+});
+
 app.post('/api/channel-candidates', async (req, res) => {
+  // Legacy manual candidate flow retained for rollback.
+  if (rejectLegacyManualFlowIfDisabled(res)) return;
+
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
@@ -3769,6 +3997,9 @@ app.post('/api/channel-candidates', async (req, res) => {
 });
 
 app.get('/api/channel-candidates/:id', async (req, res) => {
+  // Legacy manual candidate flow retained for rollback.
+  if (rejectLegacyManualFlowIfDisabled(res)) return;
+
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
@@ -3804,6 +4035,9 @@ app.get('/api/channel-candidates/:id', async (req, res) => {
 });
 
 app.post('/api/channel-candidates/:id/evaluate', async (req, res) => {
+  // Legacy manual candidate flow retained for rollback.
+  if (rejectLegacyManualFlowIfDisabled(res)) return;
+
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
@@ -3909,6 +4143,9 @@ app.post('/api/channel-candidates/:id/evaluate', async (req, res) => {
 });
 
 app.post('/api/channel-candidates/:id/publish', async (req, res) => {
+  // Legacy manual candidate flow retained for rollback.
+  if (rejectLegacyManualFlowIfDisabled(res)) return;
+
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
@@ -3983,6 +4220,9 @@ app.post('/api/channel-candidates/:id/publish', async (req, res) => {
 });
 
 app.post('/api/channel-candidates/:id/reject', async (req, res) => {
+  // Legacy manual candidate flow retained for rollback.
+  if (rejectLegacyManualFlowIfDisabled(res)) return;
+
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });

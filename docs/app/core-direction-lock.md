@@ -3,19 +3,19 @@
 Status: `canonical`
 
 ## One-line promise
-`bleuV1` gives you an automated feed of bite-sized blueprints from the media you follow, with optional community posting.
+`bleuV1` gives you an automated feed of bite-sized blueprints from the media you follow, with automatic channel publishing for eligible items.
 
 ## Locked core (MVP)
 1. Source-first product identity.
 2. YouTube is the only required adapter in MVP.
 3. `My Feed` is the personal default lane.
-4. Channel feed is a second-step publish flow from `My Feed`.
+4. Channel feed is automatically populated from `My Feed` via deterministic auto-channel checks.
 5. Community value is comments/votes/insights on blueprint content.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.
 2. Generate/import blueprint into `My Feed`.
-3. Optionally post selected blueprint to a channel.
+3. System auto-evaluates and posts eligible blueprints to channels.
 4. Engage through community interactions in channel feed.
 
 ## What is not core right now

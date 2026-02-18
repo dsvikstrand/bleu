@@ -9,7 +9,10 @@ const pipeline = new GatePipeline([
   new PiiGate(),
 ]);
 
-function getGateMode(): GateMode {
+function getGateMode(modeOverride?: GateMode): GateMode {
+  if (modeOverride === 'shadow' || modeOverride === 'enforce' || modeOverride === 'bypass') {
+    return modeOverride;
+  }
   const raw = String(process.env.CHANNEL_GATES_MODE || 'bypass').trim().toLowerCase();
   if (raw === 'shadow') return 'shadow';
   if (raw === 'enforce') return 'enforce';
@@ -35,8 +38,11 @@ function buildBypassResult(): CandidateEvaluationResult {
   };
 }
 
-export function evaluateCandidateForChannel(context: CandidateContext): CandidateEvaluationResult {
-  const mode = getGateMode();
+export function evaluateCandidateForChannel(
+  context: CandidateContext,
+  options?: { modeOverride?: GateMode },
+): CandidateEvaluationResult {
+  const mode = getGateMode(options?.modeOverride);
   if (mode === 'bypass') {
     return buildBypassResult();
   }
