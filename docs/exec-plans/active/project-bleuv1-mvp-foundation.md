@@ -93,6 +93,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 19 source-page feed activation adds public `GET /api/source-pages/:platform/:externalId/blueprints` and replaces `/s/:platform/:externalId` placeholder text with deduped Home-style read-only blueprint cards (`latest + load more`).
 - Step 20 source-page Video Library adds auth-only creator backlog listing (`GET /videos`) and async selected generation (`POST /videos/generate`) on `/s/:platform/:externalId` with duplicate skip visibility and job status polling.
 - Step 20 follow-up adds two-tab list filters in Video Library (`Full videos` and `Shorts`), with shorts classified as `<=60s`.
+- Step 20 safety follow-up tunes source-page list limiter policy to burst+sustained guardrails and frontend caching to avoid normal-flow 429 churn.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Added user endpoint `GET /api/ingestion/jobs/:id` for owner-scoped manual refresh progress.
 - Added user endpoint `GET /api/ingestion/jobs/latest-mine` for owner-scoped latest refresh-job restore after page reload.

@@ -75,6 +75,7 @@
       - includes opportunistic lazy hydration for missing source avatar/banner assets on legacy backfilled rows.
     - `GET /api/source-pages/:platform/:externalId/blueprints` (public-readable source blueprint feed, deduped by `source_item_id`, cursor-paginated via `next_cursor`)
     - `GET /api/source-pages/:platform/:externalId/videos` (auth-only source video-library listing with duplicate state flags for requester and `kind=full|shorts` filter)
+      - list limiter policy: burst `4/15s` + sustained `40/10m` per user/IP.
     - `POST /api/source-pages/:platform/:externalId/videos/generate` (auth-only async queue for selected source-library videos, ingestion scope `source_page_video_library_selection`)
     - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)
     - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth-only, unsubscribe parity + notice cleanup)

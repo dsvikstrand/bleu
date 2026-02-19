@@ -327,6 +327,7 @@ Completion evidence (2026-02-19)
 - Added ingestion scope `source_page_video_library_selection` and async worker path that reuses existing blueprint/feed + auto-channel flow.
 - Updated `src/pages/SourcePage.tsx` with `Video Library` select/generate UI, duplicate badges, and background job polling card.
 - Added two-tab filter UX for `Video Library` (`Full videos`, `Shorts`) with server-side `kind` filtering and shorts threshold `<=60s`.
+- Tuned video-library list safety policy to dual limiter guards (burst + sustained) and added frontend cache/refetch controls to reduce accidental 429s during tab switch/load-more.
 
 ### Step 12 - Subscriptions management actions
 Scope

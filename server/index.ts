@@ -115,7 +115,10 @@ const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX
 const refreshScanCooldownMs = clampInt(process.env.REFRESH_SCAN_COOLDOWN_MS, 30_000, 5_000, 300_000);
 const refreshGenerateCooldownMs = clampInt(process.env.REFRESH_GENERATE_COOLDOWN_MS, 120_000, 10_000, 900_000);
 const refreshGenerateMaxItems = clampInt(process.env.REFRESH_GENERATE_MAX_ITEMS, 20, 1, 200);
-const sourceVideoListCooldownMs = clampInt(process.env.SOURCE_VIDEO_LIST_COOLDOWN_MS, 15_000, 5_000, 300_000);
+const sourceVideoListBurstWindowMs = clampInt(process.env.SOURCE_VIDEO_LIST_BURST_WINDOW_MS, 15_000, 5_000, 300_000);
+const sourceVideoListBurstMax = clampInt(process.env.SOURCE_VIDEO_LIST_BURST_MAX, 4, 1, 20);
+const sourceVideoListSustainedWindowMs = clampInt(process.env.SOURCE_VIDEO_LIST_SUSTAINED_WINDOW_MS, 10 * 60_000, 60_000, 60 * 60_000);
+const sourceVideoListSustainedMax = clampInt(process.env.SOURCE_VIDEO_LIST_SUSTAINED_MAX, 40, 5, 500);
 const sourceVideoGenerateCooldownMs = clampInt(process.env.SOURCE_VIDEO_GENERATE_COOLDOWN_MS, 30_000, 5_000, 300_000);
 const refreshFailureCooldownHours = clampInt(process.env.REFRESH_FAILURE_COOLDOWN_HOURS, 6, 1, 168);
 const ingestionStaleRunningMs = clampInt(process.env.INGESTION_STALE_RUNNING_MS, 30 * 60 * 1000, 60_000, 24 * 60 * 60 * 1000);
@@ -278,11 +281,13 @@ const refreshGenerateLimiter = rateLimit({
   handler: (req, res) => refreshRateLimitHandler('generate', req, res),
 });
 
-function sourceVideoRateLimitHandler(kind: 'list' | 'generate', req: express.Request, res: express.Response) {
+function sourceVideoRateLimitHandler(kind: 'list_burst' | 'list_sustained' | 'generate', req: express.Request, res: express.Response) {
   const retryAfter = getRetryAfterSeconds(req);
-  const message = kind === 'list'
-    ? 'Video library listing is cooling down. Please retry shortly.'
-    : 'Video library generation is cooling down. Please retry shortly.';
+  const message = kind === 'generate'
+    ? 'Video library generation is cooling down. Please retry shortly.'
+    : kind === 'list_burst'
+      ? 'Video library listing is cooling down. Please wait a few seconds.'
+      : 'Video library request limit reached. Please retry in a moment.';
   return res.status(429).json({
     ok: false,
     error_code: 'RATE_LIMITED',
@@ -292,13 +297,22 @@ function sourceVideoRateLimitHandler(kind: 'list' | 'generate', req: express.Req
   });
 }
 
-const sourceVideoListLimiter = rateLimit({
-  windowMs: sourceVideoListCooldownMs,
-  max: 1,
+const sourceVideoListBurstLimiter = rateLimit({
+  windowMs: sourceVideoListBurstWindowMs,
+  max: sourceVideoListBurstMax,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
-  handler: (req, res) => sourceVideoRateLimitHandler('list', req, res),
+  handler: (req, res) => sourceVideoRateLimitHandler('list_burst', req, res),
+});
+
+const sourceVideoListSustainedLimiter = rateLimit({
+  windowMs: sourceVideoListSustainedWindowMs,
+  max: sourceVideoListSustainedMax,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
+  handler: (req, res) => sourceVideoRateLimitHandler('list_sustained', req, res),
 });
 
 const sourceVideoGenerateLimiter = rateLimit({
@@ -4536,7 +4550,11 @@ app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
   });
 });
 
-app.get('/api/source-pages/:platform/:externalId/videos', sourceVideoListLimiter, async (req, res) => {
+app.get(
+  '/api/source-pages/:platform/:externalId/videos',
+  sourceVideoListBurstLimiter,
+  sourceVideoListSustainedLimiter,
+  async (req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId || !authToken) {
@@ -4687,7 +4705,8 @@ app.get('/api/source-pages/:platform/:externalId/videos', sourceVideoListLimiter
       shorts_max_seconds: shortsMaxSeconds,
     },
   });
-});
+  },
+);
 
 app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoGenerateLimiter, async (req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;

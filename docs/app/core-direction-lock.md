@@ -29,6 +29,7 @@ Status: `canonical`
 21. Source pages include a public, read-only blueprint feed (`GET /api/source-pages/:platform/:externalId/blueprints`) that shows channel-published items only, deduped by source video and paginated via load-more cursor.
 22. Source pages include an auth-only `Video Library` section for back-catalog generation (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/generate`) and run generation asynchronously through existing My Feed + auto-channel pipeline.
 23. Source-page Video Library filter UX is two-tab in MVP (`Full videos` and `Shorts`), with shorts classified by duration threshold `<=60s`.
+24. Source-page Video Library list traffic uses dual guardrails in backend (burst + sustained per-user/IP) so normal tab/list interaction is smooth while abuse remains capped.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.

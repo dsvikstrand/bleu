@@ -29,6 +29,7 @@
   - `GET /api/source-pages/:platform/:externalId` (public read)
   - `GET /api/source-pages/:platform/:externalId/blueprints` (public source-page feed, deduped by source video, cursor-paginated)
   - `GET /api/source-pages/:platform/:externalId/videos` (auth source-page video-library list, supports `kind=full|shorts`)
+    - rate policy: burst `4/15s` + sustained `40/10m` per user/IP.
   - `POST /api/source-pages/:platform/:externalId/videos/generate` (auth async queue for selected source videos)
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)

@@ -230,6 +230,7 @@ si38) compatibility note: legacy `POST/GET/PATCH/DELETE /api/source-subscription
 si39) public/auth endpoint: `GET /api/source-pages/:platform/:externalId/blueprints?limit=<1..24>&cursor=<opaque?>` (public channel-published feed for the source page, deduped by `source_item_id` with `next_cursor` pagination).
 si40) auth endpoint: `GET /api/source-pages/:platform/:externalId/videos?page_token=<optional>&limit=<1..25>&kind=<full|shorts>` (source-page video-library listing for signed-in users, includes duplicate flags per row; shorts threshold is `<=60s`).
 si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/generate` (queues async generation for selected source videos, skips user duplicates, returns `job_id` + queue summary).
+si42) source-page video-library list rate policy: burst `4/15s` plus sustained `40/10m` per user/IP (reduce accidental 429 on normal tab-switch/load-more while keeping abuse guardrails).
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

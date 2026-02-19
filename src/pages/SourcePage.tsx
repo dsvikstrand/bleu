@@ -166,6 +166,8 @@ export default function SourcePage() {
   const sourceVideosQuery = useInfiniteQuery({
     queryKey: ['source-page-videos', platform, externalId, user?.id, videoLibraryKind],
     enabled: backendEnabled && isValidRoute && Boolean(sourcePage) && Boolean(user),
+    staleTime: 120_000,
+    refetchOnWindowFocus: false,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => getSourcePageVideos({
       platform,
@@ -178,6 +180,8 @@ export default function SourcePage() {
   });
 
   const sourceVideoItems = sourceVideosQuery.data?.pages.flatMap((page) => page.items) || [];
+  const sourceVideoRateLimited = sourceVideosQuery.error instanceof ApiRequestError
+    && sourceVideosQuery.error.errorCode === 'RATE_LIMITED';
   const selectedSourceVideoItems = useMemo(
     () => sourceVideoItems.filter((item) => selectedVideoIds[getVideoSelectionKey(item)]),
     [selectedVideoIds, sourceVideoItems],
@@ -504,6 +508,12 @@ export default function SourcePage() {
                       {!sourceVideosQuery.isFetching && sourceVideosQuery.error ? (
                         <p className="text-sm text-destructive">
                           {getSourceVideoLibraryErrorMessage(sourceVideosQuery.error, 'Could not load source videos.')}
+                        </p>
+                      ) : null}
+
+                      {sourceVideoRateLimited ? (
+                        <p className="text-xs text-muted-foreground">
+                          Showing cached results while rate limit cools down.
                         </p>
                       ) : null}
 

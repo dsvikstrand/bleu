@@ -48,6 +48,7 @@
 - 2026-02-19 note: source-page public feed endpoint (`GET /api/source-pages/:platform/:externalId/blueprints`, deduped + cursor-paginated) is additive and does not alter the YT2BP endpoint envelope.
 - 2026-02-19 note: source-page video-library endpoints (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/generate`) are additive and do not alter the YT2BP endpoint envelope.
 - 2026-02-19 note: source-page video-library listing now supports `kind=full|shorts` with shorts threshold `<=60s`; additive and outside the YT2BP envelope.
+- 2026-02-19 note: source-page video-library list now uses dual rate-limit guards (burst+sustained) and frontend cache/focus-refetch tuning; additive and outside the YT2BP envelope.
 
 ## Request
 ```json
