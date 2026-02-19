@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { createClient } from '@supabase/supabase-js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash, randomBytes } from 'node:crypto';
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { createLLMClient } from './llm/client';
@@ -29,6 +30,18 @@ import {
   searchYouTubeChannels,
   YouTubeChannelSearchError,
 } from './services/youtubeChannelSearch';
+import {
+  buildYouTubeOAuthUrl,
+  exchangeYouTubeOAuthCode,
+  fetchYouTubeOAuthAccountProfile,
+  isYouTubeOAuthConfigured,
+  refreshYouTubeAccessToken,
+  revokeYouTubeToken,
+  type YouTubeOAuthConfig,
+  YouTubeOAuthError,
+} from './services/youtubeOAuth';
+import { fetchYouTubeUserSubscriptions, YouTubeUserSubscriptionsError } from './services/youtubeUserSubscriptions';
+import { decryptToken, encryptToken } from './services/tokenCrypto';
 import {
   clampInt,
   getFailureTransition,
@@ -101,6 +114,16 @@ const autoBannerStaleRunningMs = clampInt(process.env.AUTO_BANNER_STALE_RUNNING_
 const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
 const debugEndpointsEnabled = debugEndpointsEnabledRaw === 'true' || debugEndpointsEnabledRaw === '1' || debugEndpointsEnabledRaw === 'on';
 const youtubeDataApiKey = String(process.env.YOUTUBE_DATA_API_KEY || '').trim();
+const googleOAuthClientId = String(process.env.GOOGLE_OAUTH_CLIENT_ID || '').trim();
+const googleOAuthClientSecret = String(process.env.GOOGLE_OAUTH_CLIENT_SECRET || '').trim();
+const youtubeOAuthRedirectUri = String(process.env.YOUTUBE_OAUTH_REDIRECT_URI || '').trim();
+const youtubeOAuthScopes = String(process.env.YOUTUBE_OAUTH_SCOPES || 'https://www.googleapis.com/auth/youtube.readonly')
+  .split(/[,\s]+/)
+  .map((scope) => scope.trim())
+  .filter(Boolean);
+const tokenEncryptionKey = String(process.env.TOKEN_ENCRYPTION_KEY || '').trim();
+const youtubeImportMaxChannels = clampInt(process.env.YOUTUBE_IMPORT_MAX_CHANNELS, 2000, 50, 10_000);
+const youtubeOAuthStateTtlSeconds = clampInt(process.env.YOUTUBE_OAUTH_STATE_TTL_SECONDS, 600, 60, 3600);
 const autoChannelPipelineEnabledRaw = String(process.env.AUTO_CHANNEL_PIPELINE_ENABLED || 'false').trim().toLowerCase();
 const autoChannelPipelineEnabled = autoChannelPipelineEnabledRaw === 'true' || autoChannelPipelineEnabledRaw === '1' || autoChannelPipelineEnabledRaw === 'on';
 const autoChannelDefaultSlug = String(process.env.AUTO_CHANNEL_DEFAULT_SLUG || 'general').trim().toLowerCase() || 'general';
@@ -114,9 +137,24 @@ const autoChannelFallbackSlug = String(process.env.AUTO_CHANNEL_FALLBACK_SLUG ||
 const autoChannelLegacyManualFlowEnabledRaw = String(process.env.AUTO_CHANNEL_LEGACY_MANUAL_FLOW_ENABLED || 'true').trim().toLowerCase();
 const autoChannelLegacyManualFlowEnabled = !(autoChannelLegacyManualFlowEnabledRaw === 'false' || autoChannelLegacyManualFlowEnabledRaw === '0' || autoChannelLegacyManualFlowEnabledRaw === 'off');
 const autoChannelGateMode = normalizeGateMode(process.env.AUTO_CHANNEL_GATE_MODE, 'enforce');
+const youtubeOAuthConfig: YouTubeOAuthConfig = {
+  clientId: googleOAuthClientId,
+  clientSecret: googleOAuthClientSecret,
+  redirectUri: youtubeOAuthRedirectUri,
+  scopes: youtubeOAuthScopes,
+};
+const youtubeOAuthConfigured = isYouTubeOAuthConfigured(youtubeOAuthConfig);
 
 if (!youtubeDataApiKey) {
   console.warn('[youtube-search] YOUTUBE_DATA_API_KEY is not configured. /api/youtube-search and /api/youtube-channel-search will return SEARCH_DISABLED.');
+}
+
+if (!youtubeOAuthConfigured) {
+  console.warn('[youtube-oauth] Google OAuth env is incomplete. /api/youtube/connection* and /api/youtube/subscriptions* will return YT_OAUTH_NOT_CONFIGURED.');
+}
+
+if (!tokenEncryptionKey) {
+  console.warn('[youtube-oauth] TOKEN_ENCRYPTION_KEY is not configured. YouTube connection endpoints will return YT_OAUTH_NOT_CONFIGURED.');
 }
 
 if (autoBannerMode !== 'off' && !String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) {
@@ -225,6 +263,61 @@ const refreshGenerateLimiter = rateLimit({
   handler: (req, res) => refreshRateLimitHandler('generate', req, res),
 });
 
+function youtubeConnectionRateLimitHandler(kind: 'start' | 'preview' | 'import' | 'disconnect', req: express.Request, res: express.Response) {
+  const retryAfter = getRetryAfterSeconds(req);
+  const message = kind === 'start'
+    ? 'Connect is cooling down. Please retry shortly.'
+    : kind === 'preview'
+      ? 'Import preview is cooling down. Please retry shortly.'
+      : kind === 'import'
+        ? 'Import is cooling down. Please retry shortly.'
+        : 'Disconnect is cooling down. Please retry shortly.';
+
+  return res.status(429).json({
+    ok: false,
+    error_code: 'RATE_LIMITED',
+    message,
+    retry_after_seconds: retryAfter,
+    data: null,
+  });
+}
+
+const youtubeConnectStartLimiter = rateLimit({
+  windowMs: 15_000,
+  max: 1,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
+  handler: (req, res) => youtubeConnectionRateLimitHandler('start', req, res),
+});
+
+const youtubePreviewLimiter = rateLimit({
+  windowMs: 30_000,
+  max: 1,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
+  handler: (req, res) => youtubeConnectionRateLimitHandler('preview', req, res),
+});
+
+const youtubeImportLimiter = rateLimit({
+  windowMs: 30_000,
+  max: 1,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
+  handler: (req, res) => youtubeConnectionRateLimitHandler('import', req, res),
+});
+
+const youtubeDisconnectLimiter = rateLimit({
+  windowMs: 15_000,
+  max: 1,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
+  handler: (req, res) => youtubeConnectionRateLimitHandler('disconnect', req, res),
+});
+
 app.use((req, res, next) => {
   const start = process.hrtime.bigint();
   res.on('finish', () => {
@@ -253,6 +346,7 @@ app.use((req, res, next) => {
   const isDebugSimulationRoute = /^\/api\/debug\/subscriptions\/[^/]+\/simulate-new-uploads$/.test(req.path);
   const isPublicProfileFeedRoute = /^\/api\/profile\/[^/]+\/feed$/.test(req.path);
   const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
+    || req.path === '/api/youtube/connection/callback'
     || req.path === '/api/ingestion/jobs/trigger'
     || req.path === '/api/ingestion/jobs/latest'
     || req.path === '/api/auto-banner/jobs/trigger'
@@ -337,6 +431,20 @@ const YouTubeToBlueprintRequestSchema = z.object({
   source: z.literal('youtube_mvp').default('youtube_mvp'),
 });
 const GENERIC_YT2BP_FAILURE_MESSAGE = 'Could not complete the blueprint. Please test another video.';
+
+const YouTubeConnectionStartSchema = z.object({
+  return_to: z.string().url().optional(),
+});
+
+const YouTubeSubscriptionsImportSchema = z.object({
+  channels: z.array(
+    z.object({
+      channel_id: z.string().min(1),
+      channel_url: z.string().url().optional(),
+      channel_title: z.string().optional(),
+    }),
+  ).min(1).max(5000),
+});
 
 type YouTubeDraftStep = {
   name: string;
@@ -1333,6 +1441,556 @@ app.get('/api/youtube-channel-search', async (req, res) => {
   }
 });
 
+app.get('/api/youtube/connection/status', async (_req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const configCheck = ensureYouTubeOAuthConfig();
+  if (!configCheck.ok) {
+    return res.status(configCheck.status).json({ ok: false, error_code: configCheck.error_code, message: configCheck.message, data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const { data, error } = await db
+    .from('user_youtube_connections')
+    .select('id, user_id, youtube_channel_title, youtube_channel_url, youtube_channel_avatar_url, refresh_token_encrypted, token_expires_at, last_import_at, is_active')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
+
+  if (!data || !data.is_active) {
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'youtube connection status',
+      data: {
+        connected: false,
+        needs_reauth: false,
+        channel_title: null,
+        channel_url: null,
+        channel_avatar_url: null,
+        last_import_at: null,
+      },
+    });
+  }
+
+  const expiresAtMs = data.token_expires_at ? Date.parse(data.token_expires_at) : null;
+  const hasRefreshToken = Boolean(String(data.refresh_token_encrypted || '').trim());
+  const needsReauth = Boolean(expiresAtMs && expiresAtMs <= Date.now() + 60_000 && !hasRefreshToken);
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'youtube connection status',
+    data: {
+      connected: true,
+      needs_reauth: needsReauth,
+      channel_title: data.youtube_channel_title || null,
+      channel_url: data.youtube_channel_url || null,
+      channel_avatar_url: data.youtube_channel_avatar_url || null,
+      last_import_at: data.last_import_at || null,
+    },
+  });
+});
+
+app.post('/api/youtube/connection/start', youtubeConnectStartLimiter, async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const configCheck = ensureYouTubeOAuthConfig();
+  if (!configCheck.ok) {
+    return res.status(configCheck.status).json({ ok: false, error_code: configCheck.error_code, message: configCheck.message, data: null });
+  }
+
+  const parsed = YouTubeConnectionStartSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'Invalid connect request.', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const returnTo = normalizeReturnToUrl(String(parsed.data.return_to || '').trim(), req) || buildDefaultReturnTo(req);
+  if (!returnTo) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'YT_RETURN_TO_INVALID',
+      message: 'Invalid return URL. Please retry from the app.',
+      data: null,
+    });
+  }
+
+  await db
+    .from('youtube_oauth_states')
+    .delete()
+    .eq('user_id', userId)
+    .not('consumed_at', 'is', null);
+  await db
+    .from('youtube_oauth_states')
+    .delete()
+    .eq('user_id', userId)
+    .lt('expires_at', new Date().toISOString());
+
+  const state = randomBytes(24).toString('base64url');
+  const stateHash = hashOAuthState(state);
+  const expiresAt = new Date(Date.now() + youtubeOAuthStateTtlSeconds * 1000).toISOString();
+
+  const { error: insertError } = await db
+    .from('youtube_oauth_states')
+    .insert({
+      user_id: userId,
+      state_hash: stateHash,
+      return_to: returnTo,
+      expires_at: expiresAt,
+    });
+  if (insertError) {
+    return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: insertError.message, data: null });
+  }
+
+  const authUrl = buildYouTubeOAuthUrl(youtubeOAuthConfig, state);
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'youtube connection started',
+    data: {
+      auth_url: authUrl,
+    },
+  });
+});
+
+app.get('/api/youtube/connection/callback', async (req, res) => {
+  const configCheck = ensureYouTubeOAuthConfig();
+  if (!configCheck.ok) {
+    return res.status(configCheck.status).json({ ok: false, error_code: configCheck.error_code, message: configCheck.message, data: null });
+  }
+
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  const state = String(req.query.state || '').trim();
+  if (!state) {
+    return res.status(400).json({ ok: false, error_code: 'YT_STATE_INVALID', message: 'Invalid OAuth state.', data: null });
+  }
+
+  const stateHash = hashOAuthState(state);
+  const { data: oauthState, error: stateError } = await db
+    .from('youtube_oauth_states')
+    .select('id, user_id, return_to, expires_at, consumed_at')
+    .eq('state_hash', stateHash)
+    .maybeSingle();
+  if (stateError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: stateError.message, data: null });
+  }
+  if (!oauthState?.id) {
+    return res.status(400).json({ ok: false, error_code: 'YT_STATE_INVALID', message: 'Invalid OAuth state.', data: null });
+  }
+
+  const returnTo = String(oauthState.return_to || '').trim();
+  const redirectWith = (params: Record<string, string>) => res.redirect(appendReturnToQuery(returnTo, params));
+  const now = Date.now();
+  const expiresAtMs = Number.isFinite(Date.parse(oauthState.expires_at)) ? Date.parse(oauthState.expires_at) : 0;
+  if (expiresAtMs <= now) {
+    return redirectWith({ yt_connect: 'error', yt_code: 'YT_STATE_EXPIRED' });
+  }
+  if (oauthState.consumed_at) {
+    return redirectWith({ yt_connect: 'error', yt_code: 'YT_STATE_INVALID' });
+  }
+
+  const { data: consumeData, error: consumeError } = await db
+    .from('youtube_oauth_states')
+    .update({ consumed_at: new Date().toISOString() })
+    .eq('id', oauthState.id)
+    .is('consumed_at', null)
+    .select('id')
+    .maybeSingle();
+  if (consumeError || !consumeData?.id) {
+    return redirectWith({ yt_connect: 'error', yt_code: 'YT_STATE_INVALID' });
+  }
+
+  const providerError = String(req.query.error || '').trim();
+  if (providerError) {
+    return redirectWith({ yt_connect: 'error', yt_code: 'YT_TOKEN_EXCHANGE_FAILED' });
+  }
+
+  const code = String(req.query.code || '').trim();
+  if (!code) {
+    return redirectWith({ yt_connect: 'error', yt_code: 'YT_TOKEN_EXCHANGE_FAILED' });
+  }
+
+  try {
+    const tokenSet = await exchangeYouTubeOAuthCode(youtubeOAuthConfig, code);
+    const profile = await fetchYouTubeOAuthAccountProfile(tokenSet.accessToken);
+    const accessTokenEncrypted = encryptToken(tokenSet.accessToken, tokenEncryptionKey);
+    const refreshTokenEncrypted = tokenSet.refreshToken
+      ? encryptToken(tokenSet.refreshToken, tokenEncryptionKey)
+      : null;
+    const tokenExpiresAt = tokenSet.expiresIn ? new Date(Date.now() + tokenSet.expiresIn * 1000).toISOString() : null;
+
+    const { error: upsertError } = await db
+      .from('user_youtube_connections')
+      .upsert({
+        user_id: oauthState.user_id,
+        google_sub: tokenSet.googleSub || profile.googleSub || null,
+        youtube_channel_id: profile.youtubeChannelId,
+        youtube_channel_title: profile.youtubeChannelTitle,
+        youtube_channel_url: profile.youtubeChannelUrl,
+        youtube_channel_avatar_url: profile.youtubeChannelAvatarUrl,
+        access_token_encrypted: accessTokenEncrypted,
+        refresh_token_encrypted: refreshTokenEncrypted,
+        token_expires_at: tokenExpiresAt,
+        scope: tokenSet.scope,
+        is_active: true,
+        last_error: null,
+      }, { onConflict: 'user_id' });
+    if (upsertError) {
+      return redirectWith({ yt_connect: 'error', yt_code: 'WRITE_FAILED' });
+    }
+
+    return redirectWith({ yt_connect: 'success' });
+  } catch (error) {
+    const mapped = mapYouTubeOAuthError(error);
+    await db
+      .from('user_youtube_connections')
+      .upsert({
+        user_id: oauthState.user_id,
+        is_active: false,
+        last_error: mapped.message.slice(0, 500),
+      }, { onConflict: 'user_id' });
+
+    return redirectWith({ yt_connect: 'error', yt_code: mapped.error_code });
+  }
+});
+
+app.get('/api/youtube/subscriptions/preview', youtubePreviewLimiter, async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const configCheck = ensureYouTubeOAuthConfig();
+  if (!configCheck.ok) {
+    return res.status(configCheck.status).json({ ok: false, error_code: configCheck.error_code, message: configCheck.message, data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const { data: connection, error: connectionError } = await db
+    .from('user_youtube_connections')
+    .select('id, user_id, google_sub, youtube_channel_id, youtube_channel_title, youtube_channel_url, youtube_channel_avatar_url, access_token_encrypted, refresh_token_encrypted, token_expires_at, scope, is_active, last_import_at, last_error')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (connectionError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: connectionError.message, data: null });
+  }
+  if (!connection) {
+    return res.status(404).json({ ok: false, error_code: 'YT_CONNECTION_NOT_FOUND', message: 'Connect YouTube first.', data: null });
+  }
+
+  try {
+    const { accessToken } = await getUsableYouTubeAccessToken({
+      db,
+      connection: connection as UserYouTubeConnectionRow,
+    });
+
+    const preview = await fetchYouTubeUserSubscriptions({
+      accessToken,
+      maxTotal: youtubeImportMaxChannels,
+    });
+    const channelIds = preview.items.map((item) => item.channelId);
+
+    const { data: existing, error: existingError } = channelIds.length === 0
+      ? { data: [] as Array<{ source_channel_id: string; is_active: boolean }>, error: null }
+      : await db
+        .from('user_source_subscriptions')
+        .select('source_channel_id, is_active')
+        .eq('user_id', userId)
+        .eq('source_type', 'youtube')
+        .in('source_channel_id', channelIds);
+    if (existingError) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: existingError.message, data: null });
+    }
+
+    const existingByChannelId = new Map(
+      (existing || []).map((row) => [String(row.source_channel_id || '').trim(), row.is_active]),
+    );
+
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'youtube subscriptions preview',
+      data: {
+        results: preview.items.map((item) => ({
+          channel_id: item.channelId,
+          channel_title: item.channelTitle,
+          channel_url: item.channelUrl,
+          thumbnail_url: item.thumbnailUrl,
+          already_active: existingByChannelId.get(item.channelId) === true,
+          already_exists_inactive: existingByChannelId.get(item.channelId) === false,
+        })),
+        truncated: preview.truncated,
+      },
+    });
+  } catch (error) {
+    const mapped = mapYouTubeOAuthError(error);
+    return res.status(mapped.status).json({
+      ok: false,
+      error_code: mapped.error_code,
+      message: mapped.message,
+      data: null,
+    });
+  }
+});
+
+app.post('/api/youtube/subscriptions/import', youtubeImportLimiter, async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const configCheck = ensureYouTubeOAuthConfig();
+  if (!configCheck.ok) {
+    return res.status(configCheck.status).json({ ok: false, error_code: configCheck.error_code, message: configCheck.message, data: null });
+  }
+
+  const parsed = YouTubeSubscriptionsImportSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'Invalid import payload.', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const { data: connection, error: connectionError } = await db
+    .from('user_youtube_connections')
+    .select('id, user_id, is_active')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (connectionError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: connectionError.message, data: null });
+  }
+  if (!connection) {
+    return res.status(404).json({ ok: false, error_code: 'YT_CONNECTION_NOT_FOUND', message: 'Connect YouTube first.', data: null });
+  }
+
+  const channelIdRe = /^UC[a-zA-Z0-9_-]{20,}$/;
+  const requestedMap = new Map<string, { channelId: string; channelUrl: string | null; channelTitle: string | null }>();
+  for (const item of parsed.data.channels) {
+    const channelId = String(item.channel_id || '').trim();
+    if (!channelIdRe.test(channelId)) continue;
+    const channelUrl = String(item.channel_url || '').trim() || `https://www.youtube.com/channel/${channelId}`;
+    const channelTitle = String(item.channel_title || '').trim() || null;
+    requestedMap.set(channelId, { channelId, channelUrl, channelTitle });
+    if (requestedMap.size >= youtubeImportMaxChannels) break;
+  }
+
+  const requested = Array.from(requestedMap.values());
+  if (requested.length === 0) {
+    return res.status(400).json({ ok: false, error_code: 'YT_IMPORT_EMPTY_SELECTION', message: 'Select at least one channel to import.', data: null });
+  }
+
+  const channelIds = requested.map((row) => row.channelId);
+  const { data: existingRows, error: existingError } = await db
+    .from('user_source_subscriptions')
+    .select('id, source_channel_id, is_active')
+    .eq('user_id', userId)
+    .eq('source_type', 'youtube')
+    .in('source_channel_id', channelIds);
+  if (existingError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: existingError.message, data: null });
+  }
+  const existingByChannelId = new Map(
+    (existingRows || []).map((row) => [String(row.source_channel_id || '').trim(), row]),
+  );
+
+  let assetMap = new Map<string, { avatarUrl: string | null; bannerUrl: string | null }>();
+  if (youtubeDataApiKey) {
+    try {
+      assetMap = await fetchYouTubeChannelAssetMap({
+        apiKey: youtubeDataApiKey,
+        channelIds,
+      });
+    } catch (error) {
+      console.log('[youtube_import_assets_lookup_failed]', JSON.stringify({
+        user_id: userId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  let importedCount = 0;
+  let reactivatedCount = 0;
+  let alreadyActiveCount = 0;
+  const failures: Array<{ channel_id: string; error_code: string; error: string }> = [];
+
+  for (const row of requested) {
+    const existing = existingByChannelId.get(row.channelId) || null;
+    if (existing?.is_active) {
+      alreadyActiveCount += 1;
+      continue;
+    }
+
+    const { data: upserted, error: upsertError } = await db
+      .from('user_source_subscriptions')
+      .upsert(
+        {
+          user_id: userId,
+          source_type: 'youtube',
+          source_channel_id: row.channelId,
+          source_channel_url: row.channelUrl,
+          source_channel_title: row.channelTitle,
+          mode: 'auto',
+          is_active: true,
+          last_sync_error: null,
+        },
+        { onConflict: 'user_id,source_type,source_channel_id' },
+      )
+      .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+      .single();
+    if (upsertError || !upserted) {
+      failures.push({
+        channel_id: row.channelId,
+        error_code: 'WRITE_FAILED',
+        error: upsertError?.message || 'Could not upsert subscription.',
+      });
+      continue;
+    }
+
+    try {
+      await syncSingleSubscription(db, upserted, { trigger: 'youtube_import' });
+    } catch (error) {
+      await markSubscriptionSyncError(db, upserted.id, error);
+    }
+
+    if (!existing) importedCount += 1;
+    else reactivatedCount += 1;
+
+    try {
+      const assets = assetMap.get(row.channelId);
+      const noticeSource = await upsertSubscriptionNoticeSourceItem(db, {
+        channelId: row.channelId,
+        channelTitle: row.channelTitle,
+        channelUrl: row.channelUrl,
+        channelAvatarUrl: assets?.avatarUrl || null,
+        channelBannerUrl: assets?.bannerUrl || null,
+      });
+      await insertFeedItem(db, {
+        userId,
+        sourceItemId: noticeSource.id,
+        blueprintId: null,
+        state: 'subscription_notice',
+      });
+    } catch (noticeError) {
+      console.log('[youtube_import_notice_insert_failed]', JSON.stringify({
+        user_id: userId,
+        source_channel_id: row.channelId,
+        error: noticeError instanceof Error ? noticeError.message : String(noticeError),
+      }));
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  await db
+    .from('user_youtube_connections')
+    .update({
+      last_import_at: nowIso,
+      last_error: failures.length
+        ? `Failed ${failures.length}/${requested.length} channels during import.`
+        : null,
+    })
+    .eq('user_id', userId);
+
+  const failedCount = failures.length;
+  return res.json({
+    ok: true,
+    error_code: failedCount > 0 ? 'YT_IMPORT_PARTIAL_FAILURE' : null,
+    message: failedCount > 0 ? 'Import completed with partial failures.' : 'Import completed.',
+    data: {
+      requested_count: requested.length,
+      imported_count: importedCount,
+      reactivated_count: reactivatedCount,
+      already_active_count: alreadyActiveCount,
+      failed_count: failedCount,
+      failures: failures.slice(0, 50),
+    },
+  });
+});
+
+app.delete('/api/youtube/connection', youtubeDisconnectLimiter, async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const configCheck = ensureYouTubeOAuthConfig();
+  if (!configCheck.ok) {
+    return res.status(configCheck.status).json({ ok: false, error_code: configCheck.error_code, message: configCheck.message, data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const { data: connection, error: connectionError } = await db
+    .from('user_youtube_connections')
+    .select('id, access_token_encrypted, refresh_token_encrypted')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (connectionError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: connectionError.message, data: null });
+  }
+  if (!connection?.id) {
+    return res.status(404).json({ ok: false, error_code: 'YT_CONNECTION_NOT_FOUND', message: 'No active YouTube connection found.', data: null });
+  }
+
+  try {
+    const refreshToken = connection.refresh_token_encrypted
+      ? decryptToken(connection.refresh_token_encrypted, tokenEncryptionKey)
+      : null;
+    const accessToken = connection.access_token_encrypted
+      ? decryptToken(connection.access_token_encrypted, tokenEncryptionKey)
+      : null;
+    await revokeYouTubeToken(refreshToken || accessToken || '');
+  } catch {
+    // best effort revoke, continue unlink flow
+  }
+
+  const { error: updateError } = await db
+    .from('user_youtube_connections')
+    .update({
+      is_active: false,
+      access_token_encrypted: null,
+      refresh_token_encrypted: null,
+      token_expires_at: null,
+      scope: null,
+      last_error: null,
+    })
+    .eq('id', connection.id);
+  if (updateError) {
+    return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: updateError.message, data: null });
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'YouTube disconnected.',
+    data: { disconnected: true },
+  });
+});
+
 async function fetchYouTubeChannelAssetMap(input: {
   apiKey: string;
   channelIds: string[];
@@ -1452,6 +2110,163 @@ function rejectLegacyManualFlowIfDisabled(res: express.Response) {
     data: null,
   });
   return true;
+}
+
+function hashOAuthState(state: string) {
+  return createHash('sha256').update(String(state || '')).digest('hex');
+}
+
+function getAllowedReturnToOrigins(req: express.Request) {
+  const values = new Set<string>();
+  const configured = Array.isArray(corsOrigin) ? corsOrigin : [];
+  for (const raw of configured) {
+    const value = String(raw || '').trim();
+    if (!value || value === '*') continue;
+    try {
+      values.add(new URL(value).origin);
+    } catch {
+      continue;
+    }
+  }
+
+  const requestOrigin = String(req.header('origin') || '').trim();
+  if (requestOrigin) {
+    try {
+      values.add(new URL(requestOrigin).origin);
+    } catch {
+      // ignore invalid origin
+    }
+  }
+
+  return values;
+}
+
+function normalizeReturnToUrl(input: string, req: express.Request) {
+  const value = String(input || '').trim();
+  if (!value) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return null;
+  }
+
+  const allowedOrigins = getAllowedReturnToOrigins(req);
+  if (!allowedOrigins.has(parsed.origin)) {
+    return null;
+  }
+  return parsed.toString();
+}
+
+function buildDefaultReturnTo(req: express.Request) {
+  const allowedOrigins = getAllowedReturnToOrigins(req);
+  const origin = allowedOrigins.values().next().value as string | undefined;
+  if (!origin) return null;
+  return `${origin.replace(/\/$/, '')}/subscriptions`;
+}
+
+function appendReturnToQuery(returnTo: string, params: Record<string, string>) {
+  const url = new URL(returnTo);
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+  return url.toString();
+}
+
+function ensureYouTubeOAuthConfig() {
+  if (!youtubeOAuthConfigured || !tokenEncryptionKey) {
+    return {
+      ok: false as const,
+      status: 503,
+      error_code: 'YT_OAUTH_NOT_CONFIGURED',
+      message: 'YouTube OAuth is not configured.',
+    };
+  }
+  return { ok: true as const };
+}
+
+function mapYouTubeOAuthError(error: unknown) {
+  if (error instanceof YouTubeOAuthError || error instanceof YouTubeUserSubscriptionsError) {
+    return {
+      status: error.status,
+      error_code: error.code,
+      message: error.message,
+    };
+  }
+  return {
+    status: 502,
+    error_code: 'YT_PROVIDER_FAIL',
+    message: error instanceof Error ? error.message : 'YouTube provider failed.',
+  };
+}
+
+type UserYouTubeConnectionRow = {
+  id: string;
+  user_id: string;
+  google_sub: string | null;
+  youtube_channel_id: string | null;
+  youtube_channel_title: string | null;
+  youtube_channel_url: string | null;
+  youtube_channel_avatar_url: string | null;
+  access_token_encrypted: string | null;
+  refresh_token_encrypted: string | null;
+  token_expires_at: string | null;
+  scope: string | null;
+  is_active: boolean;
+  last_import_at: string | null;
+  last_error: string | null;
+};
+
+async function getUsableYouTubeAccessToken(input: {
+  db: ReturnType<typeof createClient>;
+  connection: UserYouTubeConnectionRow;
+}) {
+  const { db, connection } = input;
+  const nowPlusSlackMs = Date.now() + 60_000;
+  const expiresAtMs = connection.token_expires_at ? Date.parse(connection.token_expires_at) : null;
+  const accessToken = connection.access_token_encrypted
+    ? decryptToken(connection.access_token_encrypted, tokenEncryptionKey)
+    : null;
+
+  if (accessToken && (!expiresAtMs || expiresAtMs > nowPlusSlackMs)) {
+    return { accessToken, connection };
+  }
+
+  const refreshToken = connection.refresh_token_encrypted
+    ? decryptToken(connection.refresh_token_encrypted, tokenEncryptionKey)
+    : null;
+  if (!refreshToken) {
+    throw new YouTubeOAuthError('YT_REAUTH_REQUIRED', 'YouTube authorization expired. Reconnect required.', 401);
+  }
+
+  const refreshed = await refreshYouTubeAccessToken(youtubeOAuthConfig, refreshToken);
+  const nextAccessTokenEncrypted = encryptToken(refreshed.accessToken, tokenEncryptionKey);
+  const nextRefreshToken = refreshed.refreshToken || refreshToken;
+  const nextRefreshTokenEncrypted = encryptToken(nextRefreshToken, tokenEncryptionKey);
+  const expiresAt = refreshed.expiresIn ? new Date(Date.now() + refreshed.expiresIn * 1000).toISOString() : null;
+
+  const { data: updated, error: updateError } = await db
+    .from('user_youtube_connections')
+    .update({
+      access_token_encrypted: nextAccessTokenEncrypted,
+      refresh_token_encrypted: nextRefreshTokenEncrypted,
+      token_expires_at: expiresAt,
+      scope: refreshed.scope || connection.scope,
+      is_active: true,
+      last_error: null,
+    })
+    .eq('id', connection.id)
+    .select('id, user_id, google_sub, youtube_channel_id, youtube_channel_title, youtube_channel_url, youtube_channel_avatar_url, access_token_encrypted, refresh_token_encrypted, token_expires_at, scope, is_active, last_import_at, last_error')
+    .single();
+  if (updateError || !updated) {
+    throw new YouTubeOAuthError('WRITE_FAILED', updateError?.message || 'Could not update OAuth connection.', 400);
+  }
+
+  return {
+    accessToken: refreshed.accessToken,
+    connection: updated as UserYouTubeConnectionRow,
+  };
 }
 
 async function runAutoChannelForFeedItem(input: {

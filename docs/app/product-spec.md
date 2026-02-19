@@ -203,6 +203,13 @@ si24) user endpoint: `GET /api/ingestion/jobs/latest-mine?scope=manual_refresh_s
 si25) user endpoint: `POST /api/my-feed/items/:id/auto-publish` (run auto-channel publish for a saved My Feed blueprint).
 si26) `POST /api/my-feed/items/:id/auto-publish` returns additive classifier metadata (`classifier_mode`, `classifier_reason`, optional `classifier_confidence`) for audit/debug.
 si27) `AUTO_CHANNEL_CLASSIFIER_MODE` now supports `llm_labeler_v1` (artifact-only input, sync before publish, retry once on invalid output, fallback to `general`).
+si28) user endpoint: `GET /api/youtube/connection/status` (owner-scoped YouTube OAuth link status for `/subscriptions`)
+si29) user endpoint: `POST /api/youtube/connection/start` (starts Google OAuth; returns `auth_url`)
+si30) callback endpoint: `GET /api/youtube/connection/callback` (consumes one-time state and redirects back to `/subscriptions`)
+si31) user endpoint: `GET /api/youtube/subscriptions/preview` (fetches all available YouTube subscriptions for import selection)
+si32) user endpoint: `POST /api/youtube/subscriptions/import` (bulk import selected channels; idempotent + inactive reactivation)
+si33) user endpoint: `DELETE /api/youtube/connection` (revoke+unlink OAuth connection while preserving existing app subscriptions)
+si34) `/subscriptions` now includes a `YouTube account` connect/import surface; import selection defaults to none selected.
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

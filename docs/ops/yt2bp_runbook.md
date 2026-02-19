@@ -76,6 +76,13 @@ ssh oracle-free 'cd /home/ubuntu/remix-of-stackwise-advisor && git pull --ff-onl
 Required runtime variables:
 - `OPENAI_API_KEY`
 - `YOUTUBE_DATA_API_KEY` (required for `/api/youtube-search`)
+- `GOOGLE_OAUTH_CLIENT_ID` (required for `/api/youtube/connection*`)
+- `GOOGLE_OAUTH_CLIENT_SECRET` (required for `/api/youtube/connection*`)
+- `YOUTUBE_OAUTH_REDIRECT_URI` (must match Google OAuth client redirect URI exactly)
+- `YOUTUBE_OAUTH_SCOPES` (default `https://www.googleapis.com/auth/youtube.readonly`)
+- `TOKEN_ENCRYPTION_KEY` (base64 32-byte key for encrypted OAuth tokens at rest)
+- `YOUTUBE_IMPORT_MAX_CHANNELS` (default `2000`)
+- `YOUTUBE_OAUTH_STATE_TTL_SECONDS` (default `600`)
 - `TRANSCRIPT_PROVIDER` (`yt_to_text` or `youtube_timedtext`)
 - `YT2BP_ENABLED`
 - `YT2BP_QUALITY_ENABLED`
@@ -265,6 +272,40 @@ curl -sS "https://bapi.vdsai.cloud/api/youtube-search?q=skincare%202026%20best&l
 YouTube channel search smoke (auth required):
 ```bash
 curl -sS "https://bapi.vdsai.cloud/api/youtube-channel-search?q=skincare%20doctor&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+YouTube OAuth status (auth required):
+```bash
+curl -sS "https://bapi.vdsai.cloud/api/youtube/connection/status" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+YouTube OAuth start (auth required; open returned `auth_url` in browser):
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/youtube/connection/start \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"return_to":"https://dsvikstrand.github.io/remix-of-stackwise-advisor/subscriptions"}'
+```
+
+YouTube import preview (auth required):
+```bash
+curl -sS "https://bapi.vdsai.cloud/api/youtube/subscriptions/preview" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+YouTube import selected channels (auth required):
+```bash
+curl -sS -X POST https://bapi.vdsai.cloud/api/youtube/subscriptions/import \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"channels":[{"channel_id":"UC_x5XG1OV2P6uZZ5FSM9Ttw","channel_url":"https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw","channel_title":"Google for Developers"}]}'
+```
+
+Disconnect YouTube OAuth link (auth required; imported app subscriptions remain):
+```bash
+curl -sS -X DELETE https://bapi.vdsai.cloud/api/youtube/connection \
   -H "Authorization: Bearer $TOKEN"
 ```
 

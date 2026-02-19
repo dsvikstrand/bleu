@@ -783,6 +783,25 @@ Evaluation
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
 
+### Step 35 - YouTube OAuth connect + bulk subscription import
+Scope
+- add `/subscriptions`-only YouTube connect flow (OAuth start/callback/status/disconnect)
+- add bulk import preview + selected-channel import with default none-selected UX
+- keep manual add/search flow intact and import path idempotent (inactive rows reactivate)
+
+Definition of done
+- signed-in users can connect YouTube and import selected subscriptions from preview list
+- disconnect revokes+unlinks OAuth tokens while leaving app subscriptions untouched
+- import does not auto-trigger refresh-scan in this phase
+
+Evaluation
+- manual smoke: connect -> preview -> select -> import summary -> subscriptions list updated
+- manual smoke: disconnect removes OAuth status but keeps subscription rows
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary
 2. Plan with touched files and acceptance checks

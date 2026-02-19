@@ -42,6 +42,9 @@
   - Blueprint detail in `src/pages/BlueprintDetail.tsx` now prefers source-channel attribution for imported YouTube blueprints and hides edit CTA in default MVP UI.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
     - active subscription rows are copy-light; avatar is the channel-open link target.
+    - includes YouTube OAuth connect + bulk import flow (`Connect YouTube` -> preview -> select channels -> import).
+    - import selection defaults to none selected; users explicitly choose channels to import.
+    - disconnect revokes+unlinks OAuth tokens but keeps existing app subscriptions unchanged.
     - includes manual `Refresh` popup flow: scan new subscription videos, select items, and start async background generation.
   - User menu includes a direct `Subscriptions` shortcut to `/subscriptions`; profile tab keeps a lightweight owner-only list with `Unsubscribe`.
 - Backend:
@@ -59,6 +62,12 @@
     - `GET /api/ingestion/jobs/latest-mine` (auth-only, user-scoped latest refresh job; used to restore in-flight status after reload)
     - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
     - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
+    - `GET /api/youtube/connection/status` (auth-only YouTube OAuth status)
+    - `POST /api/youtube/connection/start` (auth-only OAuth start, returns auth URL)
+    - `GET /api/youtube/connection/callback` (anonymous callback; state-validated and redirects back to app)
+    - `GET /api/youtube/subscriptions/preview` (auth-only paginated import preview, all pages up to cap)
+    - `POST /api/youtube/subscriptions/import` (auth-only bulk import with idempotent upsert + inactive reactivation)
+    - `DELETE /api/youtube/connection` (auth-only revoke+unlink)
     - `POST /api/ingestion/jobs/trigger` (service auth)
     - `GET /api/ingestion/jobs/latest` (service auth, latest job snapshot)
     - `POST /api/auto-banner/jobs/trigger` (service auth, queue worker + cap rebalance)
@@ -87,6 +96,7 @@
    - optional review/banner generation is executed outside the core endpoint request and may attach after save.
 2. Subscription create/reactivate:
    - user opens `/subscriptions`, launches `Add Subscription`, searches channels, then clicks subscribe.
+   - optional onboarding accelerator: user connects YouTube on `/subscriptions` and imports selected subscriptions in bulk.
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.
    - resolve channel id and set first-sync checkpoint only (`last_seen_published_at`, `last_seen_video_id`).
    - no historical prefill on first subscribe in MVP.

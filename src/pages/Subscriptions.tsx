@@ -32,6 +32,15 @@ import {
   searchYouTubeChannels,
   type YouTubeChannelSearchResult,
 } from '@/lib/youtubeChannelSearchApi';
+import {
+  disconnectYouTubeConnection,
+  getYouTubeConnectionStatus,
+  importYouTubeSubscriptions,
+  previewYouTubeSubscriptionsImport,
+  startYouTubeConnection,
+  type YouTubeImportPreviewItem,
+  type YouTubeImportResult,
+} from '@/lib/youtubeConnectionApi';
 
 function getChannelUrl(subscription: SourceSubscription) {
   if (subscription.source_channel_url) return subscription.source_channel_url;
@@ -89,6 +98,28 @@ function getChannelSearchErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Channel search failed.';
 }
 
+function getYouTubeConnectionErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiRequestError) {
+    switch (error.errorCode) {
+      case 'YT_OAUTH_NOT_CONFIGURED':
+        return 'YouTube connect is not configured yet.';
+      case 'YT_CONNECTION_NOT_FOUND':
+        return 'Connect YouTube first.';
+      case 'YT_REAUTH_REQUIRED':
+        return 'YouTube authorization expired. Reconnect required.';
+      case 'YT_IMPORT_EMPTY_SELECTION':
+        return 'Select at least one channel to import.';
+      case 'YT_RETURN_TO_INVALID':
+        return 'Invalid return URL. Open Subscriptions directly and retry.';
+      case 'RATE_LIMITED':
+        return error.message || 'Please wait a moment before trying again.';
+      default:
+        return error.message || fallback;
+    }
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function Subscriptions() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -104,6 +135,12 @@ export default function Subscriptions() {
   const [channelSearchError, setChannelSearchError] = useState<string | null>(null);
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
   const [pendingRows, setPendingRows] = useState<Record<string, boolean>>({});
+  const [isYouTubeImportOpen, setIsYouTubeImportOpen] = useState(false);
+  const [youTubeImportResults, setYouTubeImportResults] = useState<YouTubeImportPreviewItem[]>([]);
+  const [youTubeImportSelected, setYouTubeImportSelected] = useState<Record<string, boolean>>({});
+  const [youTubeImportTruncated, setYouTubeImportTruncated] = useState(false);
+  const [youTubeImportError, setYouTubeImportError] = useState<string | null>(null);
+  const [youTubeImportSummary, setYouTubeImportSummary] = useState<YouTubeImportResult | null>(null);
   const [isRefreshDialogOpen, setIsRefreshDialogOpen] = useState(false);
   const [refreshCandidates, setRefreshCandidates] = useState<SubscriptionRefreshCandidate[]>([]);
   const [refreshSelected, setRefreshSelected] = useState<Record<string, boolean>>({});
@@ -143,6 +180,32 @@ export default function Subscriptions() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
+  useEffect(() => {
+    const connectStatus = String(searchParams.get('yt_connect') || '').trim();
+    if (!connectStatus) return;
+
+    const code = String(searchParams.get('yt_code') || '').trim();
+    const next = new URLSearchParams(searchParams);
+    next.delete('yt_connect');
+    next.delete('yt_code');
+    setSearchParams(next, { replace: true });
+    queryClient.invalidateQueries({ queryKey: ['youtube-connection-status', user?.id] });
+
+    if (connectStatus === 'success') {
+      toast({
+        title: 'YouTube connected',
+        description: 'You can now import subscriptions from your YouTube account.',
+      });
+      return;
+    }
+
+    toast({
+      title: 'YouTube connect failed',
+      description: code ? `OAuth returned: ${code}` : 'Could not connect YouTube.',
+      variant: 'destructive',
+    });
+  }, [queryClient, searchParams, setSearchParams, toast, user?.id]);
+
   const isRowPending = (subscriptionId: string) => Boolean(pendingRows[subscriptionId]);
   const markRowPending = (subscriptionId: string, isPending: boolean) => {
     setPendingRows((previous) => {
@@ -170,6 +233,102 @@ export default function Subscriptions() {
     queryKey: ['source-subscriptions', user?.id],
     enabled: Boolean(user) && subscriptionsEnabled,
     queryFn: listSourceSubscriptions,
+  });
+
+  const youtubeConnectionQuery = useQuery({
+    queryKey: ['youtube-connection-status', user?.id],
+    enabled: Boolean(user) && subscriptionsEnabled,
+    queryFn: getYouTubeConnectionStatus,
+    retry: false,
+  });
+
+  const startYouTubeConnectMutation = useMutation({
+    mutationFn: async () => {
+      if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
+      return startYouTubeConnection({ returnTo: window.location.href });
+    },
+    onSuccess: (payload) => {
+      window.location.assign(payload.auth_url);
+    },
+    onError: (error) => {
+      toast({
+        title: 'Connect failed',
+        description: getYouTubeConnectionErrorMessage(error, 'Could not start YouTube connect flow.'),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const youtubeImportPreviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
+      return previewYouTubeSubscriptionsImport();
+    },
+    onSuccess: (payload) => {
+      setYouTubeImportError(null);
+      setYouTubeImportResults(payload.results || []);
+      setYouTubeImportTruncated(Boolean(payload.truncated));
+      const nextSelected: Record<string, boolean> = {};
+      for (const item of payload.results || []) {
+        nextSelected[item.channel_id] = false;
+      }
+      setYouTubeImportSelected(nextSelected);
+    },
+    onError: (error) => {
+      setYouTubeImportResults([]);
+      setYouTubeImportSelected({});
+      setYouTubeImportTruncated(false);
+      setYouTubeImportError(getYouTubeConnectionErrorMessage(error, 'Could not load YouTube subscriptions.'));
+    },
+  });
+
+  const youtubeImportMutation = useMutation({
+    mutationFn: async (channels: Array<{ channel_id: string; channel_url?: string; channel_title?: string | null }>) => {
+      if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
+      return importYouTubeSubscriptions({ channels });
+    },
+    onSuccess: (result) => {
+      setYouTubeImportSummary(result);
+      invalidateSubscriptionViews();
+      queryClient.invalidateQueries({ queryKey: ['youtube-connection-status', user?.id] });
+      toast({
+        title: 'Import complete',
+        description: `Imported ${result.imported_count}, reactivated ${result.reactivated_count}, already active ${result.already_active_count}, failed ${result.failed_count}.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Import failed',
+        description: getYouTubeConnectionErrorMessage(error, 'Could not import YouTube subscriptions.'),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const youtubeDisconnectMutation = useMutation({
+    mutationFn: async () => {
+      if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
+      return disconnectYouTubeConnection();
+    },
+    onSuccess: () => {
+      setYouTubeImportSummary(null);
+      setYouTubeImportResults([]);
+      setYouTubeImportSelected({});
+      setYouTubeImportTruncated(false);
+      setYouTubeImportError(null);
+      queryClient.invalidateQueries({ queryKey: ['youtube-connection-status', user?.id] });
+      toast({
+        title: 'YouTube disconnected',
+        description: 'Your existing app subscriptions were kept.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Disconnect failed',
+        description: getYouTubeConnectionErrorMessage(error, 'Could not disconnect YouTube.'),
+        variant: 'destructive',
+      });
+    },
   });
 
   const channelSearchMutation = useMutation({
@@ -340,6 +499,51 @@ export default function Subscriptions() {
     void withRowPending(subscription.id, () => deactivateMutation.mutateAsync(subscription.id));
   };
 
+  const handleOpenYouTubeImport = () => {
+    setIsYouTubeImportOpen(true);
+    setYouTubeImportSummary(null);
+    setYouTubeImportError(null);
+    setYouTubeImportResults([]);
+    setYouTubeImportSelected({});
+    youtubeImportPreviewMutation.mutate();
+  };
+
+  const handleYouTubeImportDialogChange = (nextOpen: boolean) => {
+    setIsYouTubeImportOpen(nextOpen);
+    if (!nextOpen) {
+      setYouTubeImportError(null);
+      setYouTubeImportResults([]);
+      setYouTubeImportSelected({});
+      setYouTubeImportTruncated(false);
+      youtubeImportPreviewMutation.reset();
+      youtubeImportMutation.reset();
+    }
+  };
+
+  const toggleYouTubeImportChannel = (channelId: string, checked: boolean) => {
+    setYouTubeImportSelected((previous) => ({
+      ...previous,
+      [channelId]: checked,
+    }));
+  };
+
+  const handleYouTubeImportSelectAll = (checked: boolean) => {
+    const next: Record<string, boolean> = {};
+    for (const row of youTubeImportResults) {
+      next[row.channel_id] = checked;
+    }
+    setYouTubeImportSelected(next);
+  };
+
+  const handleDisconnectYouTube = () => {
+    if (!window.confirm('Disconnect YouTube? Imported app subscriptions will remain active.')) return;
+    youtubeDisconnectMutation.mutate();
+  };
+
+  const handleStartYouTubeConnect = () => {
+    startYouTubeConnectMutation.mutate();
+  };
+
   const setSubscribing = (channelId: string, value: boolean) => {
     setSubscribingChannelIds((previous) => {
       if (value) return { ...previous, [channelId]: true };
@@ -392,9 +596,21 @@ export default function Subscriptions() {
   };
 
   const subscriptions = subscriptionsQuery.data || [];
+  const youtubeConnection = youtubeConnectionQuery.data;
   const activeSubscriptions = useMemo(
     () => subscriptions.filter((subscription) => subscription.is_active),
     [subscriptions],
+  );
+  const selectedYouTubeImportChannels = useMemo(
+    () =>
+      youTubeImportResults
+        .filter((item) => youTubeImportSelected[item.channel_id])
+        .map((item) => ({
+          channel_id: item.channel_id,
+          channel_url: item.channel_url,
+          channel_title: item.channel_title,
+        })),
+    [youTubeImportResults, youTubeImportSelected],
   );
   const selectedRefreshItems = useMemo(
     () => refreshCandidates.filter((item) => refreshSelected[getRefreshCandidateKey(item)]),
@@ -415,6 +631,18 @@ export default function Subscriptions() {
         : refreshJobStatus === 'queued'
           ? 'Queued'
           : null;
+
+  const handleImportSelectedChannels = () => {
+    if (selectedYouTubeImportChannels.length === 0) {
+      toast({
+        title: 'No channels selected',
+        description: 'Select one or more channels to import.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    youtubeImportMutation.mutate(selectedYouTubeImportChannels);
+  };
 
   useEffect(() => {
     const job = refreshJobQuery.data;
@@ -534,6 +762,95 @@ export default function Subscriptions() {
             ) : null}
           </div>
         </PageSection>
+
+        <Card className="border-border/40">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">YouTube account</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {!subscriptionsEnabled ? (
+              <p className="text-sm text-muted-foreground">Connect requires `VITE_AGENTIC_BACKEND_URL`.</p>
+            ) : youtubeConnectionQuery.isLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-48" />
+                <Skeleton className="h-9 w-40" />
+              </div>
+            ) : youtubeConnectionQuery.error ? (
+              <p className="text-sm text-destructive">
+                {getYouTubeConnectionErrorMessage(youtubeConnectionQuery.error, 'Could not load YouTube connection status.')}
+              </p>
+            ) : youtubeConnection?.connected ? (
+              <>
+                <div className="flex items-center gap-3">
+                  {youtubeConnection.channel_avatar_url ? (
+                    <img
+                      src={youtubeConnection.channel_avatar_url}
+                      alt={youtubeConnection.channel_title || 'YouTube channel'}
+                      className="h-10 w-10 rounded-full border border-border/40 object-cover"
+                    />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center">
+                      YT
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {youtubeConnection.channel_title || 'Connected YouTube account'}
+                    </p>
+                    {youtubeConnection.last_import_at ? (
+                      <p className="text-xs text-muted-foreground">
+                        Last import: {formatDateTime(youtubeConnection.last_import_at)}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                {youtubeConnection.needs_reauth ? (
+                  <p className="text-xs text-destructive">
+                    Authorization expired. Reconnect YouTube to continue importing.
+                  </p>
+                ) : null}
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleOpenYouTubeImport}
+                    disabled={youtubeImportPreviewMutation.isPending || youtubeImportMutation.isPending || youtubeConnection.needs_reauth}
+                  >
+                    Import from YouTube
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleDisconnectYouTube}
+                    disabled={youtubeDisconnectMutation.isPending}
+                  >
+                    {youtubeDisconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Connect your YouTube account to import subscriptions in bulk.
+                </p>
+                <Button
+                  size="sm"
+                  onClick={handleStartYouTubeConnect}
+                  disabled={startYouTubeConnectMutation.isPending}
+                >
+                  {startYouTubeConnectMutation.isPending ? 'Connecting...' : 'Connect YouTube'}
+                </Button>
+              </>
+            )}
+
+            {youTubeImportSummary ? (
+              <p className="text-xs text-muted-foreground">
+                Last import: Imported {youTubeImportSummary.imported_count}, reactivated {youTubeImportSummary.reactivated_count}, already active {youTubeImportSummary.already_active_count}, failed {youTubeImportSummary.failed_count}.
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
 
         {activeRefreshJobId ? (
           <Card className="border-border/40">
@@ -664,6 +981,128 @@ export default function Subscriptions() {
                   ) : null}
                 </div>
               ) : null}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isYouTubeImportOpen} onOpenChange={handleYouTubeImportDialogChange}>
+          <DialogContent className="sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Import YouTube subscriptions</DialogTitle>
+              <DialogDescription>
+                Select channels to import as blueprint subscriptions. Nothing is selected by default.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => youtubeImportPreviewMutation.mutate()}
+                  disabled={youtubeImportPreviewMutation.isPending || youtubeImportMutation.isPending}
+                >
+                  {youtubeImportPreviewMutation.isPending ? 'Loading...' : 'Reload list'}
+                </Button>
+                {youTubeImportResults.length > 0 ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleYouTubeImportSelectAll(true)}
+                      disabled={youtubeImportMutation.isPending}
+                    >
+                      Select all
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleYouTubeImportSelectAll(false)}
+                      disabled={youtubeImportMutation.isPending}
+                    >
+                      Clear
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+
+              {youTubeImportError ? (
+                <p className="text-sm text-destructive">{youTubeImportError}</p>
+              ) : null}
+
+              {youTubeImportTruncated ? (
+                <p className="text-xs text-muted-foreground">
+                  Showing the first {youTubeImportResults.length} subscriptions (import cap reached).
+                </p>
+              ) : null}
+
+              {youtubeImportPreviewMutation.isPending ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-16 rounded-md" />
+                  <Skeleton className="h-16 rounded-md" />
+                </div>
+              ) : null}
+
+              {!youtubeImportPreviewMutation.isPending && !youTubeImportError && youTubeImportResults.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No YouTube subscriptions available to import.
+                </p>
+              ) : null}
+
+              {youTubeImportResults.length > 0 ? (
+                <div className="space-y-2 max-h-[52vh] overflow-y-auto pr-1">
+                  {youTubeImportResults.map((item) => {
+                    const checked = Boolean(youTubeImportSelected[item.channel_id]);
+                    return (
+                      <div key={item.channel_id} className="rounded-md border border-border/40 p-3">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(value) => toggleYouTubeImportChannel(item.channel_id, value === true)}
+                            className="mt-0.5"
+                          />
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <p className="text-sm font-medium line-clamp-1">
+                              {item.channel_title || item.channel_id}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <a href={item.channel_url} target="_blank" rel="noreferrer" className="underline">
+                                Open channel
+                              </a>
+                              {item.already_active ? (
+                                <Badge variant="secondary" className="h-5 px-2 text-[10px]">Already active</Badge>
+                              ) : null}
+                              {!item.already_active && item.already_exists_inactive ? (
+                                <Badge variant="outline" className="h-5 px-2 text-[10px]">Will reactivate</Badge>
+                              ) : null}
+                            </div>
+                          </div>
+                          {item.thumbnail_url ? (
+                            <img
+                              src={item.thumbnail_url}
+                              alt={item.channel_title || item.channel_id}
+                              className="h-10 w-10 rounded-md border border-border/40 object-cover shrink-0"
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              <div className="flex items-center justify-between gap-2 pt-2">
+                <p className="text-xs text-muted-foreground">
+                  Selected: {selectedYouTubeImportChannels.length} / {youTubeImportResults.length}
+                </p>
+                <Button
+                  size="sm"
+                  onClick={handleImportSelectedChannels}
+                  disabled={selectedYouTubeImportChannels.length === 0 || youtubeImportMutation.isPending || youtubeImportPreviewMutation.isPending}
+                >
+                  {youtubeImportMutation.isPending ? 'Importing...' : 'Import selected'}
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

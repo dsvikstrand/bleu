@@ -189,6 +189,11 @@ Rules:
   - added `llm_labeler_v1` mode for post-artifact sync channel labeling with allowed-slug whitelist.
   - valid label output is trusted; invalid output retries once and then falls back to `general`.
   - auto-publish metadata now includes optional `classifier_confidence` for diagnostics.
+- YouTube OAuth bulk import (2026-02-19):
+  - `/subscriptions` now includes `Connect YouTube` and `Import from YouTube` flow.
+  - backend adds OAuth start/callback/status/disconnect and import preview/import endpoints.
+  - import is idempotent, defaults to none-selected, and reactivates inactive rows.
+  - disconnect revokes+unlinks OAuth tokens while preserving existing app subscriptions.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

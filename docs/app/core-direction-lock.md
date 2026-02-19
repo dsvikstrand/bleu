@@ -18,6 +18,9 @@ Status: `canonical`
 10. Signed-in primary nav is `Home / Channels / Explore`; search/create entrypoint is the header `Create` action to `/search`.
 11. Subscriptions are reachable from both user dropdown (full page) and profile workspace owner tab (lightweight list).
 12. Core high-traffic UI copy must use current runtime language (`Home`, `Create`, auto-channel publish) and avoid legacy manual-post wording.
+13. `/subscriptions` is the only entrypoint for YouTube OAuth connect + bulk import in MVP; signup-step integration is deferred.
+14. YouTube disconnect revokes+unlinks OAuth tokens but preserves existing app subscriptions.
+15. Import selection defaults to none-selected, and import is idempotent with inactive-row reactivation.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.
