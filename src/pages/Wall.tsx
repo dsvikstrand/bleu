@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,7 +25,9 @@ import { logOncePerSession, logP3Event } from '@/lib/telemetry';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface BlueprintPost {
   id: string;
@@ -59,21 +61,59 @@ export default function Wall() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [scopeOpen, setScopeOpen] = useState(false);
-  const [feedScope, setFeedScope] = useState<string>(SCOPE_ALL);
-  const [feedSort, setFeedSort] = useState<FeedSort>('latest');
   const [selectedTagSlug, setSelectedTagSlug] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (authLoading) return;
-    setFeedScope((current) => {
-      if (!user) {
-        return current === SCOPE_FOR_YOU ? SCOPE_ALL : current;
-      }
-      if (current === SCOPE_ALL) return SCOPE_FOR_YOU;
-      return current;
-    });
-  }, [authLoading, user]);
+  const scopeOptions = useMemo(() => {
+    const base = user
+      ? [
+          {
+            value: SCOPE_FOR_YOU,
+            label: 'For You',
+            icon: Sparkles,
+          },
+        ]
+      : [];
+
+    const allOption = {
+      value: SCOPE_ALL,
+      label: 'All Channels',
+      icon: Grid3X3,
+    };
+
+    const channelOptions = CHANNELS_CATALOG
+      .filter((channel) => channel.status === 'active')
+      .sort((a, b) => a.priority - b.priority)
+      .map((channel) => ({
+        value: channel.slug,
+        label: `b/${channel.slug}`,
+        icon: getChannelIcon(channel.icon),
+        channel,
+      }));
+
+    return [...base, allOption, ...channelOptions];
+  }, [user]);
+
+  const scopeValues = useMemo(() => new Set(scopeOptions.map((option) => option.value)), [scopeOptions]);
+  const scopeParam = (searchParams.get('scope') || '').trim();
+  const sortParam = (searchParams.get('sort') || '').trim();
+  const defaultScope = user ? SCOPE_FOR_YOU : SCOPE_ALL;
+  const feedScope = scopeValues.has(scopeParam) ? scopeParam : defaultScope;
+  const feedSort: FeedSort = sortParam === 'trending' ? 'trending' : 'latest';
+
+  const updateSearchParams = (updates: { scope?: string; sort?: FeedSort }) => {
+    const next = new URLSearchParams(searchParams);
+    if (updates.scope) next.set('scope', updates.scope);
+    if (updates.sort) next.set('sort', updates.sort);
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleScopeSelect = (scope: string) => {
+    updateSearchParams({ scope });
+    setScopeOpen(false);
+  };
   
   // Popular channels (tag-backed) for empty state
   const { data: popularTags = [] } = usePopularInventoryTags(6);
@@ -350,36 +390,6 @@ export default function Wall() {
     return posts.filter((post) => post.tags.some((tag) => tag.slug === selectedTagSlug));
   }, [posts, selectedTagSlug]);
 
-  const scopeOptions = useMemo(() => {
-    const base = user
-      ? [
-          {
-            value: SCOPE_FOR_YOU,
-            label: 'For You',
-            icon: Sparkles,
-          },
-        ]
-      : [];
-
-    const allOption = {
-      value: SCOPE_ALL,
-      label: 'All Channels',
-      icon: Grid3X3,
-    };
-
-    const channelOptions = CHANNELS_CATALOG
-      .filter((channel) => channel.status === 'active')
-      .sort((a, b) => a.priority - b.priority)
-      .map((channel) => ({
-        value: channel.slug,
-        label: `b/${channel.slug}`,
-        icon: getChannelIcon(channel.icon),
-        channel,
-      }));
-
-    return [...base, allOption, ...channelOptions];
-  }, [user]);
-
   const selectedScope = useMemo(() => {
     return scopeOptions.find((option) => option.value === effectiveScope) || scopeOptions[0];
   }, [effectiveScope, scopeOptions]);
@@ -425,49 +435,93 @@ export default function Wall() {
         )}
         <div className="space-y-3">
           <div className="px-3 sm:px-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <Popover open={scopeOpen} onOpenChange={setScopeOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" role="combobox" className="w-full sm:w-72 justify-between">
-                  <span className="inline-flex items-center gap-2 truncate">
-                    {selectedScope?.icon && <selectedScope.icon className="h-4 w-4 shrink-0" />}
-                    <span className="truncate">{selectedScope?.label || 'Select scope'}</span>
-                  </span>
-                  <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[320px] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search channels..." />
-                  <CommandList>
-                    <CommandEmpty>No channels found.</CommandEmpty>
-                    <CommandGroup>
-                      {scopeOptions.map((option) => (
-                        <CommandItem
-                          key={option.value}
-                          value={`${option.label} ${option.value}`}
-                          onSelect={() => {
-                            setFeedScope(option.value);
-                            setScopeOpen(false);
-                          }}
-                          className="flex items-center gap-2"
-                        >
-                          <option.icon className="h-4 w-4 text-muted-foreground" />
-                          <span className="truncate">{option.label}</span>
-                          <Check
-                            className={cn(
-                              'ml-auto h-4 w-4',
-                              effectiveScope === option.value ? 'opacity-100' : 'opacity-0',
-                            )}
-                          />
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            {isMobile ? (
+              <Sheet open={scopeOpen} onOpenChange={setScopeOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" role="combobox" className="w-full justify-between">
+                    <span className="inline-flex items-center gap-2 truncate">
+                      {selectedScope?.icon && <selectedScope.icon className="h-4 w-4 shrink-0" />}
+                      <span className="truncate">{selectedScope?.label || 'Select scope'}</span>
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="bottom" className="h-[72vh] overflow-hidden px-0">
+                  <SheetHeader className="px-4 pb-2">
+                    <SheetTitle>Choose channel scope</SheetTitle>
+                    <SheetDescription>Select which channel lane you want to browse.</SheetDescription>
+                  </SheetHeader>
+                  <div className="px-4 pb-4">
+                    <Command className="rounded-lg border">
+                      <CommandInput placeholder="Search channels..." />
+                      <CommandList className="max-h-[54vh]">
+                        <CommandEmpty>No channels found.</CommandEmpty>
+                        <CommandGroup>
+                          {scopeOptions.map((option) => (
+                            <CommandItem
+                              key={option.value}
+                              value={`${option.label} ${option.value}`}
+                              onSelect={() => handleScopeSelect(option.value)}
+                              className="flex items-center gap-2"
+                            >
+                              <option.icon className="h-4 w-4 text-muted-foreground" />
+                              <span className="truncate">{option.label}</span>
+                              <Check
+                                className={cn(
+                                  'ml-auto h-4 w-4',
+                                  effectiveScope === option.value ? 'opacity-100' : 'opacity-0',
+                                )}
+                              />
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            ) : (
+              <Popover open={scopeOpen} onOpenChange={setScopeOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" role="combobox" className="w-full sm:w-72 justify-between">
+                    <span className="inline-flex items-center gap-2 truncate">
+                      {selectedScope?.icon && <selectedScope.icon className="h-4 w-4 shrink-0" />}
+                      <span className="truncate">{selectedScope?.label || 'Select scope'}</span>
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[320px] p-0" align="start" side="bottom" sideOffset={8} collisionPadding={12}>
+                  <Command>
+                    <CommandInput placeholder="Search channels..." />
+                    <CommandList>
+                      <CommandEmpty>No channels found.</CommandEmpty>
+                      <CommandGroup>
+                        {scopeOptions.map((option) => (
+                          <CommandItem
+                            key={option.value}
+                            value={`${option.label} ${option.value}`}
+                            onSelect={() => handleScopeSelect(option.value)}
+                            className="flex items-center gap-2"
+                          >
+                            <option.icon className="h-4 w-4 text-muted-foreground" />
+                            <span className="truncate">{option.label}</span>
+                            <Check
+                              className={cn(
+                                'ml-auto h-4 w-4',
+                                effectiveScope === option.value ? 'opacity-100' : 'opacity-0',
+                              )}
+                            />
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            )}
 
-            <Tabs value={feedSort} onValueChange={(v) => setFeedSort(v as FeedSort)}>
+            <Tabs value={feedSort} onValueChange={(v) => updateSearchParams({ sort: v as FeedSort })}>
               <TabsList className="h-9 w-full sm:w-fit rounded-md bg-muted/40 p-0.5">
                 {SORT_TABS.map((tab) => (
                   <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none">
