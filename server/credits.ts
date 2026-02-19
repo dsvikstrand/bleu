@@ -1,116 +1,105 @@
-import fs from 'fs';
-import path from 'path';
-
-type UserUsage = {
-  date: string;
-  used: number;
-};
+import { randomUUID } from 'node:crypto';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { consumeFlatCredit, getWallet, getWalletDefaults, type CreditLedgerContext } from './services/creditWallet';
 
 type UsageState = {
-  users: Record<string, UserUsage>;
   global: {
     timestamps: number[];
   };
 };
 
-const DAILY_CREDITS = Number(process.env.AI_DAILY_CREDITS) || 10;
 const GLOBAL_WINDOW_MS = Number(process.env.AI_GLOBAL_WINDOW_MS) || 10 * 60 * 1000;
 const GLOBAL_MAX = Number(process.env.AI_GLOBAL_MAX) || 25;
-const CREDITS_BYPASS = /^(1|true|yes)$/i.test(process.env.AI_CREDITS_BYPASS ?? '');
-const USAGE_FILE =
-  process.env.AI_USAGE_FILE ||
-  path.join(process.cwd(), 'server', 'data', 'ai-usage.json');
 
-const state: UsageState = loadState();
+const supabaseUrl = String(process.env.SUPABASE_URL || '').trim();
+const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 
-function ensureDir(filePath: string) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+let serviceClient: SupabaseClient<any, 'public', any> | null = null;
+
+const state: UsageState = {
+  global: {
+    timestamps: [],
+  },
+};
+
+function getServiceClient() {
+  if (!supabaseUrl || !serviceRoleKey) return null;
+  if (!serviceClient) {
+    serviceClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
   }
-}
-
-function loadState(): UsageState {
-  try {
-    if (!fs.existsSync(USAGE_FILE)) {
-      return { users: {}, global: { timestamps: [] } };
-    }
-    const raw = fs.readFileSync(USAGE_FILE, 'utf-8');
-    const parsed = JSON.parse(raw) as UsageState;
-    return {
-      users: parsed?.users ?? {},
-      global: { timestamps: parsed?.global?.timestamps ?? [] },
-    };
-  } catch {
-    return { users: {}, global: { timestamps: [] } };
-  }
-}
-
-let writeQueue = Promise.resolve();
-function persistState() {
-  ensureDir(USAGE_FILE);
-  const payload = JSON.stringify(state, null, 2);
-  writeQueue = writeQueue
-    .then(() => fs.promises.writeFile(USAGE_FILE, payload))
-    .catch(() => undefined);
-}
-
-function todayKey(now = new Date()): string {
-  return now.toISOString().slice(0, 10);
-}
-
-function nextResetAt(dateKey: string): string {
-  const base = new Date(`${dateKey}T00:00:00.000Z`);
-  base.setUTCDate(base.getUTCDate() + 1);
-  return base.toISOString();
+  return serviceClient;
 }
 
 function pruneGlobal(nowMs: number) {
-  state.global.timestamps = state.global.timestamps.filter(
-    (ts) => nowMs - ts <= GLOBAL_WINDOW_MS
-  );
+  state.global.timestamps = state.global.timestamps.filter((ts) => nowMs - ts <= GLOBAL_WINDOW_MS);
 }
 
-export function getCredits(userId: string) {
-  const dateKey = todayKey();
-  if (CREDITS_BYPASS) {
-    return {
-      remaining: DAILY_CREDITS,
-      limit: DAILY_CREDITS,
-      resetAt: nextResetAt(dateKey),
-      bypass: true,
-    };
-  }
-  const user = state.users[userId];
-  const used = user?.date === dateKey ? user.used : 0;
-  const remaining = Math.max(0, DAILY_CREDITS - used);
+function nextResetAtFromWallet(secondsToFull: number) {
+  const seconds = Math.max(0, Number(secondsToFull || 0));
+  return new Date(Date.now() + seconds * 1000).toISOString();
+}
+
+function fallbackResetAt() {
+  return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+}
+
+function getFallbackCredits() {
+  const defaults = getWalletDefaults();
   return {
-    remaining,
-    limit: DAILY_CREDITS,
-    resetAt: nextResetAt(dateKey),
+    remaining: defaults.capacity,
+    limit: defaults.capacity,
+    resetAt: fallbackResetAt(),
+    bypass: true,
+    balance: defaults.capacity,
+    capacity: defaults.capacity,
+    refill_rate_per_sec: defaults.refill_rate_per_sec,
+    seconds_to_full: 0,
   };
 }
 
-export function consumeCredit(userId: string) {
-  const dateKey = todayKey();
-  if (CREDITS_BYPASS) {
+export async function getCredits(userId: string) {
+  const db = getServiceClient();
+  if (!db) return getFallbackCredits();
+
+  try {
+    const wallet = await getWallet(db, userId);
+    return {
+      remaining: wallet.balance,
+      limit: wallet.capacity,
+      resetAt: nextResetAtFromWallet(wallet.seconds_to_full),
+      bypass: wallet.bypass,
+      balance: wallet.balance,
+      capacity: wallet.capacity,
+      refill_rate_per_sec: wallet.refill_rate_per_sec,
+      seconds_to_full: wallet.seconds_to_full,
+    };
+  } catch {
+    return getFallbackCredits();
+  }
+}
+
+export async function consumeCredit(
+  userId: string,
+  input?: {
+    amount?: number;
+    reasonCode?: string;
+    idempotencyKey?: string;
+    context?: CreditLedgerContext;
+  },
+) {
+  const db = getServiceClient();
+  if (!db) {
     return {
       ok: true as const,
-      remaining: DAILY_CREDITS,
-      limit: DAILY_CREDITS,
-      resetAt: nextResetAt(dateKey),
-      bypass: true,
+      ...(await getCredits(userId)),
     };
   }
-  const nowMs = Date.now();
 
+  const nowMs = Date.now();
   pruneGlobal(nowMs);
   if (state.global.timestamps.length >= GLOBAL_MAX) {
     const oldest = state.global.timestamps[0];
-    const retryAfterSeconds = Math.max(
-      1,
-      Math.ceil((oldest + GLOBAL_WINDOW_MS - nowMs) / 1000)
-    );
+    const retryAfterSeconds = Math.max(1, Math.ceil((oldest + GLOBAL_WINDOW_MS - nowMs) / 1000));
     return {
       ok: false as const,
       reason: 'global' as const,
@@ -118,26 +107,44 @@ export function consumeCredit(userId: string) {
     };
   }
 
-  const current = state.users[userId];
-  const used = current?.date === dateKey ? current.used : 0;
-  if (used >= DAILY_CREDITS) {
+  const amount = Math.max(0.001, Number(input?.amount ?? 1));
+  const reasonCode = String(input?.reasonCode || 'AI_FLAT').trim() || 'AI_FLAT';
+  const idempotencyKey = String(input?.idempotencyKey || `${reasonCode}:${userId}:${randomUUID()}`).trim();
+
+  const consumed = await consumeFlatCredit(db, {
+    userId,
+    amount,
+    reasonCode,
+    idempotencyKey,
+    context: input?.context,
+  });
+
+  if (!consumed.ok) {
     return {
       ok: false as const,
       reason: 'user' as const,
-      remaining: 0,
-      limit: DAILY_CREDITS,
-      resetAt: nextResetAt(dateKey),
+      remaining: consumed.wallet.balance,
+      limit: consumed.wallet.capacity,
+      resetAt: nextResetAtFromWallet(consumed.wallet.seconds_to_full),
+      balance: consumed.wallet.balance,
+      capacity: consumed.wallet.capacity,
+      refill_rate_per_sec: consumed.wallet.refill_rate_per_sec,
+      seconds_to_full: consumed.wallet.seconds_to_full,
     };
   }
 
-  state.users[userId] = { date: dateKey, used: used + 1 };
   state.global.timestamps.push(nowMs);
-  persistState();
 
+  const wallet = consumed.wallet;
   return {
     ok: true as const,
-    remaining: Math.max(0, DAILY_CREDITS - (used + 1)),
-    limit: DAILY_CREDITS,
-    resetAt: nextResetAt(dateKey),
+    remaining: wallet.balance,
+    limit: wallet.capacity,
+    resetAt: nextResetAtFromWallet(wallet.seconds_to_full),
+    bypass: wallet.bypass,
+    balance: wallet.balance,
+    capacity: wallet.capacity,
+    refill_rate_per_sec: wallet.refill_rate_per_sec,
+    seconds_to_full: wallet.seconds_to_full,
   };
 }

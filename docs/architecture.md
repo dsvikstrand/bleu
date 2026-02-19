@@ -48,7 +48,7 @@
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
     - public-readable source header (avatar/title/follower count + source link)
     - authenticated subscribe/unsubscribe actions
-    - authenticated `Video Library` section for creator back-catalog selection (`select -> queue -> async generation`) with two filters: `Full videos` and `Shorts` (`<=60s` threshold).
+    - authenticated `Video Library` section for creator back-catalog selection (`select -> unlock -> async generation`) with two filters: `Full videos` and `Shorts` (`<=60s` threshold).
     - source blueprint feed is now live: public-only channel-published cards, deduped by source video (`source_item_id`), newest-first, with `Load more` cursor pagination.
     - source feed cards are Home-style read-only (`open blueprint` on card click, no like/comment/share controls in this step).
     - active subscription rows are copy-light; avatar is the channel-open link target.
@@ -76,7 +76,8 @@
     - `GET /api/source-pages/:platform/:externalId/blueprints` (public-readable source blueprint feed, deduped by `source_item_id`, cursor-paginated via `next_cursor`)
     - `GET /api/source-pages/:platform/:externalId/videos` (auth-only source video-library listing with duplicate state flags for requester and `kind=full|shorts` filter)
       - list limiter policy: burst `4/15s` + sustained `40/10m` per user/IP.
-    - `POST /api/source-pages/:platform/:externalId/videos/generate` (auth-only async queue for selected source-library videos, ingestion scope `source_page_video_library_selection`)
+    - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth-only shared unlock + queue start for selected source-library videos, ingestion scope `source_item_unlock_generation`)
+    - `POST /api/source-pages/:platform/:externalId/videos/generate` (compatibility alias to unlock flow)
     - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)
     - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth-only, unsubscribe parity + notice cleanup)
     - `POST /api/source-subscriptions/:id/sync`
@@ -105,8 +106,9 @@
   - Gate runtime mode switch: `CHANNEL_GATES_MODE = bypass | shadow | enforce` (default `bypass`).
 - Data:
   - Supabase is system of record for blueprints, tags, follows, likes/comments, telemetry.
-  - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables + auto-banner policy/queue tables.
+  - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables + auto-banner policy/queue tables + refill-credit/unlock tables.
   - source-identity foundation: `source_pages` table and FK links from `user_source_subscriptions` + `source_items` via `source_page_id`.
+  - shared unlock foundation: `source_item_unlocks` (status/cost/reservation/ready blueprint) + `user_credit_wallets` + immutable `credit_ledger`.
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
 - Eval assets:
   - Runtime policy/config under `eval/methods/v0/*`.
@@ -134,7 +136,9 @@
    - create one persistent notice card (`user_feed_items.state = subscription_notice`) with avatar + optional banner metadata.
    - unsubscribe removes that user-scoped notice card while preserving other My Feed blueprint items.
 4. Subscription sync after checkpoint:
-   - new uploads generate immediately to `my_feed_published`.
+   - new uploads create unlockable feed rows (`my_feed_unlockable`) instead of immediate generation.
+   - unlock cards can be activated by one user; successful generation fans out shared blueprint linkage to subscribed users for that source item.
+   - source unlock pricing uses `1 / active_subscribers` (clamped and rounded), with hold -> settle/refund ledger flow.
    - auto-ingest path enables review generation by default.
    - auto-banner mode is controlled by env:
      - `off`: no auto banner processing.
@@ -215,6 +219,7 @@ Current production behavior note:
   - `CHANNEL_FIT_BLOCKED`, `QUALITY_BLOCKED`, `DUPLICATE_INGEST`.
   - `EVAL_BYPASSED` (expected in bypass mode).
   - `JOB_ALREADY_RUNNING`, `MAX_ITEMS_EXCEEDED`, `STALE_RUNNING_RECOVERY`.
+  - `INSUFFICIENT_CREDITS`, `UNLOCK_RESERVATION_EXPIRED`, `UNLOCK_GENERATION_FAILED`.
 - Recovery authority:
   - Logs-first triage in `docs/ops/yt2bp_runbook.md`.
   - Feature/env toggles for fast rollback.

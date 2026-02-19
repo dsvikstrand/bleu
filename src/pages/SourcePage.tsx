@@ -15,10 +15,10 @@ import { config } from '@/config/runtime';
 import { ApiRequestError, getIngestionJob, type IngestionJobStatus } from '@/lib/subscriptionsApi';
 import {
   type SourcePageVideoLibraryItem,
-  generateSourcePageVideos,
   getSourcePage,
   getSourcePageBlueprints,
   getSourcePageVideos,
+  unlockSourcePageVideos,
   subscribeToSourcePage,
   unsubscribeFromSourcePage,
 } from '@/lib/sourcePagesApi';
@@ -69,7 +69,9 @@ function getSourceVideoLibraryErrorMessage(error: unknown, fallback: string) {
       case 'SOURCE_VIDEO_GENERATE_INVALID_INPUT':
         return 'Select one or more valid videos to generate.';
       case 'SOURCE_VIDEO_GENERATE_FAILED':
-        return 'Could not queue generation for selected videos.';
+        return 'Could not start unlock generation for selected videos.';
+      case 'INSUFFICIENT_CREDITS':
+        return 'You need more credits. Wait for refill and retry.';
       default:
         return error.message || fallback;
     }
@@ -141,6 +143,7 @@ export default function SourcePage() {
   const sourcePage = sourcePageQuery.data?.source_page || null;
   const viewer = sourcePageQuery.data?.viewer || null;
   const subscribed = Boolean(viewer?.subscribed);
+  const canUnlockSourceVideos = Boolean(user && subscribed);
   const actionPending = subscribeMutation.isPending || unsubscribeMutation.isPending;
 
   const sourceBlueprintsQuery = useInfiniteQuery({
@@ -188,7 +191,7 @@ export default function SourcePage() {
   );
 
   const videoLibraryGenerateMutation = useMutation({
-    mutationFn: (items: SourcePageVideoLibraryItem[]) => generateSourcePageVideos({
+    mutationFn: (items: SourcePageVideoLibraryItem[]) => unlockSourcePageVideos({
       platform,
       externalId,
       items: items.map((item) => ({
@@ -207,16 +210,16 @@ export default function SourcePage() {
       setSelectedVideoIds({});
       queryClient.invalidateQueries({ queryKey: ['source-page-videos', platform, externalId, user?.id] });
       toast({
-        title: data.job_id ? 'Generation queued' : 'Nothing new to queue',
+        title: data.job_id ? 'Unlock queued' : 'No unlock queued',
         description: data.job_id
-          ? `Queued ${data.queued_count}, skipped existing ${data.skipped_existing_count}.`
-          : `All selected videos already exist for you (${data.skipped_existing_count} skipped).`,
+          ? `Queued ${data.queued_count}, ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}.`
+          : `Ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}.`,
       });
     },
     onError: (error) => {
       toast({
-        title: 'Generate failed',
-        description: getSourceVideoLibraryErrorMessage(error, 'Could not queue source videos for generation.'),
+        title: 'Unlock failed',
+        description: getSourceVideoLibraryErrorMessage(error, 'Could not start source video unlock.'),
         variant: 'destructive',
       });
     },
@@ -263,15 +266,15 @@ export default function SourcePage() {
 
     if (job.status === 'succeeded') {
       toast({
-        title: 'Video Library generation finished',
+        title: 'Video Library unlock finished',
         description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${Math.max(0, job.processed_count - job.inserted_count - job.skipped_count)}.`,
       });
       return;
     }
 
     toast({
-      title: 'Video Library generation failed',
-      description: job.error_message || 'Could not complete source video generation.',
+      title: 'Video Library unlock failed',
+      description: job.error_message || 'Could not complete source video unlock.',
       variant: 'destructive',
     });
   }, [
@@ -319,6 +322,7 @@ export default function SourcePage() {
 
   const handleGenerateSelectedVideos = () => {
     if (selectedSourceVideoItems.length === 0) return;
+    if (!canUnlockSourceVideos) return;
     videoLibraryGenerateMutation.mutate(selectedSourceVideoItems);
   };
 
@@ -469,7 +473,7 @@ export default function SourcePage() {
                         >
                           {sourceVideosQuery.isFetching ? 'Loading...' : 'Reload list'}
                         </Button>
-                        {sourceVideoItems.length > 0 ? (
+                        {sourceVideoItems.length > 0 && canUnlockSourceVideos ? (
                           <>
                             <Button
                               size="sm"
@@ -491,10 +495,16 @@ export default function SourcePage() {
                         ) : null}
                       </div>
 
+                      {!canUnlockSourceVideos ? (
+                        <p className="text-xs text-muted-foreground">
+                          Subscribe to this source to view unlock cost and activate blueprint generation.
+                        </p>
+                      ) : null}
+
                       {videoLibraryJobLabel ? (
                         <div className="rounded-md border border-border/40 bg-muted/10 p-3">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-medium">Video Library generation</p>
+                            <p className="text-sm font-medium">Video Library unlock</p>
                             <Badge variant={videoLibraryJobStatus === 'failed' ? 'destructive' : 'secondary'}>
                               {videoLibraryJobLabel}
                             </Badge>
@@ -545,7 +555,13 @@ export default function SourcePage() {
                                   <div className="flex items-start gap-3">
                                     <Checkbox
                                       checked={checked}
-                                      disabled={item.already_exists_for_user || videoLibraryGenerateMutation.isPending}
+                                      disabled={
+                                        !canUnlockSourceVideos
+                                        || item.already_exists_for_user
+                                        || item.unlock_in_progress
+                                        || item.unlock_status === 'ready'
+                                        || videoLibraryGenerateMutation.isPending
+                                      }
                                       onCheckedChange={(value) => toggleVideoSelection(item, value === true)}
                                       className="mt-0.5"
                                     />
@@ -556,13 +572,28 @@ export default function SourcePage() {
                                         <a href={item.video_url} target="_blank" rel="noreferrer" className="underline">
                                           Open video
                                         </a>
+                                        {canUnlockSourceVideos ? (
+                                          <Badge variant="outline" className="h-5 px-2 text-[10px]">
+                                            Cost {Number(item.unlock_cost || 0).toFixed(3)} cr
+                                          </Badge>
+                                        ) : null}
+                                        {item.unlock_status === 'ready' ? (
+                                          <Badge variant="secondary" className="h-5 px-2 text-[10px]">
+                                            Ready
+                                          </Badge>
+                                        ) : null}
+                                        {item.unlock_in_progress ? (
+                                          <Badge variant="secondary" className="h-5 px-2 text-[10px]">
+                                            Generating
+                                          </Badge>
+                                        ) : null}
                                         {item.already_exists_for_user ? (
                                           <Badge variant="secondary" className="h-5 px-2 text-[10px]">
                                             Already in your feed
                                           </Badge>
                                         ) : null}
-                                        {item.existing_blueprint_id ? (
-                                          <Link className="underline" to={`/blueprint/${item.existing_blueprint_id}`}>
+                                        {item.existing_blueprint_id || item.ready_blueprint_id ? (
+                                          <Link className="underline" to={`/blueprint/${item.existing_blueprint_id || item.ready_blueprint_id}`}>
                                             Open blueprint
                                           </Link>
                                         ) : null}
@@ -595,23 +626,25 @@ export default function SourcePage() {
                             </div>
                           ) : null}
 
-                          <div className="flex items-center justify-between gap-2 pt-1">
-                            <p className="text-xs text-muted-foreground">
-                              Selected: {selectedSourceVideoItems.length} / {sourceVideoItems.length}
-                            </p>
-                            <Button
-                              size="sm"
-                              onClick={handleGenerateSelectedVideos}
-                              disabled={
-                                selectedSourceVideoItems.length === 0
-                                || videoLibraryGenerateMutation.isPending
-                                || sourceVideosQuery.isFetching
-                                || videoLibraryJobRunning
-                              }
-                            >
-                              {videoLibraryGenerateMutation.isPending ? 'Queueing...' : 'Generate selected'}
-                            </Button>
-                          </div>
+                          {canUnlockSourceVideos ? (
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                              <p className="text-xs text-muted-foreground">
+                                Selected: {selectedSourceVideoItems.length} / {sourceVideoItems.length}
+                              </p>
+                              <Button
+                                size="sm"
+                                onClick={handleGenerateSelectedVideos}
+                                disabled={
+                                  selectedSourceVideoItems.length === 0
+                                  || videoLibraryGenerateMutation.isPending
+                                  || sourceVideosQuery.isFetching
+                                  || videoLibraryJobRunning
+                                }
+                              >
+                                {videoLibraryGenerateMutation.isPending ? 'Queueing...' : 'Unlock selected'}
+                              </Button>
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </>

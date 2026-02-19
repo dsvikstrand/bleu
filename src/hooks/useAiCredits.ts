@@ -7,6 +7,10 @@ type CreditsResponse = {
   limit: number;
   resetAt: string;
   bypass?: boolean;
+  balance?: number;
+  capacity?: number;
+  refill_rate_per_sec?: number;
+  seconds_to_full?: number;
 };
 
 async function fetchCredits(): Promise<CreditsResponse> {

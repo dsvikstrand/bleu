@@ -107,7 +107,7 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
               {credits
                 ? credits.bypass
                   ? 'Unlimited'
-                  : `${credits.remaining}/${credits.limit}`
+                  : `${Number(credits.balance ?? credits.remaining).toFixed(3)}/${Number(credits.capacity ?? credits.limit).toFixed(3)}`
                 : '—'}
             </span>
           </div>
@@ -122,7 +122,7 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
               ? 'Loading credits…'
               : creditsQuery.isError
               ? 'Credits unavailable'
-              : 'Resets daily'}
+              : 'Refills over time'}
           </p>
         </div>
         <DropdownMenuSeparator />

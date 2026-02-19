@@ -11,11 +11,16 @@ export interface MyFeedItemView {
   source: {
     id: string;
     sourceChannelId: string | null;
+    sourcePageId: string | null;
     sourceUrl: string;
     title: string;
     sourceChannelTitle: string | null;
     thumbnailUrl: string | null;
     channelBannerUrl: string | null;
+    unlockStatus: 'available' | 'reserved' | 'processing' | 'ready' | null;
+    unlockCost: number | null;
+    unlockInProgress: boolean;
+    readyBlueprintId: string | null;
   } | null;
   blueprint: {
     id: string;
@@ -62,10 +67,10 @@ export function useMyFeed() {
       const blueprintIds = [...new Set(filteredFeedRows.map((row) => row.blueprint_id).filter(Boolean))] as string[];
       const feedItemIds = filteredFeedRows.map((row) => row.id);
 
-      const [{ data: sources }, { data: blueprints }, { data: candidates }] = await Promise.all([
+      const [{ data: sources }, { data: blueprints }, { data: candidates }, { data: unlocks }] = await Promise.all([
         supabase
           .from('source_items')
-          .select('id, source_channel_id, source_url, title, source_channel_title, thumbnail_url, metadata')
+          .select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata')
           .in('id', sourceIds),
         blueprintIds.length
           ? supabase.from('blueprints').select('id, title, banner_url, llm_review, is_public, steps').in('id', blueprintIds)
@@ -73,8 +78,14 @@ export function useMyFeed() {
         supabase
           .from('channel_candidates')
           .select('id, user_feed_item_id, channel_slug, status, created_at')
-          .in('user_feed_item_id', feedItemIds)
-          .order('created_at', { ascending: false }),
+            .in('user_feed_item_id', feedItemIds)
+            .order('created_at', { ascending: false }),
+        sourceIds.length
+          ? supabase
+            .from('source_item_unlocks')
+            .select('source_item_id, status, estimated_cost, blueprint_id')
+            .in('source_item_id', sourceIds)
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
       const { data: tagRows } = blueprintIds.length
@@ -100,6 +111,7 @@ export function useMyFeed() {
       });
 
       const sourceMap = new Map((sources || []).map((row) => [row.id, row]));
+      const unlockMap = new Map((unlocks || []).map((row) => [row.source_item_id, row]));
       const blueprintMap = new Map((blueprints || []).map((row) => [row.id, row]));
       const candidateMap = new Map<string, { id: string; channelSlug: string; status: string }>();
       (candidates || []).forEach((row) => {
@@ -113,6 +125,7 @@ export function useMyFeed() {
 
       return filteredFeedRows.map((row) => {
         const source = sourceMap.get(row.source_item_id);
+        const sourceUnlock = source ? unlockMap.get(source.id) : null;
         const blueprint = blueprintMap.get(row.blueprint_id);
         const sourceMetadata =
           source?.metadata
@@ -138,6 +151,7 @@ export function useMyFeed() {
             ? {
                 id: source.id,
                 sourceChannelId: source.source_channel_id || null,
+                sourcePageId: source.source_page_id || null,
                 sourceUrl: source.source_url,
                 title: source.title,
                 sourceChannelTitle: source.source_channel_title || metadataSourceChannelTitle || null,
@@ -149,6 +163,18 @@ export function useMyFeed() {
                   && 'channel_banner_url' in source.metadata
                     ? String((source.metadata as Record<string, unknown>).channel_banner_url || '') || null
                     : null,
+                unlockStatus:
+                  sourceUnlock?.status === 'available'
+                  || sourceUnlock?.status === 'reserved'
+                  || sourceUnlock?.status === 'processing'
+                  || sourceUnlock?.status === 'ready'
+                    ? sourceUnlock.status
+                    : null,
+                unlockCost: sourceUnlock ? Number(sourceUnlock.estimated_cost || 0) : null,
+                unlockInProgress: sourceUnlock?.status === 'reserved' || sourceUnlock?.status === 'processing',
+                readyBlueprintId: sourceUnlock?.status === 'ready'
+                  ? (sourceUnlock.blueprint_id || null)
+                  : null,
               }
             : null,
           blueprint: blueprint

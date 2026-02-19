@@ -9,7 +9,7 @@
 ## bleuV1 source-first integration context
 - YT2BP remains the ingestion/generation entrypoint only.
 - Personal-first routing is now expected:
-  - generated draft is saved to `My Feed` (`user_feed_items.state = my_feed_published`).
+  - generated draft is saved to `My Feed` (`user_feed_items.state = my_feed_published` for direct/manual paths, `my_feed_unlockable` for new subscription uploads).
   - channel visibility is handled by auto-channel pipeline when enabled.
   - `/youtube` runs core generation first and executes optional review/banner asynchronously after core success.
   - `Save to My Feed` is non-blocking while optional review/banner complete and attach later.
@@ -30,7 +30,8 @@
   - `GET /api/source-pages/:platform/:externalId/blueprints` (public source-page feed, deduped by source video, cursor-paginated)
   - `GET /api/source-pages/:platform/:externalId/videos` (auth source-page video-library list, supports `kind=full|shorts`)
     - rate policy: burst `4/15s` + sustained `40/10m` per user/IP.
-  - `POST /api/source-pages/:platform/:externalId/videos/generate` (auth async queue for selected source videos)
+  - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth shared unlock + async generation queue for selected source videos)
+  - `POST /api/source-pages/:platform/:externalId/videos/generate` (compatibility alias to `/videos/unlock`)
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
 - Profile feed read endpoint:
@@ -122,6 +123,12 @@ Required runtime variables:
 - `SUBSCRIPTION_AUTO_BANNER_BATCH_SIZE` (default `20`)
 - `SUBSCRIPTION_AUTO_BANNER_CONCURRENCY` (default `1`)
 - `AUTO_BANNER_STALE_RUNNING_MS` (default `1200000`)
+- `CREDIT_WALLET_CAPACITY` (default `10`)
+- `CREDIT_WALLET_INITIAL_BALANCE` (default `10`)
+- `CREDIT_REFILL_SECONDS_PER_CREDIT` (default `360`)
+- `SOURCE_UNLOCK_RESERVATION_SECONDS` (default `300`)
+- `SOURCE_UNLOCK_GENERATE_MAX_ITEMS` (default `100`)
+- `SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH` (default `100`)
 
 Safe defaults:
 - `YT2BP_ENABLED=true`
@@ -152,6 +159,12 @@ Safe defaults:
 - `SUBSCRIPTION_AUTO_BANNER_BATCH_SIZE=20`
 - `SUBSCRIPTION_AUTO_BANNER_CONCURRENCY=1`
 - `AUTO_BANNER_STALE_RUNNING_MS=1200000`
+- `CREDIT_WALLET_CAPACITY=10`
+- `CREDIT_WALLET_INITIAL_BALANCE=10`
+- `CREDIT_REFILL_SECONDS_PER_CREDIT=360`
+- `SOURCE_UNLOCK_RESERVATION_SECONDS=300`
+- `SOURCE_UNLOCK_GENERATE_MAX_ITEMS=100`
+- `SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH=100`
 
 ## Onboarding rollout checks
 - Schema check:
@@ -213,6 +226,20 @@ Safe defaults:
   1) Use `GET /api/ingestion/jobs/<job_id>` (user auth) to track completion.
   2) Wait for terminal state (`succeeded|failed`) before launching a new refresh-generate run.
   3) If job appears stuck, inspect stale recovery settings (`INGESTION_STALE_RUNNING_MS`).
+
+### `INSUFFICIENT_CREDITS`
+- Meaning: user wallet could not reserve enough credits for source-video unlock.
+- Action:
+  1) Check `/api/credits` response fields (`balance`, `capacity`, `refill_rate_per_sec`, `seconds_to_full`).
+  2) Confirm wallet env defaults are set as expected (`CREDIT_WALLET_*`).
+  3) Verify user has active subscriptions on the source page (cost is subscriber-based and can drop as followers increase).
+
+### `UNLOCK_RESERVATION_EXPIRED` or `UNLOCK_GENERATION_FAILED`
+- Meaning: unlock reservation expired or queued generation failed; held credits should be refunded.
+- Action:
+  1) Inspect `source_item_unlocks` row (`status`, `last_error_code`, `last_error_message`, `reservation_expires_at`).
+  2) Inspect `credit_ledger` for matching `hold` and `refund` entries via `unlock_id`.
+  3) Retry unlock from source page after verifying provider health.
 
 ### `candidate_pending_manual_review` growth
 - Meaning: gate pipeline is producing warn outcomes (fit/quality) and routing to manual review.

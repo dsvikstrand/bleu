@@ -5,8 +5,12 @@ export function getFriendlyErrorMessage(error: unknown, fallback: string) {
   if (normalized.includes('unauthorized') || normalized.includes('auth')) {
     return 'Please sign in again and try that request.';
   }
-  if (normalized.includes('daily ai credits') || normalized.includes('credits used')) {
-    return 'You have used today’s AI credits. Try again tomorrow.';
+  if (
+    normalized.includes('daily ai credits')
+    || normalized.includes('credits used')
+    || normalized.includes('insufficient credits')
+  ) {
+    return 'You do not have enough credits right now. Wait for refill and try again.';
   }
   if (normalized.includes('capacity') || normalized.includes('at capacity')) {
     return 'High AI activity. Please try again in a minute.';

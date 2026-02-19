@@ -56,6 +56,7 @@ Execution mode:
 37. [have] Step 36 - Source Pages foundation (platform-agnostic source entity + additive APIs + minimal `/s/:platform/:externalId` UI)
 38. [have] Step 37 - Source Page blueprint feed (public deduped list + latest/load-more UX)
 39. [have] Step 38 - Source Page Video Library (auth-only creator backlog list + async selected generation)
+40. [have] Step 39 - Shared source unlock + refill credits (unlock cards, wallet ledger, no historical backfill)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -328,6 +329,31 @@ Completion evidence (2026-02-19)
 - Updated `src/pages/SourcePage.tsx` with `Video Library` select/generate UI, duplicate badges, and background job polling card.
 - Added two-tab filter UX for `Video Library` (`Full videos`, `Shorts`) with server-side `kind` filtering and shorts threshold `<=60s`.
 - Tuned video-library list safety policy to dual limiter guards (burst + sustained) and added frontend cache/refetch controls to reduce accidental 429s during tab switch/load-more.
+
+### Step 39 - Shared source unlock + refill credits
+Scope
+- stop duplicate per-user generation for the same source video by introducing shared unlock rows.
+- switch credits from daily-reset counters to refill wallets with decimal balance.
+- cut over new source-video generation paths to reserve -> settle/refund unlock flow.
+
+Definition of done
+- migration adds `user_credit_wallets`, `credit_ledger`, and `source_item_unlocks` (no backfill required).
+- source-page video-library list and unlock endpoints expose per-video unlock status/cost/ready metadata.
+- subscription new-upload ingest creates `my_feed_unlockable` rows and unlock cards instead of immediate generation.
+- successful unlock generation fans out one shared blueprint to subscribed users for that source item.
+
+Evaluation
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+Completion evidence (2026-02-20)
+- Added migration `20260220010000_credit_unlock_foundation_v1.sql` (wallet/ledger/unlock tables + indexes + RLS + triggers).
+- Added backend services `server/services/creditWallet.ts` and `server/services/sourceUnlocks.ts`.
+- Added `POST /api/source-pages/:platform/:externalId/videos/unlock` and kept `/videos/generate` as compatibility alias.
+- Updated `/api/credits` + frontend credit UI to refill-model fields (`balance/capacity/refill_rate_per_sec/seconds_to_full`).
+- Cut subscription sync to write unlockable feed items and attached unlock actions on `My Feed` + `Source Page` Video Library.
 
 ### Step 12 - Subscriptions management actions
 Scope

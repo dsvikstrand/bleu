@@ -49,6 +49,9 @@
 - 2026-02-19 note: source-page video-library endpoints (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/generate`) are additive and do not alter the YT2BP endpoint envelope.
 - 2026-02-19 note: source-page video-library listing now supports `kind=full|shorts` with shorts threshold `<=60s`; additive and outside the YT2BP envelope.
 - 2026-02-19 note: source-page video-library list now uses dual rate-limit guards (burst+sustained) and frontend cache/focus-refetch tuning; additive and outside the YT2BP envelope.
+- 2026-02-20 note: source-page unlock endpoint (`POST /api/source-pages/:platform/:externalId/videos/unlock`) is additive; legacy `/videos/generate` remains compatibility alias; both are outside this endpoint envelope.
+- 2026-02-20 note: refill-credit wallet model (`user_credit_wallets`, `credit_ledger`, `/api/credits` refill fields) is additive and outside this endpoint envelope.
+- 2026-02-20 note: subscription new-upload ingest now writes unlockable feed rows (`my_feed_unlockable`) before generation; this lifecycle change is outside this endpoint envelope.
 
 ## Request
 ```json
@@ -144,7 +147,8 @@
 - Source-page lifecycle (`source_pages`, `/api/source-pages/*`, `source_page_id` dual-write links) is intentionally outside this endpoint contract.
 - Source-page read-time asset hydration behavior is intentionally outside this endpoint contract.
 - Source-page public feed retrieval (`GET /api/source-pages/:platform/:externalId/blueprints`) is intentionally outside this endpoint contract.
-- Source-page video-library listing/queue flow (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/generate`) is intentionally outside this endpoint contract.
+- Source-page video-library listing/queue flow (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`, compatibility alias `/videos/generate`) is intentionally outside this endpoint contract.
+- Refill-credit wallet and source-unlock persistence (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`, `/api/credits`) are intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: env-controlled via `YT2BP_CORE_TIMEOUT_MS` (default `120s`).

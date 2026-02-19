@@ -62,7 +62,10 @@ a50) [have] Source Pages foundation is active: YouTube channels are now represen
 a51) [have] Subscription surfaces now deep-link to Source Pages, while legacy `/api/source-subscriptions*` contracts remain active for compatibility.
 a52) [have] Source page reads now lazily hydrate missing avatar/banner assets for legacy backfilled rows, so first open can populate visuals without requiring re-subscribe.
 a53) [have] Source pages now expose a public, deduped blueprint feed (`latest + load more`) via `GET /api/source-pages/:platform/:externalId/blueprints`, and `/s/:platform/:externalId` renders Home-style read-only blueprint cards.
-a54) [have] Source pages now include an auth-only `Video Library` section for back-catalog generation (`GET /videos`, `POST /videos/generate`) with async queue execution and duplicate skip visibility.
+a54) [have] Source pages now include an auth-only `Video Library` section for back-catalog generation (`GET /videos`, `POST /videos/unlock`, legacy alias `POST /videos/generate`) with async queue execution and duplicate skip visibility.
+a55) [have] Shared source-video unlock model is active for new source-page generation: one generation per source video can be reused across subscribers.
+a56) [have] Credit model now uses refill wallets (decimal balance) instead of daily reset counters (`10.000` cap, `+1.000 / 6 min` default).
+a57) [have] Subscription auto-ingestion now writes unlockable My Feed rows (`my_feed_unlockable`) for new uploads instead of immediately generating blueprints.
 
 ## Core Model
 b1) `Source Item`
@@ -84,7 +87,9 @@ b4) Feed surfaces
 b5) Subscription behavior (MVP simplified)
 - UI behavior is auto-only.
 - On subscribe, backend sets a checkpoint (`last_seen_published_at` / `last_seen_video_id`) without ingesting historical uploads.
-- Future uploads after checkpoint ingest directly to `my_feed_published`.
+- Future uploads after checkpoint ingest to unlockable rows (`my_feed_unlockable`) with shared unlock metadata.
+- Shared unlock pricing for source videos is subscriber-based: `cost = clamp(round(1 / active_subscribers, 3), 0.050..1.000)`.
+- Unlock debit policy is hold-first, settle-on-success, refund-on-failure/expiry.
 - Auto-ingested subscription items run review generation by default.
 - Banner generation for auto-ingest is controlled by `SUBSCRIPTION_AUTO_BANNER_MODE`:
   - `off` (default): no auto banner worker activity.
@@ -101,7 +106,7 @@ b5) Subscription behavior (MVP simplified)
   - if generation fails for a selected video, that `(subscription_id, video_id)` is hidden from scan results for `6h` and then automatically retryable.
 
 ## MVP Lifecycle Contract
-c1) Pull/ingest -> generate blueprint -> publish to `My Feed`.
+c1) Pull/ingest -> either generate directly or create unlockable source row -> `My Feed`.
 c2) Optional user remix/insight.
 c3) Auto-channel pipeline runs per item (classifier mode is env-driven: deterministic or post-artifact LLM labeler).
 c4) Channel gate contract remains (`channel_fit`, `quality`, `safety`, `pii`); in `llm_labeler_v1`, channel-fit is pass-by-design for the selected label while quality/safety/pii stay enforced.
@@ -187,6 +192,7 @@ d5) [have] Scheduled/user-triggered ingestion jobs + trace table (`ingestion_job
 d6) [have] Auto-banner policy + queue tables (`channel_default_banners`, `auto_banner_jobs`).
 d7) [have] Onboarding state table for new-user YouTube setup (`user_youtube_onboarding`).
 d8) [have] Source-page foundation tables/links (`source_pages`, `user_source_subscriptions.source_page_id`, `source_items.source_page_id`).
+d9) [have] Refill-credit + unlock tables (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`).
 
 ## Subscription Interfaces (MVP)
 si1) `POST /api/source-subscriptions` with `{ channel_input, mode? }` (`mode` accepted but ignored/coerced to `auto` in MVP path)
@@ -229,8 +235,12 @@ si37) auth endpoint: `DELETE /api/source-pages/:platform/:externalId/subscribe` 
 si38) compatibility note: legacy `POST/GET/PATCH/DELETE /api/source-subscriptions*` remains live while Source Pages rollout expands.
 si39) public/auth endpoint: `GET /api/source-pages/:platform/:externalId/blueprints?limit=<1..24>&cursor=<opaque?>` (public channel-published feed for the source page, deduped by `source_item_id` with `next_cursor` pagination).
 si40) auth endpoint: `GET /api/source-pages/:platform/:externalId/videos?page_token=<optional>&limit=<1..25>&kind=<full|shorts>` (source-page video-library listing for signed-in users, includes duplicate flags per row; shorts threshold is `<=60s`).
-si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/generate` (queues async generation for selected source videos, skips user duplicates, returns `job_id` + queue summary).
-si42) source-page video-library list rate policy: burst `4/15s` plus sustained `40/10m` per user/IP (reduce accidental 429 on normal tab-switch/load-more while keeping abuse guardrails).
+si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/unlock` (reserves credits, starts shared unlock generation queue, returns `job_id` + ready/in-progress/insufficient summary buckets).
+si42) compatibility alias: `POST /api/source-pages/:platform/:externalId/videos/generate` routes to unlock flow in this phase.
+si43) `GET /api/source-pages/:platform/:externalId/videos` now includes unlock metadata per row (`unlock_status`, `unlock_cost`, `unlock_in_progress`, `ready_blueprint_id`).
+si44) `GET /api/credits` now returns refill-wallet fields (`balance`, `capacity`, `refill_rate_per_sec`, `seconds_to_full`) alongside compatibility fields (`remaining`, `limit`, `resetAt`).
+si45) source-page video-library unlock worker scope is `source_item_unlock_generation` (single generation per source video, shared fan-out to subscribed users).
+si46) source-page video-library list rate policy: burst `4/15s` plus sustained `40/10m` per user/IP (reduce accidental 429 on normal tab-switch/load-more while keeping abuse guardrails).
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

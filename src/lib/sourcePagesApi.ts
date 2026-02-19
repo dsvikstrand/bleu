@@ -61,6 +61,11 @@ export type SourcePageVideoLibraryItem = {
   already_exists_for_user: boolean;
   existing_blueprint_id: string | null;
   existing_feed_item_id: string | null;
+  unlock_status: 'available' | 'reserved' | 'processing' | 'ready';
+  unlock_cost: number;
+  unlock_in_progress: boolean;
+  ready_blueprint_id: string | null;
+  unlock_id: string | null;
 };
 
 export type SourcePageVideoLibraryPage = {
@@ -80,6 +85,12 @@ export type SourcePageVideoGenerateSummary = {
     existing_blueprint_id: string | null;
     existing_feed_item_id: string | null;
   }>;
+  ready_count: number;
+  ready: Array<{ video_id: string; title: string; blueprint_id: string | null }>;
+  in_progress_count: number;
+  in_progress: Array<{ video_id: string; title: string }>;
+  insufficient_count: number;
+  insufficient: Array<{ video_id: string; title: string; required: number; balance: number }>;
 };
 
 function getApiBase() {
@@ -245,9 +256,23 @@ export async function generateSourcePageVideos(input: {
     thumbnail_url?: string | null;
   }>;
 }) {
+  return unlockSourcePageVideos(input);
+}
+
+export async function unlockSourcePageVideos(input: {
+  platform: string;
+  externalId: string;
+  items: Array<{
+    video_id: string;
+    video_url: string;
+    title: string;
+    published_at?: string | null;
+    thumbnail_url?: string | null;
+  }>;
+}) {
   const authHeader = await getRequiredAuthHeader();
   const response = await apiRequest<SourcePageVideoGenerateSummary>(
-    `/source-pages/${encodeURIComponent(input.platform)}/${encodeURIComponent(input.externalId)}/videos/generate`,
+    `/source-pages/${encodeURIComponent(input.platform)}/${encodeURIComponent(input.externalId)}/videos/unlock`,
     {
       method: 'POST',
       headers: {

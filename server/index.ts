@@ -56,6 +56,21 @@ import {
   normalizeSourcePagePlatform,
 } from './services/sourcePages';
 import {
+  attachReservationLedger,
+  completeUnlock,
+  computeUnlockCost,
+  countActiveSubscribersForSourcePage,
+  ensureSourceItemUnlock,
+  failUnlock,
+  findExpiredReservedUnlocks,
+  getSourceItemUnlockBySourceItemId,
+  getSourceItemUnlocksBySourceItemIds,
+  markUnlockProcessing,
+  reserveUnlock,
+  type SourceItemUnlockRow,
+} from './services/sourceUnlocks';
+import { refundReservation, reserveCredits, settleReservation } from './services/creditWallet';
+import {
   clampInt,
   getFailureTransition,
   normalizeAutoBannerMode,
@@ -120,6 +135,9 @@ const sourceVideoListBurstMax = clampInt(process.env.SOURCE_VIDEO_LIST_BURST_MAX
 const sourceVideoListSustainedWindowMs = clampInt(process.env.SOURCE_VIDEO_LIST_SUSTAINED_WINDOW_MS, 10 * 60_000, 60_000, 60 * 60_000);
 const sourceVideoListSustainedMax = clampInt(process.env.SOURCE_VIDEO_LIST_SUSTAINED_MAX, 40, 5, 500);
 const sourceVideoGenerateCooldownMs = clampInt(process.env.SOURCE_VIDEO_GENERATE_COOLDOWN_MS, 30_000, 5_000, 300_000);
+const sourceUnlockReservationSeconds = clampInt(process.env.SOURCE_UNLOCK_RESERVATION_SECONDS, 300, 60, 3600);
+const sourceUnlockGenerateMaxItems = clampInt(process.env.SOURCE_UNLOCK_GENERATE_MAX_ITEMS, 100, 1, 500);
+const sourceUnlockExpiredSweepBatch = clampInt(process.env.SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH, 100, 10, 1000);
 const refreshFailureCooldownHours = clampInt(process.env.REFRESH_FAILURE_COOLDOWN_HOURS, 6, 1, 168);
 const ingestionStaleRunningMs = clampInt(process.env.INGESTION_STALE_RUNNING_MS, 30 * 60 * 1000, 60_000, 24 * 60 * 60 * 1000);
 const autoBannerMode = normalizeAutoBannerMode(process.env.SUBSCRIPTION_AUTO_BANNER_MODE);
@@ -1111,12 +1129,13 @@ app.get('/api/profile/:userId/feed', async (req, res) => {
   });
 });
 
-app.get('/api/credits', (_req, res) => {
+app.get('/api/credits', async (_req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  return res.json(getCredits(userId));
+  const credits = await getCredits(userId);
+  return res.json(credits);
 });
 
 app.post('/api/generate-inventory', async (req, res) => {
@@ -1130,7 +1149,9 @@ app.post('/api/generate-inventory', async (req, res) => {
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const creditCheck = consumeCredit(userId);
+  const creditCheck = await consumeCredit(userId, {
+    reasonCode: 'INVENTORY_GENERATE',
+  });
   if (!creditCheck.ok) {
     if (creditCheck.reason === 'global') {
       return res.status(429).json({
@@ -1139,7 +1160,7 @@ app.post('/api/generate-inventory', async (req, res) => {
       });
     }
     return res.status(429).json({
-      error: 'Daily AI credits used. Please try again tomorrow.',
+      error: 'Insufficient credits right now. Please wait for refill and try again.',
       remaining: creditCheck.remaining,
       limit: creditCheck.limit,
       resetAt: creditCheck.resetAt,
@@ -1165,7 +1186,9 @@ app.post('/api/analyze-blueprint', async (req, res) => {
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const creditCheck = consumeCredit(userId);
+  const creditCheck = await consumeCredit(userId, {
+    reasonCode: 'BLUEPRINT_REVIEW',
+  });
   if (!creditCheck.ok) {
     if (creditCheck.reason === 'global') {
       return res.status(429).json({
@@ -1174,7 +1197,7 @@ app.post('/api/analyze-blueprint', async (req, res) => {
       });
     }
     return res.status(429).json({
-      error: 'Daily AI credits used. Please try again tomorrow.',
+      error: 'Insufficient credits right now. Please wait for refill and try again.',
       remaining: creditCheck.remaining,
       limit: creditCheck.limit,
       resetAt: creditCheck.resetAt,
@@ -1233,7 +1256,9 @@ app.post('/api/generate-blueprint', async (req, res) => {
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const creditCheck = consumeCredit(userId);
+  const creditCheck = await consumeCredit(userId, {
+    reasonCode: 'BLUEPRINT_GENERATE',
+  });
   if (!creditCheck.ok) {
     if (creditCheck.reason === 'global') {
       return res.status(429).json({
@@ -1242,7 +1267,7 @@ app.post('/api/generate-blueprint', async (req, res) => {
       });
     }
     return res.status(429).json({
-      error: 'Daily AI credits used. Please try again tomorrow.',
+      error: 'Insufficient credits right now. Please wait for refill and try again.',
       remaining: creditCheck.remaining,
       limit: creditCheck.limit,
       resetAt: creditCheck.resetAt,
@@ -1318,14 +1343,16 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (userId) {
-    const creditCheck = consumeCredit(userId);
+    const creditCheck = await consumeCredit(userId, {
+      reasonCode: 'YOUTUBE_TO_BLUEPRINT',
+    });
     if (!creditCheck.ok) {
       return res.status(429).json({
         ok: false,
         error_code: 'GENERATION_FAIL',
         message: creditCheck.reason === 'global'
           ? 'We’re at capacity right now. Please try again in a few minutes.'
-          : 'Daily AI credits used. Please try again tomorrow.',
+          : 'Insufficient credits right now. Please wait for refill and try again.',
         run_id: runId,
       });
     }
@@ -2502,7 +2529,7 @@ async function upsertSourceItemFromVideo(db: ReturnType<typeof createClient>, in
       },
       { onConflict: 'canonical_key' },
     )
-    .select('id, source_url, source_native_id')
+    .select('id, source_url, source_native_id, source_page_id, source_channel_id, source_channel_title, title, published_at, thumbnail_url')
     .single();
   if (error) throw error;
   return data;
@@ -2579,6 +2606,65 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
     throw error;
   }
   return data;
+}
+
+async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, input: {
+  userId: string;
+  sourceItemId: string;
+  blueprintId: string;
+  state: string;
+}) {
+  const { data, error } = await db
+    .from('user_feed_items')
+    .upsert(
+      {
+        user_id: input.userId,
+        source_item_id: input.sourceItemId,
+        blueprint_id: input.blueprintId,
+        state: input.state,
+        last_decision_code: null,
+      },
+      { onConflict: 'user_id,source_item_id' },
+    )
+    .select('id, user_id')
+    .single();
+  if (error) throw error;
+  return data as { id: string; user_id: string };
+}
+
+async function attachBlueprintToSubscribedUsers(db: ReturnType<typeof createClient>, input: {
+  sourceItemId: string;
+  sourcePageId: string | null;
+  blueprintId: string;
+  unlockingUserId: string;
+}) {
+  const targetUsers = new Set<string>([input.unlockingUserId]);
+
+  if (input.sourcePageId) {
+    const { data: subscriptions, error: subscriptionsError } = await db
+      .from('user_source_subscriptions')
+      .select('user_id')
+      .eq('source_page_id', input.sourcePageId)
+      .eq('is_active', true);
+    if (subscriptionsError) throw subscriptionsError;
+    for (const row of subscriptions || []) {
+      const userId = String(row.user_id || '').trim();
+      if (userId) targetUsers.add(userId);
+    }
+  }
+
+  const results: Array<{ id: string; user_id: string }> = [];
+  for (const userId of targetUsers) {
+    const row = await upsertFeedItemWithBlueprint(db, {
+      userId,
+      sourceItemId: input.sourceItemId,
+      blueprintId: input.blueprintId,
+      state: 'my_feed_published',
+    });
+    results.push(row);
+  }
+
+  return results;
 }
 
 const AUTO_BANNER_ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
@@ -3229,6 +3315,28 @@ type SourcePageVideoExistingState = {
   already_exists_for_user: boolean;
   existing_blueprint_id: string | null;
   existing_feed_item_id: string | null;
+  source_item_id: string | null;
+};
+
+type SourcePageVideoUnlockSnapshot = {
+  unlock_status: 'available' | 'reserved' | 'processing' | 'ready';
+  unlock_cost: number;
+  unlock_in_progress: boolean;
+  ready_blueprint_id: string | null;
+  unlock_id: string | null;
+};
+
+type SourceUnlockQueueItem = {
+  unlock_id: string;
+  source_item_id: string;
+  source_page_id: string | null;
+  source_channel_id: string;
+  source_channel_title: string | null;
+  video_id: string;
+  video_url: string;
+  title: string;
+  reserved_cost: number;
+  reserved_by_user_id: string;
 };
 
 const YOUTUBE_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{8,15}$/;
@@ -3340,6 +3448,7 @@ async function loadExistingSourceVideoStateForUser(
         already_exists_for_user: false,
         existing_blueprint_id: null,
         existing_feed_item_id: null,
+        source_item_id: null,
       });
       continue;
     }
@@ -3348,10 +3457,88 @@ async function loadExistingSourceVideoStateForUser(
       already_exists_for_user: Boolean(existingFeed),
       existing_blueprint_id: existingFeed?.blueprint_id || null,
       existing_feed_item_id: existingFeed?.id || null,
+      source_item_id: source.id,
     });
   }
 
   return result;
+}
+
+async function recoverExpiredSourceUnlockReservations(db: ReturnType<typeof createClient>) {
+  const expired = await findExpiredReservedUnlocks(db, sourceUnlockExpiredSweepBatch);
+  if (expired.length === 0) return 0;
+
+  let recovered = 0;
+  for (const unlock of expired) {
+    const userId = String(unlock.reserved_by_user_id || '').trim();
+    const amount = Math.max(0, Number(unlock.estimated_cost || 0));
+    if (userId && amount > 0) {
+      try {
+        await refundReservation(db, {
+          userId,
+          amount,
+          idempotencyKey: `unlock:${unlock.id}:expired_refund`,
+          reasonCode: 'UNLOCK_RESERVATION_EXPIRED_REFUND',
+          context: {
+            source_item_id: unlock.source_item_id,
+            source_page_id: unlock.source_page_id,
+            unlock_id: unlock.id,
+            metadata: {
+              reservation_expires_at: unlock.reservation_expires_at,
+            },
+          },
+        });
+      } catch (error) {
+        console.log('[unlock_expired_refund_failed]', JSON.stringify({
+          unlock_id: unlock.id,
+          user_id: userId,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
+    }
+
+    try {
+      await failUnlock(db, {
+        unlockId: unlock.id,
+        errorCode: 'UNLOCK_RESERVATION_EXPIRED',
+        errorMessage: 'Reservation expired before generation started.',
+      });
+      recovered += 1;
+    } catch (error) {
+      console.log('[unlock_expired_reset_failed]', JSON.stringify({
+        unlock_id: unlock.id,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  return recovered;
+}
+
+function toUnlockSnapshot(input: {
+  unlock: SourceItemUnlockRow | null;
+  fallbackCost: number;
+}): SourcePageVideoUnlockSnapshot {
+  const unlock = input.unlock;
+  if (!unlock) {
+    return {
+      unlock_status: 'available',
+      unlock_cost: input.fallbackCost,
+      unlock_in_progress: false,
+      ready_blueprint_id: null,
+      unlock_id: null,
+    };
+  }
+
+  const status = unlock.status;
+  const cost = Math.max(0, Number(unlock.estimated_cost || input.fallbackCost));
+  return {
+    unlock_status: status,
+    unlock_cost: cost,
+    unlock_in_progress: status === 'reserved' || status === 'processing',
+    ready_blueprint_id: status === 'ready' ? unlock.blueprint_id || null : null,
+    unlock_id: unlock.id,
+  };
 }
 
 type RefreshVideoAttemptRow = {
@@ -3976,6 +4163,208 @@ async function processSourcePageVideoLibraryJob(input: {
   }));
 }
 
+async function processSourceItemUnlockGenerationJob(input: {
+  jobId: string;
+  userId: string;
+  items: SourceUnlockQueueItem[];
+}) {
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    throw new Error('Service role client not configured');
+  }
+
+  let processed = 0;
+  let inserted = 0;
+  let skipped = 0;
+  const failures: Array<{ video_id: string; unlock_id: string; error_code: string; error: string }> = [];
+
+  for (const item of input.items) {
+    processed += 1;
+    try {
+      const processingUnlock = await markUnlockProcessing(db, {
+        unlockId: item.unlock_id,
+        userId: item.reserved_by_user_id,
+        jobId: input.jobId,
+      });
+
+      if (!processingUnlock) {
+        const current = await getSourceItemUnlockBySourceItemId(db, item.source_item_id);
+        if (current?.status === 'ready' && current.blueprint_id) {
+          skipped += 1;
+          continue;
+        }
+        skipped += 1;
+        continue;
+      }
+
+      if (processingUnlock.status === 'ready' && processingUnlock.blueprint_id) {
+        skipped += 1;
+        continue;
+      }
+
+      const { data: sourceRow, error: sourceError } = await db
+        .from('source_items')
+        .select('id, source_url, source_native_id, source_page_id, source_channel_id, source_channel_title, title')
+        .eq('id', item.source_item_id)
+        .maybeSingle();
+
+      if (sourceError || !sourceRow) {
+        throw new Error(sourceError?.message || 'SOURCE_ITEM_NOT_FOUND');
+      }
+
+      const generated = await createBlueprintFromVideo(db, {
+        userId: input.userId,
+        videoUrl: sourceRow.source_url,
+        videoId: sourceRow.source_native_id,
+        sourceTag: 'source_page_video_library',
+        sourceItemId: sourceRow.id,
+        subscriptionId: null,
+      });
+
+      const feedRows = await attachBlueprintToSubscribedUsers(db, {
+        sourceItemId: sourceRow.id,
+        sourcePageId: sourceRow.source_page_id || item.source_page_id || null,
+        blueprintId: generated.blueprintId,
+        unlockingUserId: input.userId,
+      });
+
+      const unlockingFeed = feedRows.find((row) => row.user_id === input.userId) || null;
+      if (unlockingFeed) {
+        try {
+          await runAutoChannelForFeedItem({
+            db,
+            userId: input.userId,
+            userFeedItemId: unlockingFeed.id,
+            blueprintId: generated.blueprintId,
+            sourceItemId: sourceRow.id,
+            sourceTag: 'source_unlock_generation',
+          });
+        } catch (autoChannelError) {
+          console.log('[auto_channel_pipeline_failed]', JSON.stringify({
+            user_id: input.userId,
+            user_feed_item_id: unlockingFeed.id,
+            blueprint_id: generated.blueprintId,
+            source_item_id: sourceRow.id,
+            source_tag: 'source_unlock_generation',
+            error: autoChannelError instanceof Error ? autoChannelError.message : String(autoChannelError),
+          }));
+        }
+      }
+
+      await completeUnlock(db, {
+        unlockId: item.unlock_id,
+        blueprintId: generated.blueprintId,
+        jobId: input.jobId,
+      });
+
+      await settleReservation(db, {
+        userId: item.reserved_by_user_id,
+        amount: item.reserved_cost,
+        idempotencyKey: `unlock:${item.unlock_id}:settle`,
+        reasonCode: 'UNLOCK_SETTLE',
+        context: {
+          source_item_id: item.source_item_id,
+          source_page_id: item.source_page_id,
+          unlock_id: item.unlock_id,
+          metadata: {
+            job_id: input.jobId,
+            blueprint_id: generated.blueprintId,
+          },
+        },
+      });
+
+      inserted += 1;
+
+      console.log('[source_unlock_generation_succeeded]', JSON.stringify({
+        job_id: input.jobId,
+        unlock_id: item.unlock_id,
+        source_item_id: item.source_item_id,
+        blueprint_id: generated.blueprintId,
+        attached_users: feedRows.length,
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const errorCode = error instanceof PipelineError
+        ? error.errorCode
+        : getSupabaseErrorCode(error) || 'UNLOCK_GENERATION_FAILED';
+
+      failures.push({
+        video_id: item.video_id,
+        unlock_id: item.unlock_id,
+        error_code: errorCode,
+        error: message,
+      });
+
+      try {
+        await refundReservation(db, {
+          userId: item.reserved_by_user_id,
+          amount: item.reserved_cost,
+          idempotencyKey: `unlock:${item.unlock_id}:refund`,
+          reasonCode: 'UNLOCK_REFUND',
+          context: {
+            source_item_id: item.source_item_id,
+            source_page_id: item.source_page_id,
+            unlock_id: item.unlock_id,
+            metadata: {
+              job_id: input.jobId,
+              error_code: errorCode,
+            },
+          },
+        });
+      } catch (refundError) {
+        console.log('[source_unlock_refund_failed]', JSON.stringify({
+          job_id: input.jobId,
+          unlock_id: item.unlock_id,
+          user_id: item.reserved_by_user_id,
+          error: refundError instanceof Error ? refundError.message : String(refundError),
+        }));
+      }
+
+      try {
+        await failUnlock(db, {
+          unlockId: item.unlock_id,
+          errorCode,
+          errorMessage: message,
+        });
+      } catch (unlockError) {
+        console.log('[source_unlock_fail_transition_failed]', JSON.stringify({
+          job_id: input.jobId,
+          unlock_id: item.unlock_id,
+          error: unlockError instanceof Error ? unlockError.message : String(unlockError),
+        }));
+      }
+
+      console.log('[source_unlock_generation_failed]', JSON.stringify({
+        job_id: input.jobId,
+        unlock_id: item.unlock_id,
+        source_item_id: item.source_item_id,
+        video_id: item.video_id,
+        error_code: errorCode,
+        error: message.slice(0, 220),
+      }));
+    }
+  }
+
+  await db.from('ingestion_jobs').update({
+    status: failures.length ? 'failed' : 'succeeded',
+    finished_at: new Date().toISOString(),
+    processed_count: processed,
+    inserted_count: inserted,
+    skipped_count: skipped,
+    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
+    error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
+  }).eq('id', input.jobId);
+
+  console.log('[source_unlock_generation_job_done]', JSON.stringify({
+    job_id: input.jobId,
+    user_id: input.userId,
+    processed,
+    inserted,
+    skipped,
+    failures: failures.length,
+  }));
+}
+
 async function syncSingleSubscription(db: ReturnType<typeof createClient>, subscription: {
   id: string;
   user_id: string;
@@ -4028,6 +4417,8 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
+  const activeSubscriberCount = await countActiveSubscribersForSourcePage(db, subscription.source_page_id || null);
+  const estimatedUnlockCost = computeUnlockCost(activeSubscriberCount);
 
   for (const video of toProcess) {
     processed += 1;
@@ -4044,54 +4435,27 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
       continue;
     }
 
-    const generated = await createBlueprintFromVideo(db, {
-      userId: subscription.user_id,
-      videoUrl: source.source_url,
-      videoId: source.source_native_id,
-      sourceTag: 'subscription_auto',
+    await ensureSourceItemUnlock(db, {
       sourceItemId: source.id,
-      subscriptionId: subscription.id,
+      sourcePageId: subscription.source_page_id || source.source_page_id || null,
+      estimatedCost: estimatedUnlockCost,
     });
 
     const insertedItem = await insertFeedItem(db, {
       userId: subscription.user_id,
       sourceItemId: source.id,
-      blueprintId: generated.blueprintId,
-      state: 'my_feed_published',
+      blueprintId: null,
+      state: 'my_feed_unlockable',
     });
     if (insertedItem) inserted += 1;
     else skipped += 1;
 
-    if (insertedItem) {
-      try {
-        await runAutoChannelForFeedItem({
-          db,
-          userId: subscription.user_id,
-          userFeedItemId: insertedItem.id,
-          blueprintId: generated.blueprintId,
-          sourceItemId: source.id,
-          sourceTag: 'subscription_auto_ingest',
-        });
-      } catch (autoChannelError) {
-        console.log('[auto_channel_pipeline_failed]', JSON.stringify({
-          user_id: subscription.user_id,
-          subscription_id: subscription.id,
-          user_feed_item_id: insertedItem.id,
-          blueprint_id: generated.blueprintId,
-          source_item_id: source.id,
-          source_tag: 'subscription_auto_ingest',
-          error: autoChannelError instanceof Error ? autoChannelError.message : String(autoChannelError),
-        }));
-      }
-    }
-
-    console.log('[subscription_auto_ingested]', JSON.stringify({
+    console.log('[subscription_auto_unlockable]', JSON.stringify({
       subscription_id: subscription.id,
       user_id: subscription.user_id,
       source_item_id: source.id,
-      blueprint_id: generated.blueprintId,
+      estimated_unlock_cost: estimatedUnlockCost,
       trigger: options.trigger,
-      run_id: generated.runId,
     }));
   }
 
@@ -4621,6 +4985,7 @@ app.get(
 
   let page;
   try {
+    await recoverExpiredSourceUnlockReservations(sourcePageDb);
     page = await listYouTubeSourceVideos({
       apiKey: youtubeDataApiKey,
       channelId: sourcePage.external_id,
@@ -4678,6 +5043,35 @@ app.get(
     });
   }
 
+  let activeSubscriberCount = 0;
+  try {
+    activeSubscriberCount = await countActiveSubscribersForSourcePage(sourcePageDb, sourcePage.id);
+  } catch (error) {
+    console.log('[source_video_active_subscriber_count_failed]', JSON.stringify({
+      source_page_id: sourcePage.id,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+  const fallbackUnlockCost = computeUnlockCost(activeSubscriberCount);
+
+  const sourceItemIds = Array.from(new Set(
+    page.results
+      .map((item) => existingByVideoId.get(item.video_id)?.source_item_id || null)
+      .filter((value): value is string => Boolean(value)),
+  ));
+  let unlockBySourceItemId = new Map<string, SourceItemUnlockRow>();
+  if (sourceItemIds.length > 0) {
+    try {
+      const unlockRows = await getSourceItemUnlocksBySourceItemIds(sourcePageDb, sourceItemIds);
+      unlockBySourceItemId = new Map(unlockRows.map((row) => [row.source_item_id, row]));
+    } catch (error) {
+      console.log('[source_video_unlock_lookup_failed]', JSON.stringify({
+        source_page_id: sourcePage.id,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
   return res.json({
     ok: true,
     error_code: null,
@@ -4698,6 +5092,10 @@ app.get(
           already_exists_for_user: Boolean(existing?.already_exists_for_user),
           existing_blueprint_id: existing?.existing_blueprint_id || null,
           existing_feed_item_id: existing?.existing_feed_item_id || null,
+          ...toUnlockSnapshot({
+            unlock: existing?.source_item_id ? unlockBySourceItemId.get(existing.source_item_id) || null : null,
+            fallbackCost: fallbackUnlockCost,
+          }),
         };
       }),
       next_page_token: page.nextPageToken,
@@ -4708,7 +5106,7 @@ app.get(
   },
 );
 
-app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoGenerateLimiter, async (req, res) => {
+async function handleSourcePageVideosUnlock(req: express.Request, res: express.Response) {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId || !authToken) {
@@ -4748,7 +5146,15 @@ app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoG
     return res.status(400).json({
       ok: false,
       error_code: 'SOURCE_VIDEO_GENERATE_INVALID_INPUT',
-      message: 'Invalid generate payload.',
+      message: 'Invalid unlock payload.',
+      data: null,
+    });
+  }
+  if (parsed.data.items.length > sourceUnlockGenerateMaxItems) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_VIDEO_GENERATE_INVALID_INPUT',
+      message: `Select up to ${sourceUnlockGenerateMaxItems} videos per request.`,
       data: null,
     });
   }
@@ -4777,6 +5183,8 @@ app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoG
       data: null,
     });
   }
+
+  await recoverExpiredSourceUnlockReservations(sourcePageDb);
 
   const dedupedMap = new Map<string, SourcePageVideoGenerateItem>();
   for (const item of parsed.data.items) {
@@ -4817,13 +5225,160 @@ app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoG
     }))
     .filter((row) => Boolean(row.existing?.already_exists_for_user));
 
-  const queuedItems = normalizedItems.filter((item) => !existingByVideoId.get(item.video_id)?.already_exists_for_user);
+  let activeSubscriberCount = 0;
+  try {
+    activeSubscriberCount = await countActiveSubscribersForSourcePage(sourcePageDb, sourcePage.id);
+  } catch (error) {
+    console.log('[source_unlock_active_subscriber_count_failed]', JSON.stringify({
+      source_page_id: sourcePage.id,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+  const estimatedUnlockCost = computeUnlockCost(activeSubscriberCount);
 
-  if (queuedItems.length === 0) {
+  const queueItems: SourceUnlockQueueItem[] = [];
+  const inProgressRows: Array<{ video_id: string; title: string }> = [];
+  const readyRows: Array<{ video_id: string; title: string; blueprint_id: string | null }> = [];
+  const insufficientRows: Array<{ video_id: string; title: string; required: number; balance: number }> = [];
+
+  const candidateRows = normalizedItems.filter((item) => !existingByVideoId.get(item.video_id)?.already_exists_for_user);
+
+  for (const item of candidateRows) {
+    try {
+      const source = await upsertSourceItemFromVideo(sourcePageDb, {
+        video: {
+          videoId: item.video_id,
+          title: item.title,
+          url: item.video_url,
+          publishedAt: item.published_at || null,
+          thumbnailUrl: item.thumbnail_url || null,
+        },
+        channelId: sourcePage.external_id,
+        channelTitle: sourcePage.title || sourcePage.external_id,
+        sourcePageId: sourcePage.id,
+      });
+
+      const unlockSeed = await ensureSourceItemUnlock(sourcePageDb, {
+        sourceItemId: source.id,
+        sourcePageId: sourcePage.id,
+        estimatedCost: estimatedUnlockCost,
+      });
+
+      const reserveResult = await reserveUnlock(sourcePageDb, {
+        unlock: unlockSeed,
+        userId,
+        estimatedCost: estimatedUnlockCost,
+        reservationSeconds: sourceUnlockReservationSeconds,
+      });
+
+      if (reserveResult.state === 'ready') {
+        readyRows.push({
+          video_id: item.video_id,
+          title: item.title,
+          blueprint_id: reserveResult.unlock.blueprint_id || null,
+        });
+        continue;
+      }
+
+      if (reserveResult.state === 'in_progress') {
+        inProgressRows.push({
+          video_id: item.video_id,
+          title: item.title,
+        });
+        continue;
+      }
+
+      let reservedUnlock = reserveResult.unlock;
+      if (!reservedUnlock.reserved_ledger_id) {
+        const hold = await reserveCredits(sourcePageDb, {
+          userId,
+          amount: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
+          idempotencyKey: `unlock:${reservedUnlock.id}:hold`,
+          reasonCode: 'UNLOCK_HOLD',
+          context: {
+            source_item_id: source.id,
+            source_page_id: sourcePage.id,
+            unlock_id: reservedUnlock.id,
+            metadata: {
+              source: 'source_page_video_library',
+              video_id: item.video_id,
+            },
+          },
+        });
+
+        if (!hold.ok) {
+          await failUnlock(sourcePageDb, {
+            unlockId: reservedUnlock.id,
+            errorCode: 'INSUFFICIENT_CREDITS',
+            errorMessage: 'Insufficient credits to reserve unlock.',
+          });
+          insufficientRows.push({
+            video_id: item.video_id,
+            title: item.title,
+            required: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
+            balance: hold.wallet.balance,
+          });
+          continue;
+        }
+
+        reservedUnlock = await attachReservationLedger(sourcePageDb, {
+          unlockId: reservedUnlock.id,
+          userId,
+          ledgerId: hold.ledger_id || null,
+          amount: hold.reserved_amount,
+        });
+      }
+
+      queueItems.push({
+        unlock_id: reservedUnlock.id,
+        source_item_id: source.id,
+        source_page_id: sourcePage.id,
+        source_channel_id: sourcePage.external_id,
+        source_channel_title: sourcePage.title || sourcePage.external_id,
+        video_id: item.video_id,
+        video_url: item.video_url,
+        title: item.title,
+        reserved_cost: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
+        reserved_by_user_id: userId,
+      });
+    } catch (error) {
+      console.log('[source_unlock_prepare_failed]', JSON.stringify({
+        user_id: userId,
+        source_page_id: sourcePage.id,
+        video_id: item.video_id,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      inProgressRows.push({
+        video_id: item.video_id,
+        title: item.title,
+      });
+    }
+  }
+
+  if (
+    queueItems.length === 0
+    && insufficientRows.length > 0
+    && readyRows.length === 0
+    && inProgressRows.length === 0
+    && duplicateRows.length === 0
+  ) {
+    return res.status(402).json({
+      ok: false,
+      error_code: 'INSUFFICIENT_CREDITS',
+      message: 'Insufficient credits for unlock.',
+      data: {
+        required: insufficientRows[0]?.required || 0,
+        balance: insufficientRows[0]?.balance || 0,
+        insufficient: insufficientRows,
+      },
+    });
+  }
+
+  if (queueItems.length === 0) {
     return res.json({
       ok: true,
       error_code: null,
-      message: 'all selected videos already exist for this user',
+      message: 'source unlock status resolved',
       data: {
         job_id: null,
         queued_count: 0,
@@ -4834,6 +5389,12 @@ app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoG
           existing_blueprint_id: row.existing?.existing_blueprint_id || null,
           existing_feed_item_id: row.existing?.existing_feed_item_id || null,
         })),
+        ready_count: readyRows.length,
+        ready: readyRows,
+        in_progress_count: inProgressRows.length,
+        in_progress: inProgressRows,
+        insufficient_count: insufficientRows.length,
+        insufficient: insufficientRows,
       },
     });
   }
@@ -4842,7 +5403,7 @@ app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoG
     .from('ingestion_jobs')
     .insert({
       trigger: 'user_sync',
-      scope: 'source_page_video_library_selection',
+      scope: 'source_item_unlock_generation',
       status: 'running',
       requested_by_user_id: userId,
       started_at: new Date().toISOString(),
@@ -4859,13 +5420,10 @@ app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoG
   }
 
   setImmediate(() => {
-    void processSourcePageVideoLibraryJob({
+    void processSourceItemUnlockGenerationJob({
       jobId: job.id,
       userId,
-      sourcePageId: sourcePage.id,
-      sourceChannelId: sourcePage.external_id,
-      sourceChannelTitle: sourcePage.title || sourcePage.external_id,
-      items: queuedItems,
+      items: queueItems,
     }).catch(async (error) => {
       const serviceDb = getServiceSupabaseClient();
       if (serviceDb) {
@@ -4876,11 +5434,10 @@ app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoG
           error_message: (error instanceof Error ? error.message : String(error)).slice(0, 500),
         }).eq('id', job.id);
       }
-      console.log('[source_page_video_generate_job_failed]', JSON.stringify({
+      console.log('[source_unlock_generation_job_failed]', JSON.stringify({
         job_id: job.id,
         user_id: userId,
         source_page_id: sourcePage.id,
-        source_channel_id: sourcePage.external_id,
         error: error instanceof Error ? error.message : String(error),
       }));
     });
@@ -4889,10 +5446,10 @@ app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoG
   return res.status(202).json({
     ok: true,
     error_code: null,
-    message: 'background generation started',
+    message: 'background unlock generation started',
     data: {
       job_id: job.id,
-      queued_count: queuedItems.length,
+      queued_count: queueItems.length,
       skipped_existing_count: duplicateRows.length,
       skipped_existing: duplicateRows.map((row) => ({
         video_id: row.item.video_id,
@@ -4900,9 +5457,18 @@ app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoG
         existing_blueprint_id: row.existing?.existing_blueprint_id || null,
         existing_feed_item_id: row.existing?.existing_feed_item_id || null,
       })),
+      ready_count: readyRows.length,
+      ready: readyRows,
+      in_progress_count: inProgressRows.length,
+      in_progress: inProgressRows,
+      insufficient_count: insufficientRows.length,
+      insufficient: insufficientRows,
     },
   });
-});
+}
+
+app.post('/api/source-pages/:platform/:externalId/videos/unlock', sourceVideoGenerateLimiter, handleSourcePageVideosUnlock);
+app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoGenerateLimiter, handleSourcePageVideosUnlock);
 
 app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) => {
   const platform = normalizeSourcePagePlatform(req.params.platform || '');
@@ -7302,7 +7868,9 @@ app.post('/api/generate-banner', async (req, res) => {
   if (!userId || !authToken) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const creditCheck = consumeCredit(userId);
+  const creditCheck = await consumeCredit(userId, {
+    reasonCode: 'BANNER_GENERATE',
+  });
   if (!creditCheck.ok) {
     if (creditCheck.reason === 'global') {
       return res.status(429).json({
@@ -7311,7 +7879,7 @@ app.post('/api/generate-banner', async (req, res) => {
       });
     }
     return res.status(429).json({
-      error: 'Daily AI credits used. Please try again tomorrow.',
+      error: 'Insufficient credits right now. Please wait for refill and try again.',
       remaining: creditCheck.remaining,
       limit: creditCheck.limit,
       resetAt: creditCheck.resetAt,

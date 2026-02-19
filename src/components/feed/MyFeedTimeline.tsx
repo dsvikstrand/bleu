@@ -29,6 +29,8 @@ import {
   deactivateSourceSubscriptionByChannelId,
   skipMyFeedPendingItem,
 } from '@/lib/subscriptionsApi';
+import { unlockSourcePageVideos } from '@/lib/sourcePagesApi';
+import { extractYouTubeVideoId } from '@/lib/sourceIdentity';
 import { logMvpEvent } from '@/lib/logEvent';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { config } from '@/config/runtime';
@@ -303,6 +305,50 @@ export function MyFeedTimeline({
     },
   });
 
+  const unlockMutation = useMutation({
+    mutationFn: async (item: MyFeedItemView) => {
+      if (!canMutate || !user) throw new Error('Owner only action.');
+      const source = item.source;
+      if (!source?.sourceChannelId) throw new Error('Source channel is missing.');
+      const videoId = extractYouTubeVideoId(source.sourceUrl || '');
+      if (!videoId) throw new Error('Could not resolve source video id.');
+      return unlockSourcePageVideos({
+        platform: 'youtube',
+        externalId: source.sourceChannelId,
+        items: [
+          {
+            video_id: videoId,
+            video_url: source.sourceUrl,
+            title: source.title || 'Video',
+          },
+        ],
+      });
+    },
+    onSuccess: (result) => {
+      invalidateFeedQueries();
+      queryClient.invalidateQueries({ queryKey: ['source-page-videos'] });
+      queryClient.invalidateQueries({ queryKey: ['source-page-blueprints'] });
+      if (result.job_id) {
+        toast({
+          title: 'Unlock queued',
+          description: `Queued ${result.queued_count}, ready ${result.ready_count}, in progress ${result.in_progress_count}.`,
+        });
+        return;
+      }
+      toast({
+        title: 'Unlock status updated',
+        description: `Ready ${result.ready_count}, in progress ${result.in_progress_count}.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Unlock failed',
+        description: error instanceof Error ? error.message : 'Could not start unlock.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const hasItems = (items || []).length > 0;
 
   const submissionDialogItem = useMemo(
@@ -358,6 +404,7 @@ export function MyFeedTimeline({
           : (source?.sourceChannelTitle || source?.title || 'Imported source');
         const tags = blueprint?.tags || [];
         const canAccept = item.state === 'my_feed_pending_accept' || item.state === 'my_feed_skipped';
+        const isUnlockable = item.state === 'my_feed_unlockable' && !blueprint;
         const preview = buildFeedSummary({
           primary: blueprint?.llmReview || null,
           fallback: source?.title || 'Open to view the full blueprint.',
@@ -454,21 +501,51 @@ export function MyFeedTimeline({
                   )}
                   {canMutate ? (
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => acceptMutation.mutate(item.id)}
-                        disabled={acceptMutation.isPending || !canAccept}
-                      >
-                        Accept
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => skipMutation.mutate(item.id)}
-                        disabled={skipMutation.isPending || item.state !== 'my_feed_pending_accept'}
-                      >
-                        Skip
-                      </Button>
+                      {isUnlockable ? (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              unlockMutation.mutate(item);
+                            }}
+                            disabled={unlockMutation.isPending || Boolean(item.source?.unlockInProgress)}
+                          >
+                            {item.source?.unlockInProgress ? 'Generating...' : 'Unlock Blueprint'}
+                          </Button>
+                          <span className="inline-flex items-center text-xs text-muted-foreground">
+                            Cost {Number(item.source?.unlockCost || 0).toFixed(3)} cr
+                          </span>
+                          {item.source?.readyBlueprintId ? (
+                            <Link
+                              className="inline-flex items-center text-xs underline"
+                              to={`/blueprint/${item.source.readyBlueprintId}`}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              Open blueprint
+                            </Link>
+                          ) : null}
+                        </>
+                      ) : null}
+                      {canAccept ? (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => acceptMutation.mutate(item.id)}
+                            disabled={acceptMutation.isPending || !canAccept}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => skipMutation.mutate(item.id)}
+                            disabled={skipMutation.isPending || item.state !== 'my_feed_pending_accept'}
+                          >
+                            Skip
+                          </Button>
+                        </>
+                      ) : null}
                     </div>
                   ) : null}
                 </>
@@ -516,6 +593,8 @@ export function MyFeedTimeline({
                   <span>
                     {item.state === 'channel_published' ? (
                       `Posted to ${getChannelDisplayName(item.candidate?.channelSlug || null)}`
+                    ) : item.state === 'my_feed_unlockable' ? (
+                      item.source?.unlockInProgress ? 'Unlock in progress' : 'Unlock available'
                     ) : autoChannelPipelineEnabled || !canMutate ? (
                       item.state === 'my_feed_generating' || item.state === 'candidate_submitted'
                         ? 'Publishing...'

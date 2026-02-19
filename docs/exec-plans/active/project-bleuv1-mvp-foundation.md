@@ -94,6 +94,8 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 20 source-page Video Library adds auth-only creator backlog listing (`GET /videos`) and async selected generation (`POST /videos/generate`) on `/s/:platform/:externalId` with duplicate skip visibility and job status polling.
 - Step 20 follow-up adds two-tab list filters in Video Library (`Full videos` and `Shorts`), with shorts classified as `<=60s`.
 - Step 20 safety follow-up tunes source-page list limiter policy to burst+sustained guardrails and frontend caching to avoid normal-flow 429 churn.
+- Step 21 shared unlock + refill credits adds wallet/ledger economics (`user_credit_wallets`, `credit_ledger`) plus source-video unlock state (`source_item_unlocks`) for one-generation-per-source-item.
+- Step 21 source-page generation endpoint is now `POST /videos/unlock` (with `/videos/generate` compatibility alias), and subscription new uploads now land as `my_feed_unlockable` cards instead of immediate generation.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Added user endpoint `GET /api/ingestion/jobs/:id` for owner-scoped manual refresh progress.
 - Added user endpoint `GET /api/ingestion/jobs/latest-mine` for owner-scoped latest refresh-job restore after page reload.
