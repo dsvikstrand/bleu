@@ -200,6 +200,7 @@ export default function Inventory() {
                 className="text-muted-foreground"
                 onClick={() => {
                   setQuery('');
+                  setSelectedTag(null);
                 }}
               >
                 Clear

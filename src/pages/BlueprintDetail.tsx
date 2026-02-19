@@ -19,8 +19,7 @@ import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layou
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
-import { supabase as _supabase } from '@/integrations/supabase/client';
-const supabase = _supabase as any;
+import { supabase } from '@/integrations/supabase/client';
 
 type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };

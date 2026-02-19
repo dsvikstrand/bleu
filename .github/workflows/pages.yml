@@ -36,6 +36,8 @@ jobs:
         env:
           VITE_BASE_PATH: ${{ env.VITE_BASE_PATH }}
           VITE_AGENTIC_BACKEND_URL: https://bapi.vdsai.cloud
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v4

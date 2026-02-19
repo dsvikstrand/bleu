@@ -1,10 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase as _supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-
-// Tables not yet in generated types — cast to bypass strict checking
-const supabase = _supabase as any;
 
 export interface MyFeedItemView {
   id: string;
@@ -102,10 +99,10 @@ export function useMyFeed() {
         tagsByBlueprint.set(row.blueprint_id, list);
       });
 
-      const sourceMap = new Map((sources || []).map((row: any) => [row.id, row]));
-      const blueprintMap = new Map((blueprints || []).map((row: any) => [row.id, row]));
+      const sourceMap = new Map((sources || []).map((row) => [row.id, row]));
+      const blueprintMap = new Map((blueprints || []).map((row) => [row.id, row]));
       const candidateMap = new Map<string, { id: string; channelSlug: string; status: string }>();
-      (candidates || []).forEach((row: any) => {
+      (candidates || []).forEach((row) => {
         if (candidateMap.has(row.user_feed_item_id)) return;
         candidateMap.set(row.user_feed_item_id, {
           id: row.id,
@@ -114,9 +111,9 @@ export function useMyFeed() {
         });
       });
 
-      return filteredFeedRows.map((row: any) => {
-        const source: any = sourceMap.get(row.source_item_id);
-        const blueprint: any = blueprintMap.get(row.blueprint_id);
+      return filteredFeedRows.map((row) => {
+        const source = sourceMap.get(row.source_item_id);
+        const blueprint = blueprintMap.get(row.blueprint_id);
         const sourceMetadata =
           source?.metadata
           && typeof source.metadata === 'object'

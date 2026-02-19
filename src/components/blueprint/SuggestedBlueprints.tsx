@@ -52,6 +52,8 @@ export function SuggestedBlueprints({
             key={blueprint.id}
             blueprint={blueprint}
             onLike={onLike}
+            followedTagIds={followedTagIds}
+            onToggleTag={onToggleTag}
           />
         ))}
       </div>

@@ -102,7 +102,7 @@ export function createOpenAIClient(): LLMClient {
       }
 
       const parsed = JSON.parse(extractJson(outputText));
-      return InventorySchemaValidator.parse(parsed) as InventorySchema;
+      return InventorySchemaValidator.parse(parsed);
     },
     async analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string> {
       const response = await client.responses.create({
@@ -123,8 +123,8 @@ export function createOpenAIClient(): LLMClient {
       const response = await client.images.generate({
         model: imageModel,
         prompt,
-        size: imageSize as "1024x1024" | "1024x1536" | "1024x1792" | "1536x1024" | "1792x1024" | "256x256" | "512x512" | "auto",
-        quality: imageQuality as "auto" | "hd" | "high" | "low" | "medium" | "standard",
+        size: imageSize,
+        quality: imageQuality,
       });
 
       const imagePayload = response.data?.[0];
@@ -162,7 +162,7 @@ export function createOpenAIClient(): LLMClient {
       }
 
       const parsed = JSON.parse(extractJson(outputText));
-      return BlueprintGenerationValidator.parse(parsed) as BlueprintGenerationResult;
+      return BlueprintGenerationValidator.parse(parsed);
     },
     async generateYouTubeBlueprint(input: YouTubeBlueprintRequest): Promise<YouTubeBlueprintResult> {
       const response = await client.responses.create({
@@ -176,7 +176,7 @@ export function createOpenAIClient(): LLMClient {
         throw new Error('No output text from OpenAI');
       }
       const parsed = JSON.parse(extractJson(outputText));
-      return YouTubeBlueprintValidator.parse(parsed) as YouTubeBlueprintResult;
+      return YouTubeBlueprintValidator.parse(parsed);
     },
     async generateChannelLabel(input: ChannelLabelRequest): Promise<ChannelLabelResult> {
       const response = await client.responses.create({
