@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
@@ -13,9 +13,14 @@ import { config } from '@/config/runtime';
 import { ApiRequestError } from '@/lib/subscriptionsApi';
 import {
   getSourcePage,
+  getSourcePageBlueprints,
   subscribeToSourcePage,
   unsubscribeFromSourcePage,
 } from '@/lib/sourcePagesApi';
+import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
+import { formatRelativeShort } from '@/lib/timeFormat';
+import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
+import { getChannelIcon } from '@/lib/channelIcons';
 
 function getInitials(title: string, fallback: string) {
   const raw = title.trim() || fallback.trim();
@@ -108,6 +113,21 @@ export default function SourcePage() {
   const viewer = sourcePageQuery.data?.viewer || null;
   const subscribed = Boolean(viewer?.subscribed);
   const actionPending = subscribeMutation.isPending || unsubscribeMutation.isPending;
+
+  const sourceBlueprintsQuery = useInfiniteQuery({
+    queryKey: ['source-page-blueprints', platform, externalId],
+    enabled: backendEnabled && isValidRoute && Boolean(sourcePage),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => getSourcePageBlueprints({
+      platform,
+      externalId,
+      limit: 12,
+      cursor: pageParam ?? null,
+    }),
+    getNextPageParam: (lastPage) => lastPage.next_cursor || undefined,
+  });
+
+  const sourceBlueprintItems = sourceBlueprintsQuery.data?.pages.flatMap((page) => page.items) || [];
 
   const handleSubscribeToggle = () => {
     if (!user) return;
@@ -225,9 +245,103 @@ export default function SourcePage() {
                   <CardTitle className="text-base">Source blueprints</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Blueprint list for this source page is coming in the next step.
-                  </p>
+                  {sourceBlueprintsQuery.isLoading ? (
+                    <div className="space-y-3">
+                      {Array.from({ length: 3 }).map((_, index) => (
+                        <div key={index} className="space-y-2 rounded-md border border-border/40 p-3">
+                          <Skeleton className="h-4 w-28" />
+                          <Skeleton className="h-5 w-3/4" />
+                          <Skeleton className="h-4 w-full" />
+                          <Skeleton className="h-4 w-5/6" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {!sourceBlueprintsQuery.isLoading && sourceBlueprintsQuery.error ? (
+                    <p className="text-sm text-destructive">
+                      {getSourcePageErrorMessage(sourceBlueprintsQuery.error, 'Could not load source blueprints.')}
+                    </p>
+                  ) : null}
+
+                  {!sourceBlueprintsQuery.isLoading && !sourceBlueprintsQuery.error && sourceBlueprintItems.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No published blueprints from this source yet.
+                    </p>
+                  ) : null}
+
+                  {!sourceBlueprintsQuery.isLoading && !sourceBlueprintsQuery.error && sourceBlueprintItems.length > 0 ? (
+                    <div className="space-y-3">
+                      {sourceBlueprintItems.map((item) => {
+                        const channelSlug = item.published_channel_slug || 'general';
+                        const channelLabel = `b/${channelSlug}`;
+                        const channelConfig = CHANNELS_CATALOG.find((channel) => channel.slug === channelSlug);
+                        const ChannelIcon = getChannelIcon(channelConfig?.icon || 'sparkles');
+                        const createdLabel = formatRelativeShort(item.created_at);
+
+                        return (
+                          <Link
+                            key={`${item.source_item_id}:${item.blueprint_id}`}
+                            to={`/blueprint/${item.blueprint_id}`}
+                            className="block rounded-md border border-border/40 px-3 py-3 transition-colors hover:bg-muted/20"
+                          >
+                            <div className="relative overflow-hidden rounded-sm">
+                              {item.banner_url ? (
+                                <>
+                                  <img
+                                    src={item.banner_url}
+                                    alt=""
+                                    className="absolute inset-0 h-full w-full object-cover opacity-35"
+                                    loading="lazy"
+                                  />
+                                  <div className="absolute inset-0 bg-gradient-to-b from-background/35 via-background/60 to-background/80" />
+                                </>
+                              ) : null}
+
+                              <div className="relative space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75">
+                                    <ChannelIcon className="h-3.5 w-3.5" />
+                                    {channelLabel}
+                                  </p>
+                                  <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
+                                </div>
+
+                                <h3 className="text-base font-semibold leading-tight">{item.title}</h3>
+                                <p className="text-sm text-muted-foreground line-clamp-3">{item.summary}</p>
+
+                                {item.tags.length > 0 ? (
+                                  <OneRowTagChips
+                                    className="flex flex-nowrap gap-1.5 overflow-hidden"
+                                    items={item.tags.map((tag) => ({
+                                      key: tag.id,
+                                      label: tag.slug,
+                                      variant: 'outline',
+                                      className:
+                                        'text-xs transition-colors border bg-muted/40 text-muted-foreground border-border/60',
+                                    }))}
+                                  />
+                                ) : null}
+                              </div>
+                            </div>
+                          </Link>
+                        );
+                      })}
+
+                      {sourceBlueprintsQuery.hasNextPage ? (
+                        <div className="flex justify-center pt-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => sourceBlueprintsQuery.fetchNextPage()}
+                            disabled={sourceBlueprintsQuery.isFetchingNextPage}
+                          >
+                            {sourceBlueprintsQuery.isFetchingNextPage ? 'Loading...' : 'Load more'}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             </>

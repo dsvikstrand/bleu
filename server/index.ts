@@ -353,6 +353,7 @@ app.use((req, res, next) => {
   const isDebugSimulationRoute = /^\/api\/debug\/subscriptions\/[^/]+\/simulate-new-uploads$/.test(req.path);
   const isPublicProfileFeedRoute = /^\/api\/profile\/[^/]+\/feed$/.test(req.path);
   const isPublicSourcePageRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+$/.test(req.path);
+  const isPublicSourcePageBlueprintFeedRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+\/blueprints$/.test(req.path);
   const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
     || req.path === '/api/youtube/connection/callback'
     || req.path === '/api/ingestion/jobs/trigger'
@@ -361,6 +362,7 @@ app.use((req, res, next) => {
     || req.path === '/api/auto-banner/jobs/latest'
     || isPublicProfileFeedRoute
     || isPublicSourcePageRoute
+    || isPublicSourcePageBlueprintFeedRoute
     || (debugEndpointsEnabled && isDebugSimulationRoute);
 
   if (!supabaseClient) {
@@ -3974,6 +3976,98 @@ app.post('/api/source-subscriptions', async (req, res) => {
   });
 });
 
+type SourcePageBlueprintCursor = {
+  createdAt: string;
+  feedItemId: string;
+};
+
+type SourcePageFeedScanRow = {
+  id: string;
+  source_item_id: string;
+  blueprint_id: string;
+  created_at: string;
+};
+
+type SourcePageFeedSourceRow = {
+  id: string;
+  source_page_id: string | null;
+  source_channel_id: string | null;
+  source_url: string;
+};
+
+function normalizeSourcePageBlueprintCursor(input: SourcePageBlueprintCursor) {
+  const createdAtMs = Date.parse(input.createdAt);
+  if (!Number.isFinite(createdAtMs)) return null;
+  const feedItemId = String(input.feedItemId || '').trim();
+  if (!feedItemId) return null;
+  return {
+    createdAt: new Date(createdAtMs).toISOString(),
+    feedItemId,
+  };
+}
+
+function encodeSourcePageBlueprintCursor(input: SourcePageBlueprintCursor) {
+  const normalized = normalizeSourcePageBlueprintCursor(input);
+  if (!normalized) return null;
+  const payload = JSON.stringify({
+    created_at: normalized.createdAt,
+    feed_item_id: normalized.feedItemId,
+  });
+  return Buffer.from(payload, 'utf8').toString('base64url');
+}
+
+function decodeSourcePageBlueprintCursor(raw: string) {
+  const value = String(raw || '').trim();
+  if (!value) return null;
+  try {
+    const decoded = Buffer.from(value, 'base64url').toString('utf8');
+    const parsed = JSON.parse(decoded) as { created_at?: string; feed_item_id?: string };
+    return normalizeSourcePageBlueprintCursor({
+      createdAt: String(parsed.created_at || ''),
+      feedItemId: String(parsed.feed_item_id || ''),
+    });
+  } catch {
+    return null;
+  }
+}
+
+function buildSourcePageCursorFilter(cursor: SourcePageBlueprintCursor) {
+  const normalized = normalizeSourcePageBlueprintCursor(cursor);
+  if (!normalized) return null;
+  return `created_at.lt.${normalized.createdAt},and(created_at.eq.${normalized.createdAt},id.lt.${normalized.feedItemId})`;
+}
+
+function cleanSourcePageSummaryText(raw: string) {
+  return raw
+    .replace(/\s+/g, ' ')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/\*\*/g, '')
+    .replace(/__/g, '')
+    .replace(/`/g, '')
+    .trim();
+}
+
+function buildSourcePageSummary(input: {
+  llmReview: string | null;
+  selectedItems: unknown;
+  fallbackTitle: string;
+  maxChars?: number;
+}) {
+  const maxChars = Math.max(80, Math.min(320, Number(input.maxChars || 220)));
+  const selectedItems =
+    input.selectedItems && typeof input.selectedItems === 'object' ? input.selectedItems as Record<string, unknown> : null;
+  const selectedItemsOverview = selectedItems
+    ? [selectedItems.overview, selectedItems.description, selectedItems.notes]
+      .find((value) => typeof value === 'string' && String(value).trim().length > 0) || null
+    : null;
+  const candidate = cleanSourcePageSummaryText(
+    String(input.llmReview || selectedItemsOverview || input.fallbackTitle || ''),
+  );
+  if (!candidate) return 'Open to view the full step-by-step blueprint.';
+  if (candidate.length <= maxChars) return candidate;
+  return `${candidate.slice(0, maxChars).trim()}...`;
+}
+
 app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
   const platform = normalizeSourcePagePlatform(req.params.platform || '');
   if (!platform) {
@@ -4126,6 +4220,356 @@ app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
         subscribed,
         subscription_id: subscriptionId,
       },
+    },
+  });
+});
+
+app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) => {
+  const platform = normalizeSourcePagePlatform(req.params.platform || '');
+  if (!platform) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Unsupported source page platform.',
+      data: null,
+    });
+  }
+
+  const externalId = String(req.params.externalId || '').trim();
+  if (!externalId) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_INPUT',
+      message: 'externalId required',
+      data: null,
+    });
+  }
+
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  let sourcePage;
+  try {
+    sourcePage = await getSourcePageByPlatformExternalId(db, { platform, externalId });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not fetch source page.',
+      data: null,
+    });
+  }
+  if (!sourcePage) {
+    return res.status(404).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_NOT_FOUND',
+      message: 'Source page not found.',
+      data: null,
+    });
+  }
+
+  const limit = clampInt(req.query.limit, 12, 1, 24);
+  const rawCursor = String(req.query.cursor || '').trim();
+  const decodedCursor = rawCursor ? decodeSourcePageBlueprintCursor(rawCursor) : null;
+  if (rawCursor && !decodedCursor) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_CURSOR',
+      message: 'Invalid cursor.',
+      data: null,
+    });
+  }
+
+  const scanBatch = Math.max(limit * 6, 48);
+  const maxScanRows = 2000;
+  const seenSourceItemIds = new Set<string>();
+  const selectedRows: Array<{
+    sourceItemId: string;
+    blueprintId: string;
+    createdAt: string;
+    sourceUrl: string;
+  }> = [];
+
+  let scanRows = 0;
+  let cursor = decodedCursor;
+  let exhausted = false;
+  let reachedLimit = false;
+  let lastAcceptedCursor: SourcePageBlueprintCursor | null = null;
+  let lastScannedCursor: SourcePageBlueprintCursor | null = null;
+
+  while (!reachedLimit && !exhausted && scanRows < maxScanRows) {
+    let feedQuery = db
+      .from('user_feed_items')
+      .select('id, source_item_id, blueprint_id, created_at')
+      .eq('state', 'channel_published')
+      .not('blueprint_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(scanBatch);
+
+    const cursorFilter = cursor ? buildSourcePageCursorFilter(cursor) : null;
+    if (cursorFilter) feedQuery = feedQuery.or(cursorFilter);
+
+    const { data: feedRowsData, error: feedRowsError } = await feedQuery;
+    if (feedRowsError) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: feedRowsError.message,
+        data: null,
+      });
+    }
+
+    const feedRows = (feedRowsData || []) as SourcePageFeedScanRow[];
+    if (!feedRows.length) {
+      exhausted = true;
+      break;
+    }
+
+    scanRows += feedRows.length;
+    const lastFeedRow = feedRows[feedRows.length - 1];
+    const normalizedLastFeedCursor = normalizeSourcePageBlueprintCursor({
+      createdAt: lastFeedRow.created_at,
+      feedItemId: lastFeedRow.id,
+    });
+    if (normalizedLastFeedCursor) {
+      lastScannedCursor = normalizedLastFeedCursor;
+      cursor = normalizedLastFeedCursor;
+    }
+
+    const sourceItemIds = Array.from(new Set(feedRows.map((row) => String(row.source_item_id || '').trim()).filter(Boolean)));
+    const chunkBlueprintIds = Array.from(new Set(feedRows.map((row) => String(row.blueprint_id || '').trim()).filter(Boolean)));
+    if (!sourceItemIds.length || !chunkBlueprintIds.length) {
+      if (feedRows.length < scanBatch) exhausted = true;
+      continue;
+    }
+
+    const [{ data: sourceRowsData, error: sourceRowsError }, { data: blueprintVisibilityData, error: blueprintVisibilityError }] = await Promise.all([
+      db
+        .from('source_items')
+        .select('id, source_page_id, source_channel_id, source_url')
+        .in('id', sourceItemIds),
+      db
+        .from('blueprints')
+        .select('id, is_public')
+        .in('id', chunkBlueprintIds),
+    ]);
+
+    if (sourceRowsError || blueprintVisibilityError) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: sourceRowsError?.message || blueprintVisibilityError?.message || 'Could not load source-page feed rows.',
+        data: null,
+      });
+    }
+
+    const sourceMap = new Map((sourceRowsData || []).map((row) => [row.id, row as SourcePageFeedSourceRow]));
+    const publicBlueprintIds = new Set(
+      (blueprintVisibilityData || [])
+        .filter((row) => Boolean(row.is_public))
+        .map((row) => String(row.id || '').trim())
+        .filter(Boolean),
+    );
+
+    for (const row of feedRows) {
+      const sourceItemId = String(row.source_item_id || '').trim();
+      const blueprintId = String(row.blueprint_id || '').trim();
+      if (!sourceItemId || !blueprintId) continue;
+      if (!publicBlueprintIds.has(blueprintId)) continue;
+
+      const source = sourceMap.get(sourceItemId);
+      if (!source) continue;
+
+      const sourcePageId = String(source.source_page_id || '').trim() || null;
+      const sourceChannelId = String(source.source_channel_id || '').trim() || null;
+      const matchesLinkedSource = sourcePageId === sourcePage.id;
+      const matchesLegacyYoutubeFallback =
+        platform === 'youtube'
+        && !sourcePageId
+        && sourceChannelId === sourcePage.external_id;
+      if (!matchesLinkedSource && !matchesLegacyYoutubeFallback) continue;
+
+      if (seenSourceItemIds.has(sourceItemId)) continue;
+      seenSourceItemIds.add(sourceItemId);
+
+      const normalizedAcceptedCursor = normalizeSourcePageBlueprintCursor({
+        createdAt: row.created_at,
+        feedItemId: row.id,
+      });
+      if (normalizedAcceptedCursor) lastAcceptedCursor = normalizedAcceptedCursor;
+
+      selectedRows.push({
+        sourceItemId,
+        blueprintId,
+        createdAt: normalizedAcceptedCursor?.createdAt || row.created_at,
+        sourceUrl: String(source.source_url || '').trim(),
+      });
+
+      if (selectedRows.length >= limit) {
+        reachedLimit = true;
+        break;
+      }
+    }
+
+    if (feedRows.length < scanBatch) exhausted = true;
+  }
+
+  if (!selectedRows.length) {
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'source page blueprints',
+      data: {
+        items: [],
+        next_cursor: null,
+      },
+    });
+  }
+
+  const blueprintIds = Array.from(new Set(selectedRows.map((row) => row.blueprintId)));
+  const [{ data: blueprintRowsData, error: blueprintRowsError }, { data: tagRowsData, error: tagRowsError }] = await Promise.all([
+    db
+      .from('blueprints')
+      .select('id, title, llm_review, banner_url, selected_items, is_public')
+      .in('id', blueprintIds),
+    db
+      .from('blueprint_tags')
+      .select('blueprint_id, tag_id')
+      .in('blueprint_id', blueprintIds),
+  ]);
+
+  if (blueprintRowsError || tagRowsError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: blueprintRowsError?.message || tagRowsError?.message || 'Could not load source-page blueprints.',
+      data: null,
+    });
+  }
+
+  const tagIds = Array.from(new Set((tagRowsData || []).map((row) => String(row.tag_id || '').trim()).filter(Boolean)));
+  const { data: tagDefsData, error: tagDefsError } = tagIds.length
+    ? await db
+      .from('tags')
+      .select('id, slug')
+      .in('id', tagIds)
+    : { data: [], error: null };
+  if (tagDefsError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: tagDefsError.message,
+      data: null,
+    });
+  }
+
+  const { data: allPublishedFeedRows, error: allPublishedFeedRowsError } = await db
+    .from('user_feed_items')
+    .select('id, blueprint_id')
+    .eq('state', 'channel_published')
+    .in('blueprint_id', blueprintIds);
+  if (allPublishedFeedRowsError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: allPublishedFeedRowsError.message,
+      data: null,
+    });
+  }
+
+  const publishedFeedItemIds = Array.from(new Set((allPublishedFeedRows || []).map((row) => String(row.id || '').trim()).filter(Boolean)));
+  const blueprintIdByFeedItemId = new Map(
+    (allPublishedFeedRows || []).map((row) => [String(row.id || '').trim(), String(row.blueprint_id || '').trim()]),
+  );
+
+  const { data: candidateRowsData, error: candidateRowsError } = publishedFeedItemIds.length
+    ? await db
+      .from('channel_candidates')
+      .select('user_feed_item_id, channel_slug, created_at')
+      .eq('status', 'published')
+      .in('user_feed_item_id', publishedFeedItemIds)
+      .order('created_at', { ascending: false })
+    : { data: [], error: null };
+  if (candidateRowsError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: candidateRowsError.message,
+      data: null,
+    });
+  }
+
+  const publicBlueprintMap = new Map(
+    (blueprintRowsData || [])
+      .filter((row) => Boolean(row.is_public))
+      .map((row) => [String(row.id || '').trim(), row]),
+  );
+  const tagDefMap = new Map((tagDefsData || []).map((row) => [String(row.id || '').trim(), String(row.slug || '').trim()]));
+  const tagsByBlueprint = new Map<string, Array<{ id: string; slug: string }>>();
+  for (const row of tagRowsData || []) {
+    const blueprintId = String(row.blueprint_id || '').trim();
+    const tagId = String(row.tag_id || '').trim();
+    const tagSlug = tagDefMap.get(tagId);
+    if (!blueprintId || !tagId || !tagSlug) continue;
+    const list = tagsByBlueprint.get(blueprintId) || [];
+    list.push({ id: tagId, slug: tagSlug });
+    tagsByBlueprint.set(blueprintId, list);
+  }
+
+  const publishedChannelByBlueprint = new Map<string, { slug: string; createdAtMs: number }>();
+  for (const row of candidateRowsData || []) {
+    const feedItemId = String(row.user_feed_item_id || '').trim();
+    const blueprintId = blueprintIdByFeedItemId.get(feedItemId);
+    const channelSlug = String(row.channel_slug || '').trim().toLowerCase();
+    if (!blueprintId || !channelSlug) continue;
+    const createdAtMs = Date.parse(String(row.created_at || ''));
+    const safeCreatedAtMs = Number.isFinite(createdAtMs) ? createdAtMs : 0;
+    const existing = publishedChannelByBlueprint.get(blueprintId);
+    if (!existing || safeCreatedAtMs > existing.createdAtMs || (safeCreatedAtMs === existing.createdAtMs && channelSlug < existing.slug)) {
+      publishedChannelByBlueprint.set(blueprintId, {
+        slug: channelSlug,
+        createdAtMs: safeCreatedAtMs,
+      });
+    }
+  }
+
+  const items = selectedRows
+    .map((row) => {
+      const blueprint = publicBlueprintMap.get(row.blueprintId);
+      if (!blueprint) return null;
+      return {
+        source_item_id: row.sourceItemId,
+        blueprint_id: row.blueprintId,
+        title: String(blueprint.title || '').trim() || 'Untitled blueprint',
+        summary: buildSourcePageSummary({
+          llmReview: blueprint.llm_review || null,
+          selectedItems: blueprint.selected_items ?? null,
+          fallbackTitle: String(blueprint.title || ''),
+        }),
+        banner_url: blueprint.banner_url || null,
+        created_at: row.createdAt,
+        published_channel_slug: publishedChannelByBlueprint.get(row.blueprintId)?.slug || null,
+        tags: tagsByBlueprint.get(row.blueprintId) || [],
+        source_url: row.sourceUrl || '',
+      };
+    })
+    .filter(Boolean);
+
+  let nextCursor: string | null = null;
+  if (reachedLimit && lastAcceptedCursor) {
+    nextCursor = encodeSourcePageBlueprintCursor(lastAcceptedCursor);
+  } else if (!exhausted && lastScannedCursor) {
+    nextCursor = encodeSourcePageBlueprintCursor(lastScannedCursor);
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'source page blueprints',
+    data: {
+      items,
+      next_cursor: nextCursor,
     },
   });
 });

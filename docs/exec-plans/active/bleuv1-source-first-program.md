@@ -199,6 +199,10 @@ Rules:
   - onboarding completion requires successful import (`imported` or `reactivated` > 0).
   - skip remains non-blocking and Home can show a dismissible setup reminder until completion.
   - existing pre-rollout users are not auto-prompted.
+- Source page feed activation (2026-02-19):
+  - new endpoint `GET /api/source-pages/:platform/:externalId/blueprints` serves public source-page feed items.
+  - feed includes public, channel-published blueprints only; deduped by source video (`source_item_id`).
+  - `/s/:platform/:externalId` now renders Home-style read-only blueprint cards with latest-first `Load more` pagination.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

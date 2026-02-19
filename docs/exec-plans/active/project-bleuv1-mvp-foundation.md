@@ -90,6 +90,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 17 optional new-account setup adds `/welcome` first-login onboarding entry with skip path, Home reminder card, and import-success completion state.
 - Step 18 source-page foundation adds platform-agnostic `source_pages` identity, dual-write linking (`source_page_id`), additive source-page APIs, and minimal `/s/:platform/:externalId` UI routing from subscription surfaces.
 - Step 18 follow-up hardening adds lazy source-page asset hydration on read, so legacy backfilled rows load avatar/banner on first open.
+- Step 19 source-page feed activation adds public `GET /api/source-pages/:platform/:externalId/blueprints` and replaces `/s/:platform/:externalId` placeholder text with deduped Home-style read-only blueprint cards (`latest + load more`).
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Added user endpoint `GET /api/ingestion/jobs/:id` for owner-scoped manual refresh progress.
 - Added user endpoint `GET /api/ingestion/jobs/latest-mine` for owner-scoped latest refresh-job restore after page reload.

@@ -27,6 +27,7 @@
   - `POST /api/my-feed/items/:id/auto-publish`
 - Source-page endpoints:
   - `GET /api/source-pages/:platform/:externalId` (public read)
+  - `GET /api/source-pages/:platform/:externalId/blueprints` (public source-page feed, deduped by source video, cursor-paginated)
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
 - Profile feed read endpoint:

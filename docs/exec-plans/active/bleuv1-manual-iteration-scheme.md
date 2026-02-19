@@ -54,6 +54,7 @@ Execution mode:
 35. [have] Step 34 - Landing cold-user pass (benefit-first hero, proof/use-case blocks, empty-state fallbacks, runtime config guard)
 36. [have] Step 35 - New-account onboarding entry (`/welcome`) for optional YouTube connect/import setup
 37. [have] Step 36 - Source Pages foundation (platform-agnostic source entity + additive APIs + minimal `/s/:platform/:externalId` UI)
+38. [have] Step 37 - Source Page blueprint feed (public deduped list + latest/load-more UX)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -280,6 +281,28 @@ Evaluation
 Completion evidence (2026-02-19)
 - Patched `GET /api/source-pages/:platform/:externalId` with lazy YouTube asset hydration for missing `avatar_url`/`banner_url` on legacy backfilled rows.
 - Source page visuals now populate on first read without requiring unsubscribe/resubscribe cycle.
+
+### Step 37 - Source Page blueprint feed
+Scope
+- replace `/s/:platform/:externalId` placeholder content block with a real source-page blueprint feed.
+- expose additive public endpoint `GET /api/source-pages/:platform/:externalId/blueprints` (latest + load-more cursor pagination).
+- keep Step 4 intentionally read-only (no likes/comments/share controls on source-page cards).
+
+Definition of done
+- source-page feed shows only public, channel-published blueprints.
+- feed dedupes by `source_item_id` and keeps newest item per source video.
+- source page supports `Load more` pagination with `next_cursor`.
+
+Evaluation
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+Completion evidence (2026-02-19)
+- Added `GET /api/source-pages/:platform/:externalId/blueprints` with cursor pagination and public feed payload.
+- Implemented source-page dedupe by `source_item_id` and YouTube legacy fallback match (`source_channel_id`) for older unlinked rows.
+- Updated `src/pages/SourcePage.tsx` to render Home-style read-only blueprint cards with `Load more`.
 
 ### Step 12 - Subscriptions management actions
 Scope

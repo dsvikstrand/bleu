@@ -31,6 +31,23 @@ export type SourcePageSubscriptionState = {
   subscription_id: string | null;
 };
 
+export type SourcePageBlueprintFeedItem = {
+  source_item_id: string;
+  blueprint_id: string;
+  title: string;
+  summary: string;
+  banner_url: string | null;
+  created_at: string;
+  published_channel_slug: string | null;
+  tags: Array<{ id: string; slug: string }>;
+  source_url: string;
+};
+
+export type SourcePageBlueprintFeedPage = {
+  items: SourcePageBlueprintFeedItem[];
+  next_cursor: string | null;
+};
+
 function getApiBase() {
   if (!config.agenticBackendUrl) return null;
   return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
@@ -128,5 +145,30 @@ export async function unsubscribeFromSourcePage(input: { platform: string; exter
       ...authHeader,
     },
   });
+  return response.data;
+}
+
+export async function getSourcePageBlueprints(input: {
+  platform: string;
+  externalId: string;
+  limit?: number;
+  cursor?: string | null;
+}) {
+  const params = new URLSearchParams();
+  const safeLimit = Math.max(1, Math.min(24, Number(input.limit || 12)));
+  params.set('limit', String(Number.isFinite(safeLimit) ? safeLimit : 12));
+  if (input.cursor) params.set('cursor', String(input.cursor));
+
+  const authHeader = await getOptionalAuthHeader();
+  const response = await apiRequest<SourcePageBlueprintFeedPage>(
+    `/source-pages/${encodeURIComponent(input.platform)}/${encodeURIComponent(input.externalId)}/blueprints?${params.toString()}`,
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader,
+      },
+    },
+  );
   return response.data;
 }

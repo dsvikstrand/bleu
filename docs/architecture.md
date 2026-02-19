@@ -48,7 +48,8 @@
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
     - public-readable source header (avatar/title/follower count + source link)
     - authenticated subscribe/unsubscribe actions
-    - source-content list is intentionally deferred in this step.
+    - source blueprint feed is now live: public-only channel-published cards, deduped by source video (`source_item_id`), newest-first, with `Load more` cursor pagination.
+    - source feed cards are Home-style read-only (`open blueprint` on card click, no like/comment/share controls in this step).
     - active subscription rows are copy-light; avatar is the channel-open link target.
     - includes YouTube OAuth connect + bulk import flow (`Connect YouTube` -> preview -> select channels -> import).
     - import selection defaults to none selected; users explicitly choose channels to import.
@@ -71,6 +72,7 @@
       - `DELETE` deactivates subscription and removes user-scoped `subscription_notice` feed row for that channel
     - `GET /api/source-pages/:platform/:externalId` (public-readable source page + follower count + viewer subscription state)
       - includes opportunistic lazy hydration for missing source avatar/banner assets on legacy backfilled rows.
+    - `GET /api/source-pages/:platform/:externalId/blueprints` (public-readable source blueprint feed, deduped by `source_item_id`, cursor-paginated via `next_cursor`)
     - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)
     - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth-only, unsubscribe parity + notice cleanup)
     - `POST /api/source-subscriptions/:id/sync`
