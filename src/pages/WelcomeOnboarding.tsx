@@ -55,9 +55,12 @@ export default function WelcomeOnboarding() {
   const onboardingQuery = useYouTubeOnboarding();
   const onboardingRow = onboardingQuery.data;
   const onboardingLoading = onboardingQuery.isLoading || onboardingQuery.isFetching;
+  const onboardingError = onboardingQuery.isError;
+  const refetchOnboarding = onboardingQuery.refetch;
   const updateOnboarding = onboardingQuery.updateOnboarding;
   const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
   const didMarkPromptRef = useRef(false);
+  const didRetryMissingRowRef = useRef(false);
 
   const [previewRows, setPreviewRows] = useState<YouTubeImportPreviewItem[]>([]);
   const [previewSelected, setPreviewSelected] = useState<Record<string, boolean>>({});
@@ -127,7 +130,7 @@ export default function WelcomeOnboarding() {
 
       const successfulImports = Number(result.imported_count || 0) + Number(result.reactivated_count || 0);
       if (successfulImports > 0) {
-        await onboardingQuery.updateOnboarding({
+        await updateOnboarding({
           status: 'completed',
           completed_at: new Date().toISOString(),
         });
@@ -211,6 +214,9 @@ export default function WelcomeOnboarding() {
         title: 'YouTube connected',
         description: 'Now import channels to complete setup.',
       });
+      if (subscriptionsEnabled && !previewMutation.isPending && !importMutation.isPending) {
+        previewMutation.mutate();
+      }
       return;
     }
 
@@ -219,11 +225,27 @@ export default function WelcomeOnboarding() {
       description: code ? `OAuth returned: ${code}` : 'Could not connect YouTube.',
       variant: 'destructive',
     });
-  }, [queryClient, searchParams, setSearchParams, toast, user?.id]);
+  }, [
+    importMutation.isPending,
+    previewMutation.isPending,
+    previewMutation.mutate,
+    queryClient,
+    searchParams,
+    setSearchParams,
+    subscriptionsEnabled,
+    toast,
+    user?.id,
+  ]);
 
   useEffect(() => {
     if (!user?.id || onboardingLoading) return;
+    if (onboardingError) return;
     if (!onboardingRow) {
+      if (!didRetryMissingRowRef.current) {
+        didRetryMissingRowRef.current = true;
+        refetchOnboarding();
+        return;
+      }
       navigate('/wall', { replace: true });
       return;
     }
@@ -242,8 +264,10 @@ export default function WelcomeOnboarding() {
   }, [
     navigate,
     onboardingLoading,
+    onboardingError,
     onboardingRow,
     updateOnboarding,
+    refetchOnboarding,
     user?.id,
   ]);
 
@@ -288,6 +312,35 @@ export default function WelcomeOnboarding() {
         <PageMain className="space-y-4">
           <Skeleton className="h-28 rounded-xl" />
           <Skeleton className="h-48 rounded-xl" />
+        </PageMain>
+      </PageRoot>
+    );
+  }
+
+  if (onboardingError) {
+    return (
+      <PageRoot>
+        <AppHeader />
+        <PageMain className="space-y-6">
+          <PageSection>
+            <Card className="border-border/40">
+              <CardHeader>
+                <CardTitle className="text-base">Could not load onboarding state</CardTitle>
+                <CardDescription>
+                  Retry to continue setup, or continue to Home and return later.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => refetchOnboarding()}>
+                  Retry
+                </Button>
+                <Button size="sm" asChild>
+                  <Link to="/wall">Continue to Home</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </PageSection>
+          <AppFooter />
         </PageMain>
       </PageRoot>
     );
