@@ -1,4 +1,7 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase as _supabase } from '@/integrations/supabase/client';
+
+// Tables not yet in generated types — cast to bypass strict checking
+const supabase = _supabase as any;
 import { config } from '@/config/runtime';
 import { normalizeTag } from '@/lib/tagging';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';

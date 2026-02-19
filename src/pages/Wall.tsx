@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase as _supabase } from '@/integrations/supabase/client';
+const supabase = _supabase as any;
 import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
@@ -165,14 +166,14 @@ export default function Wall() {
         ? await supabase.from('tags').select('id, slug').in('id', tagIds)
         : { data: [] as { id: string; slug: string }[] };
 
-      const tagsMap = new Map((tagsData || []).map((tag) => [tag.id, tag]));
+      const tagsMap = new Map((tagsData || []).map((tag: any) => [tag.id, tag]));
       const blueprintTags = new Map<string, { id: string; slug: string }[]>();
 
       tagRows.forEach((row) => {
         const tag = tagsMap.get(row.tag_id);
         if (!tag) return;
         const list = blueprintTags.get(row.blueprint_id) || [];
-        list.push(tag);
+        list.push(tag as { id: string; slug: string });
         blueprintTags.set(row.blueprint_id, list);
       });
 
@@ -272,7 +273,7 @@ export default function Wall() {
 
       if (error) throw error;
 
-      return (data || []).reduce<Record<string, number>>((acc, row) => {
+      return (data || []).reduce((acc: Record<string, number>, row: any) => {
         acc[row.blueprint_id] = (acc[row.blueprint_id] || 0) + 1;
         return acc;
       }, {});
