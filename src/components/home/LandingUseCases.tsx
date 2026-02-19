@@ -46,7 +46,7 @@ export function LandingUseCases({ onSelect }: LandingUseCasesProps) {
           Extract clear steps from long-form videos.
         </div>
         <div className="border border-border/40 rounded-md px-3 py-2 text-muted-foreground">
-          Reuse and share useful playbooks in Home.
+          Reuse and share useful playbooks with others.
         </div>
       </div>
     </section>

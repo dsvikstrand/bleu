@@ -26,9 +26,7 @@ export function FeaturedTags() {
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold tracking-tight">Trending Topics</h2>
-        {!hasLiveData ? (
-          <Badge variant="outline" className="text-xs">Example set</Badge>
-        ) : (
+        {hasLiveData && (
           <Link to="/explore" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
             View all →
           </Link>

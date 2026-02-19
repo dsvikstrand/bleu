@@ -27,7 +27,6 @@ export function TopBlueprints() {
     <section className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-xl font-semibold tracking-tight">Top Blueprints</h2>
-        {!hasLiveData ? <Badge variant="outline" className="text-xs">Example set</Badge> : null}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {hasLiveData
@@ -64,7 +63,6 @@ export function TopBlueprints() {
                     <h3 className="font-medium leading-tight line-clamp-2 group-hover:text-primary transition-colors">
                       {bp.title}
                     </h3>
-                    <Badge variant="outline" className="text-[10px]">Example</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground line-clamp-2">{bp.summary}</p>
                   <div className="flex flex-wrap gap-1.5">
