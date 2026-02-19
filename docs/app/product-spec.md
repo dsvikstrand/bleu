@@ -50,6 +50,11 @@ a38) [have] Signed-in top nav is simplified to `Home / Channels / Explore`; Sear
 a39) [have] User dropdown includes `Subscriptions` as the direct link to the full subscription management page.
 a40) [have] Profile tabs now include owner-only `Subscriptions` with a lightweight list and `Unsubscribe` action.
 a41) [have] Core high-traffic copy surfaces (Home/About/Explore/Help/Auth/YouTube/Search/Wall) are aligned to current source-first and auto-channel runtime language.
+a42) [have] Landing page hero now uses benefit-first, cold-user language with logged-out primary CTA `Try YouTube URL` and a tertiary `See example blueprint` jump.
+a43) [have] Landing now includes an above-the-fold proof card (live example when available, curated example fallback when empty).
+a44) [have] Landing social-proof sections (`Top Blueprints`, `Trending Topics`) now show curated fallback content instead of disappearing when live data is empty.
+a45) [have] Frontend bootstrap now guards missing Supabase env (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`) and shows a user-facing configuration screen instead of a blank page.
+a46) [have] Landing use-case strip is now explicit (`fitness`, `recipes`, `study`, `productivity`) to communicate practical value before sign-in.
 
 ## Core Model
 b1) `Source Item`

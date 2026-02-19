@@ -17,9 +17,16 @@
 ## 2) Runtime Topology
 - Frontend:
   - React + Vite app (`src/pages/*`).
+  - Landing page (`/`) is value-first for cold users:
+    - logged-out primary CTA is `Try YouTube URL` (`/youtube`)
+    - above-the-fold proof card shows live blueprint output when available, otherwise curated example fallback
+    - use-case strip communicates concrete outcomes (fitness/recipes/study/productivity)
+    - social-proof sections keep curated fallback content when live data is empty
   - Signed-in primary nav uses `Home / Channels / Explore`.
   - Header `Create` action (next to profile menu) routes to `/search` for search/create discovery.
   - Core copy across high-traffic surfaces is intentionally aligned to runtime terms (`Home`, `Create`, auto-channel publish) to avoid legacy flow drift.
+  - Frontend bootstrap has required-env guard:
+    - missing `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY` renders a configuration screen instead of a blank page.
   - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked / Subscriptions` (subscriptions tab owner-only); `/my-feed` remains direct-access compatible.
   - Profile visibility default is public for new accounts (`profiles.is_public=true` by default).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.

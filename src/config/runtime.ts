@@ -27,6 +27,24 @@ export const config = {
   },
 } as const;
 
+const REQUIRED_FRONTEND_ENV_KEYS = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY'] as const;
+
+export function getMissingFrontendEnvKeys(): string[] {
+  const checks: Record<string, unknown> = {
+    VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+    VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  };
+
+  return REQUIRED_FRONTEND_ENV_KEYS.filter((key) => {
+    const raw = checks[key];
+    return raw === undefined || raw === null || String(raw).trim() === '';
+  });
+}
+
+export function hasRequiredFrontendEnv(): boolean {
+  return getMissingFrontendEnvKeys().length === 0;
+}
+
 function toBool(raw: unknown, fallback: boolean) {
   if (raw === undefined || raw === null || raw === '') return fallback;
   const normalized = String(raw).trim().toLowerCase();

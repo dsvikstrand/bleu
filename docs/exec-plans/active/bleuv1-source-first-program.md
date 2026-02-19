@@ -155,6 +155,12 @@ Rules:
   - shared-lane copy now consistently references `Home` while route stays `/wall`.
 - Core terminology harmonization (2026-02-18):
   - high-traffic UI copy now consistently reflects current runtime (`Home`, header `Create`, auto-channel publish) and removes stale manual-post phrasing.
+- Landing cold-user optimization (2026-02-19):
+  - `/` hero copy now leads with user outcome, not pipeline internals.
+  - logged-out primary CTA is `Try YouTube URL`; sign-in is secondary.
+  - added above-the-fold proof card and concise use-case strip.
+  - `Top Blueprints` and `Trending Topics` now use curated fallback content when live data is empty.
+  - frontend runtime guard now shows configuration guidance (instead of blank page) when required Supabase env is missing.
 - Profile workspace tabs (2026-02-18):
   - profile now anchors personal workspace with tabs `Feed / Comments / Liked`.
   - profile `Feed` reuses My Feed timeline visuals.

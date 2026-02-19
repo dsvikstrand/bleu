@@ -51,6 +51,7 @@ Execution mode:
 32. [have] Step 31 - Feed badge/tag consistency + profile visibility default update (`Blueprint` badge, Home-style capped tags without `#`, new profiles default public)
 33. [have] Step 32 - Nav/profile IA refinement (`Home / Channels / Explore`, `Create` -> `/search`, dropdown + profile-tab subscriptions entrypoints)
 34. [have] Step 33 - Core copy harmonization for source-first runtime language (Home/Create/auto-publish wording on high-traffic surfaces)
+35. [have] Step 34 - Landing cold-user pass (benefit-first hero, proof/use-case blocks, empty-state fallbacks, runtime config guard)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -758,6 +759,26 @@ Definition of done
 
 Evaluation
 - manual smoke: high-traffic surfaces use consistent source-first terminology
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+### Step 34 - Landing cold-user pass (benefit-first + trust guard)
+Scope
+- make landing (`/`) outcome-first for cold users with clear benefit messaging and lower-friction CTA hierarchy
+- add above-the-fold proof card + use-case strip to show real value before sign-in
+- prevent empty/dead sections via curated fallback content for top blueprints and trending topics
+- add frontend runtime configuration guard so missing Supabase env does not produce blank page
+
+Definition of done
+- logged-out primary CTA is `Try YouTube URL`; sign-in is secondary
+- landing always shows non-empty proof/social sections (live or curated fallback)
+- missing required frontend env renders an actionable config screen
+
+Evaluation
+- manual smoke: logged-out CTA hierarchy and example jump behavior
+- manual smoke: fallback content appears when top blueprints/tags are empty
+- manual smoke: missing env path shows configuration guidance instead of blank page
 - `npm run build`
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
