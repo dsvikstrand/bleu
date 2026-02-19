@@ -14,6 +14,7 @@ import { MyFeedTimeline } from '@/components/feed/MyFeedTimeline';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { ApiRequestError, deactivateSourceSubscription, listSourceSubscriptions, type SourceSubscription } from '@/lib/subscriptionsApi';
+import { buildSourcePagePath } from '@/lib/sourcePagesApi';
 
 interface ProfileTabsProps {
   userId: string;
@@ -196,48 +197,80 @@ export function ProfileTabs({ userId, isOwnerView, profileIsPublic }: ProfileTab
             </div>
           ) : activeSubscriptions.length > 0 ? (
             <div className="space-y-3">
-              {activeSubscriptions.map((subscription) => (
-                <Card key={subscription.id} className="transition hover:border-primary/30">
-                  <CardContent className="p-4 flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex items-center gap-3">
-                      <a
-                        href={getSubscriptionChannelUrl(subscription)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block shrink-0"
-                        aria-label={`Open ${subscription.source_channel_title || subscription.source_channel_id} on YouTube`}
-                      >
-                        {subscription.source_channel_avatar_url ? (
-                          <img
-                            src={subscription.source_channel_avatar_url}
-                            alt={subscription.source_channel_title || 'Channel avatar'}
-                            className="h-10 w-10 rounded-full border border-border/40 object-cover"
-                            loading="lazy"
-                          />
+              {activeSubscriptions.map((subscription) => {
+                const sourcePagePath = getSubscriptionSourcePagePath(subscription);
+                return (
+                  <Card key={subscription.id} className="transition hover:border-primary/30">
+                    <CardContent className="p-4 flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex items-center gap-3">
+                        {sourcePagePath ? (
+                          <Link
+                            to={sourcePagePath}
+                            className="block shrink-0"
+                            aria-label={`Open ${subscription.source_channel_title || subscription.source_channel_id} source page`}
+                          >
+                            {subscription.source_channel_avatar_url ? (
+                              <img
+                                src={subscription.source_channel_avatar_url}
+                                alt={subscription.source_channel_title || 'Channel avatar'}
+                                className="h-10 w-10 rounded-full border border-border/40 object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-full border border-border/40 bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
+                                {getSubscriptionInitials(subscription)}
+                              </div>
+                            )}
+                          </Link>
                         ) : (
-                          <div className="h-10 w-10 rounded-full border border-border/40 bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
-                            {getSubscriptionInitials(subscription)}
+                          <div className="block shrink-0">
+                            {subscription.source_channel_avatar_url ? (
+                              <img
+                                src={subscription.source_channel_avatar_url}
+                                alt={subscription.source_channel_title || 'Channel avatar'}
+                                className="h-10 w-10 rounded-full border border-border/40 object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-full border border-border/40 bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
+                                {getSubscriptionInitials(subscription)}
+                              </div>
+                            )}
                           </div>
                         )}
-                      </a>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {subscription.source_channel_title || subscription.source_channel_id}
-                        </p>
+                        <div className="min-w-0">
+                          {sourcePagePath ? (
+                            <Link to={sourcePagePath} className="text-sm font-medium truncate hover:underline block">
+                              {subscription.source_channel_title || subscription.source_channel_id}
+                            </Link>
+                          ) : (
+                            <p className="text-sm font-medium truncate">
+                              {subscription.source_channel_title || subscription.source_channel_id}
+                            </p>
+                          )}
+                          <a
+                            href={getSubscriptionChannelUrl(subscription)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-muted-foreground underline underline-offset-2"
+                          >
+                            Open on YouTube
+                          </a>
+                        </div>
                       </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 px-2 text-xs"
-                      onClick={() => handleUnsubscribe(subscription.id)}
-                      disabled={Boolean(pendingRows[subscription.id])}
-                    >
-                      {pendingRows[subscription.id] ? 'Unsubscribing...' : 'Unsubscribe'}
-                    </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-2 text-xs"
+                        onClick={() => handleUnsubscribe(subscription.id)}
+                        disabled={Boolean(pendingRows[subscription.id])}
+                      >
+                        {pendingRows[subscription.id] ? 'Unsubscribing...' : 'Unsubscribe'}
+                      </Button>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <EmptyState icon={<Rss className="h-8 w-8" />} message="No subscriptions yet." />
@@ -266,6 +299,13 @@ function EmptyState({ icon, message }: { icon: JSX.Element; message: string }) {
 function getSubscriptionChannelUrl(subscription: SourceSubscription) {
   if (subscription.source_channel_url) return subscription.source_channel_url;
   return `https://www.youtube.com/channel/${subscription.source_channel_id}`;
+}
+
+function getSubscriptionSourcePagePath(subscription: SourceSubscription) {
+  if (subscription.source_page_path) return subscription.source_page_path;
+  const channelId = String(subscription.source_channel_id || '').trim();
+  if (!channelId) return null;
+  return buildSourcePagePath('youtube', channelId);
 }
 
 function getSubscriptionInitials(subscription: SourceSubscription) {

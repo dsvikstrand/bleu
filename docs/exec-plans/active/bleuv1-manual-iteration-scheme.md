@@ -53,6 +53,7 @@ Execution mode:
 34. [have] Step 33 - Core copy harmonization for source-first runtime language (Home/Create/auto-publish wording on high-traffic surfaces)
 35. [have] Step 34 - Landing cold-user pass (benefit-first hero, proof/use-case blocks, empty-state fallbacks, runtime config guard)
 36. [have] Step 35 - New-account onboarding entry (`/welcome`) for optional YouTube connect/import setup
+37. [have] Step 36 - Source Pages foundation (platform-agnostic source entity + additive APIs + minimal `/s/:platform/:externalId` UI)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -258,6 +259,23 @@ Completion evidence (2026-02-17)
 - Added `src/pages/Subscriptions.tsx` with add form + read-only active/inactive sections.
 - Added protected `/subscriptions` route in `src/App.tsx` gated by `config.features.myFeedV1`.
 - Replaced My Feed header modal action with compact `Manage subscriptions` link.
+
+### Step 36 - Source Pages foundation
+Scope
+- add platform-agnostic `source_pages` schema foundation and backfill links to subscriptions/source items.
+- keep legacy subscription endpoints compatible while adding source-page read/subscribe/unsubscribe APIs.
+- add minimal source-page route/UI and wire subscription avatars/titles to source-page paths.
+
+Definition of done
+- `source_pages` + `source_page_id` linkage exists and backfill runs.
+- `/api/source-pages/:platform/:externalId` read and subscribe/unsubscribe endpoints work.
+- `/s/:platform/:externalId` renders source header and subscribe state.
+
+Evaluation
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
 
 ### Step 12 - Subscriptions management actions
 Scope

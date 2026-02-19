@@ -1,0 +1,132 @@
+import { config } from '@/config/runtime';
+import { supabase } from '@/integrations/supabase/client';
+import { ApiRequestError } from '@/lib/subscriptionsApi';
+
+type ApiEnvelope<T> = {
+  ok: boolean;
+  error_code: string | null;
+  message: string;
+  data: T;
+};
+
+export type SourcePage = {
+  id: string;
+  platform: string;
+  external_id: string;
+  external_url: string;
+  title: string;
+  avatar_url: string | null;
+  banner_url: string | null;
+  metadata: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  path: string;
+  follower_count: number;
+};
+
+export type SourcePageSubscriptionState = {
+  authenticated: boolean;
+  subscribed: boolean;
+  subscription_id: string | null;
+};
+
+function getApiBase() {
+  if (!config.agenticBackendUrl) return null;
+  return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
+}
+
+async function getOptionalAuthHeader(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+}
+
+async function getRequiredAuthHeader(): Promise<Record<string, string>> {
+  const auth = await getOptionalAuthHeader();
+  if (!auth.Authorization) {
+    throw new ApiRequestError(401, 'Sign in required.', 'AUTH_REQUIRED');
+  }
+  return auth;
+}
+
+async function apiRequest<T>(path: string, init?: RequestInit): Promise<ApiEnvelope<T>> {
+  const base = getApiBase();
+  if (!base) {
+    throw new ApiRequestError(503, 'Backend API is not configured.', 'API_NOT_CONFIGURED');
+  }
+
+  const response = await fetch(`${base}${path}`, init);
+  const json = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
+  if (!response.ok || !json) {
+    throw new ApiRequestError(
+      response.status,
+      json?.message || `Request failed (${response.status})`,
+      json?.error_code || null,
+      json?.data ?? null,
+    );
+  }
+  if (!json.ok) {
+    throw new ApiRequestError(
+      response.status,
+      json.message || 'Request failed.',
+      json.error_code || null,
+      json.data ?? null,
+    );
+  }
+  return json;
+}
+
+export function buildSourcePagePath(platform: string, externalId: string) {
+  return `/s/${encodeURIComponent(platform)}/${encodeURIComponent(externalId)}`;
+}
+
+export async function getSourcePage(input: { platform: string; externalId: string }) {
+  const authHeader = await getOptionalAuthHeader();
+  const response = await apiRequest<{
+    source_page: SourcePage;
+    viewer: SourcePageSubscriptionState;
+  }>(`/source-pages/${encodeURIComponent(input.platform)}/${encodeURIComponent(input.externalId)}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeader,
+    },
+  });
+  return response.data;
+}
+
+export async function subscribeToSourcePage(input: { platform: string; externalId: string }) {
+  const authHeader = await getRequiredAuthHeader();
+  const response = await apiRequest<{
+    source_page: SourcePage;
+    subscription: {
+      id: string;
+      source_page_path: string | null;
+    };
+  }>(`/source-pages/${encodeURIComponent(input.platform)}/${encodeURIComponent(input.externalId)}/subscribe`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeader,
+    },
+    body: JSON.stringify({}),
+  });
+  return response.data;
+}
+
+export async function unsubscribeFromSourcePage(input: { platform: string; externalId: string }) {
+  const authHeader = await getRequiredAuthHeader();
+  const response = await apiRequest<{
+    source_page: SourcePage;
+    subscription: { id: string; source_channel_id: string };
+  }>(`/source-pages/${encodeURIComponent(input.platform)}/${encodeURIComponent(input.externalId)}/subscribe`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeader,
+    },
+  });
+  return response.data;
+}

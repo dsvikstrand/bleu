@@ -43,6 +43,13 @@ import {
 import { fetchYouTubeUserSubscriptions, YouTubeUserSubscriptionsError } from './services/youtubeUserSubscriptions';
 import { decryptToken, encryptToken } from './services/tokenCrypto';
 import {
+  buildSourcePagePath,
+  ensureSourcePageFromYouTubeChannel,
+  getSourcePageByPlatformExternalId,
+  getUserSubscriptionStateForSourcePage,
+  normalizeSourcePagePlatform,
+} from './services/sourcePages';
+import {
   clampInt,
   getFailureTransition,
   normalizeAutoBannerMode,
@@ -345,6 +352,7 @@ app.use((req, res, next) => {
   if (req.path === '/api/health') return next();
   const isDebugSimulationRoute = /^\/api\/debug\/subscriptions\/[^/]+\/simulate-new-uploads$/.test(req.path);
   const isPublicProfileFeedRoute = /^\/api\/profile\/[^/]+\/feed$/.test(req.path);
+  const isPublicSourcePageRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+$/.test(req.path);
   const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
     || req.path === '/api/youtube/connection/callback'
     || req.path === '/api/ingestion/jobs/trigger'
@@ -352,6 +360,7 @@ app.use((req, res, next) => {
     || req.path === '/api/auto-banner/jobs/trigger'
     || req.path === '/api/auto-banner/jobs/latest'
     || isPublicProfileFeedRoute
+    || isPublicSourcePageRoute
     || (debugEndpointsEnabled && isDebugSimulationRoute);
 
   if (!supabaseClient) {
@@ -1771,6 +1780,8 @@ app.post('/api/youtube/subscriptions/import', youtubeImportLimiter, async (req, 
 
   const db = getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+  const sourcePageDb = getServiceSupabaseClient();
+  if (!sourcePageDb) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
 
   const { data: connection, error: connectionError } = await db
     .from('user_youtube_connections')
@@ -1804,7 +1815,7 @@ app.post('/api/youtube/subscriptions/import', youtubeImportLimiter, async (req, 
   const channelIds = requested.map((row) => row.channelId);
   const { data: existingRows, error: existingError } = await db
     .from('user_source_subscriptions')
-    .select('id, source_channel_id, is_active')
+    .select('id, source_channel_id, source_page_id, is_active')
     .eq('user_id', userId)
     .eq('source_type', 'youtube')
     .in('source_channel_id', channelIds);
@@ -1837,7 +1848,33 @@ app.post('/api/youtube/subscriptions/import', youtubeImportLimiter, async (req, 
 
   for (const row of requested) {
     const existing = existingByChannelId.get(row.channelId) || null;
+    let sourcePage;
+    try {
+      const assets = assetMap.get(row.channelId);
+      sourcePage = await ensureSourcePageFromYouTubeChannel(sourcePageDb, {
+        channelId: row.channelId,
+        channelUrl: row.channelUrl,
+        title: row.channelTitle,
+        avatarUrl: assets?.avatarUrl || null,
+        bannerUrl: assets?.bannerUrl || null,
+      });
+    } catch (sourcePageError) {
+      failures.push({
+        channel_id: row.channelId,
+        error_code: 'SOURCE_PAGE_SUBSCRIBE_FAILED',
+        error: sourcePageError instanceof Error ? sourcePageError.message : 'Could not create source page.',
+      });
+      continue;
+    }
+
     if (existing?.is_active) {
+      if (!existing.source_page_id) {
+        await db
+          .from('user_source_subscriptions')
+          .update({ source_page_id: sourcePage.id })
+          .eq('id', existing.id)
+          .eq('user_id', userId);
+      }
       alreadyActiveCount += 1;
       continue;
     }
@@ -1851,13 +1888,14 @@ app.post('/api/youtube/subscriptions/import', youtubeImportLimiter, async (req, 
           source_channel_id: row.channelId,
           source_channel_url: row.channelUrl,
           source_channel_title: row.channelTitle,
+          source_page_id: sourcePage.id,
           mode: 'auto',
           is_active: true,
           last_sync_error: null,
         },
         { onConflict: 'user_id,source_type,source_channel_id' },
       )
-      .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+      .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
       .single();
     if (upsertError || !upserted) {
       failures.push({
@@ -2372,6 +2410,7 @@ async function upsertSourceItemFromVideo(db: ReturnType<typeof createClient>, in
   video: YouTubeFeedVideo;
   channelId: string;
   channelTitle: string | null;
+  sourcePageId?: string | null;
 }) {
   const canonicalKey = `youtube:${input.video.videoId}`;
   const { data, error } = await db
@@ -2387,6 +2426,7 @@ async function upsertSourceItemFromVideo(db: ReturnType<typeof createClient>, in
         ingest_status: 'ready',
         source_channel_id: input.channelId,
         source_channel_title: input.channelTitle,
+        source_page_id: input.sourcePageId || null,
         thumbnail_url: input.video.thumbnailUrl,
         metadata: {
           provider: 'youtube_rss',
@@ -3432,7 +3472,7 @@ async function processManualRefreshGenerateJob(input: {
   const subscriptionIds = Array.from(new Set(input.items.map((item) => item.subscription_id)));
   const { data: subscriptions, error: subscriptionsError } = await db
     .from('user_source_subscriptions')
-    .select('id, user_id, source_channel_id, source_channel_title, last_seen_published_at, last_seen_video_id')
+    .select('id, user_id, source_channel_id, source_channel_title, source_page_id, last_seen_published_at, last_seen_video_id')
     .eq('user_id', input.userId)
     .eq('is_active', true)
     .in('id', subscriptionIds);
@@ -3462,6 +3502,7 @@ async function processManualRefreshGenerateJob(input: {
         },
         channelId: subscription.source_channel_id,
         channelTitle: item.source_channel_title || subscription.source_channel_title || null,
+        sourcePageId: subscription.source_page_id || null,
       });
 
       const existingFeedItem = await getExistingFeedItem(db, input.userId, source.id);
@@ -3612,6 +3653,7 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
   user_id: string;
   mode: string;
   source_channel_id: string;
+  source_page_id?: string | null;
   last_seen_published_at: string | null;
   last_seen_video_id: string | null;
 }, options: {
@@ -3665,6 +3707,7 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
       video,
       channelId: subscription.source_channel_id,
       channelTitle: feed.channelTitle,
+      sourcePageId: subscription.source_page_id || null,
     });
 
     const existingFeedItem = await getExistingFeedItem(db, subscription.user_id, source.id);
@@ -3760,6 +3803,40 @@ async function markSubscriptionSyncError(db: ReturnType<typeof createClient>, su
     .eq('id', subscriptionId);
 }
 
+async function cleanupSubscriptionNoticeForChannel(
+  db: ReturnType<typeof createClient>,
+  input: {
+    userId: string;
+    subscriptionId: string;
+    channelId: string;
+  },
+) {
+  try {
+    const { data: noticeSource } = await db
+      .from('source_items')
+      .select('id')
+      .eq('source_type', 'subscription_notice')
+      .eq('source_native_id', input.channelId)
+      .maybeSingle();
+
+    if (noticeSource?.id) {
+      await db
+        .from('user_feed_items')
+        .delete()
+        .eq('user_id', input.userId)
+        .eq('source_item_id', noticeSource.id)
+        .eq('state', 'subscription_notice');
+    }
+  } catch (cleanupError) {
+    console.log('[subscription_notice_cleanup_failed]', JSON.stringify({
+      user_id: input.userId,
+      subscription_id: input.subscriptionId,
+      source_channel_id: input.channelId,
+      error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+    }));
+  }
+}
+
 app.post('/api/source-subscriptions', async (req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
@@ -3775,12 +3852,51 @@ app.post('/api/source-subscriptions', async (req, res) => {
 
   const db = getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+  const sourcePageDb = getServiceSupabaseClient();
+  if (!sourcePageDb) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
 
   let resolved;
   try {
     resolved = await resolveYouTubeChannel(channelInput);
   } catch {
     return res.status(400).json({ ok: false, error_code: 'INVALID_CHANNEL', message: 'Could not resolve YouTube channel', data: null });
+  }
+
+  let channelAvatarUrl: string | null = null;
+  let channelBannerUrl: string | null = null;
+  if (youtubeDataApiKey) {
+    try {
+      const assetMap = await fetchYouTubeChannelAssetMap({
+        apiKey: youtubeDataApiKey,
+        channelIds: [resolved.channelId],
+      });
+      const assets = assetMap.get(resolved.channelId);
+      channelAvatarUrl = assets?.avatarUrl || null;
+      channelBannerUrl = assets?.bannerUrl || null;
+    } catch (assetError) {
+      console.log('[source_page_assets_lookup_failed]', JSON.stringify({
+        source_channel_id: resolved.channelId,
+        error: assetError instanceof Error ? assetError.message : String(assetError),
+      }));
+    }
+  }
+
+  let sourcePage;
+  try {
+    sourcePage = await ensureSourcePageFromYouTubeChannel(sourcePageDb, {
+      channelId: resolved.channelId,
+      channelUrl: resolved.channelUrl,
+      title: resolved.channelTitle,
+      avatarUrl: channelAvatarUrl,
+      bannerUrl: channelBannerUrl,
+    });
+  } catch (sourcePageError) {
+    return res.status(500).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_SUBSCRIBE_FAILED',
+      message: sourcePageError instanceof Error ? sourcePageError.message : 'Could not prepare source page.',
+      data: null,
+    });
   }
 
   const { data: existingSub } = await db
@@ -3801,13 +3917,14 @@ app.post('/api/source-subscriptions', async (req, res) => {
         source_channel_id: resolved.channelId,
         source_channel_url: resolved.channelUrl,
         source_channel_title: resolved.channelTitle,
+        source_page_id: sourcePage.id,
         mode: 'auto',
         is_active: true,
         last_sync_error: null,
       },
       { onConflict: 'user_id,source_type,source_channel_id' },
     )
-    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
     .single();
   if (upsertError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: upsertError.message, data: null });
 
@@ -3820,18 +3937,6 @@ app.post('/api/source-subscriptions', async (req, res) => {
 
   if (isCreateOrReactivate) {
     try {
-      let channelAvatarUrl: string | null = null;
-      let channelBannerUrl: string | null = null;
-      if (youtubeDataApiKey) {
-        const assetMap = await fetchYouTubeChannelAssetMap({
-          apiKey: youtubeDataApiKey,
-          channelIds: [resolved.channelId],
-        });
-        const assets = assetMap.get(resolved.channelId);
-        channelAvatarUrl = assets?.avatarUrl || null;
-        channelBannerUrl = assets?.bannerUrl || null;
-      }
-
       const noticeSource = await upsertSubscriptionNoticeSourceItem(db, {
         channelId: resolved.channelId,
         channelTitle: resolved.channelTitle,
@@ -3859,8 +3964,372 @@ app.post('/api/source-subscriptions', async (req, res) => {
     error_code: null,
     message: 'subscription upserted',
     data: {
-      subscription: upserted,
+      subscription: {
+        ...upserted,
+        source_page_path: buildSourcePagePath(sourcePage.platform, sourcePage.external_id),
+      },
+      source_page: sourcePage,
       sync,
+    },
+  });
+});
+
+app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
+  const platform = normalizeSourcePagePlatform(req.params.platform || '');
+  if (!platform) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Unsupported source page platform.',
+      data: null,
+    });
+  }
+
+  const externalId = String(req.params.externalId || '').trim();
+  if (!externalId) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_INPUT',
+      message: 'externalId required',
+      data: null,
+    });
+  }
+
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  let sourcePage;
+  try {
+    sourcePage = await getSourcePageByPlatformExternalId(db, { platform, externalId });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not fetch source page.',
+      data: null,
+    });
+  }
+  if (!sourcePage) {
+    return res.status(404).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_NOT_FOUND',
+      message: 'Source page not found.',
+      data: null,
+    });
+  }
+
+  const { count: linkedFollowerCount, error: linkedFollowerCountError } = await db
+    .from('user_source_subscriptions')
+    .select('id', { count: 'exact', head: true })
+    .eq('source_page_id', sourcePage.id)
+    .eq('is_active', true);
+  if (linkedFollowerCountError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: linkedFollowerCountError.message, data: null });
+  }
+
+  let followerCount = Number(linkedFollowerCount || 0);
+  if (followerCount === 0 && platform === 'youtube') {
+    const { count: fallbackFollowerCount } = await db
+      .from('user_source_subscriptions')
+      .select('id', { count: 'exact', head: true })
+      .eq('source_type', 'youtube')
+      .eq('source_channel_id', sourcePage.external_id)
+      .eq('is_active', true);
+    followerCount = Number(fallbackFollowerCount || 0);
+  }
+
+  const userId = (res.locals.user as { id?: string } | undefined)?.id || null;
+  let subscribed = false;
+  let subscriptionId: string | null = null;
+  if (userId) {
+    try {
+      const subscriptionState = await getUserSubscriptionStateForSourcePage(db, {
+        userId,
+        sourcePageId: sourcePage.id,
+      });
+      subscribed = Boolean(subscriptionState.subscribed);
+      subscriptionId = subscriptionState.subscription_id || null;
+
+      if (!subscribed && platform === 'youtube') {
+        const { data: fallbackSub } = await db
+          .from('user_source_subscriptions')
+          .select('id, is_active')
+          .eq('user_id', userId)
+          .eq('source_type', 'youtube')
+          .eq('source_channel_id', sourcePage.external_id)
+          .maybeSingle();
+        if (fallbackSub?.is_active) {
+          subscribed = true;
+          subscriptionId = fallbackSub.id;
+        }
+      }
+    } catch {
+      // Optional viewer state should not fail public reads.
+      subscribed = false;
+      subscriptionId = null;
+    }
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'source page fetched',
+    data: {
+      source_page: {
+        ...sourcePage,
+        path: buildSourcePagePath(sourcePage.platform, sourcePage.external_id),
+        follower_count: followerCount,
+      },
+      viewer: {
+        authenticated: Boolean(userId),
+        subscribed,
+        subscription_id: subscriptionId,
+      },
+    },
+  });
+});
+
+app.post('/api/source-pages/:platform/:externalId/subscribe', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const platform = normalizeSourcePagePlatform(req.params.platform || '');
+  if (!platform) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Unsupported source page platform.',
+      data: null,
+    });
+  }
+  if (platform !== 'youtube') {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Only YouTube source pages are supported in this version.',
+      data: null,
+    });
+  }
+
+  const externalId = String(req.params.externalId || '').trim();
+  if (!externalId) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'externalId required', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+  const sourcePageDb = getServiceSupabaseClient();
+  if (!sourcePageDb) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  let resolved;
+  try {
+    resolved = await resolveYouTubeChannel(externalId);
+  } catch {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_CHANNEL', message: 'Could not resolve YouTube channel', data: null });
+  }
+
+  let channelAvatarUrl: string | null = null;
+  let channelBannerUrl: string | null = null;
+  if (youtubeDataApiKey) {
+    try {
+      const assetMap = await fetchYouTubeChannelAssetMap({
+        apiKey: youtubeDataApiKey,
+        channelIds: [resolved.channelId],
+      });
+      const assets = assetMap.get(resolved.channelId);
+      channelAvatarUrl = assets?.avatarUrl || null;
+      channelBannerUrl = assets?.bannerUrl || null;
+    } catch (assetError) {
+      console.log('[source_page_assets_lookup_failed]', JSON.stringify({
+        source_channel_id: resolved.channelId,
+        error: assetError instanceof Error ? assetError.message : String(assetError),
+      }));
+    }
+  }
+
+  let sourcePage;
+  try {
+    sourcePage = await ensureSourcePageFromYouTubeChannel(sourcePageDb, {
+      channelId: resolved.channelId,
+      channelUrl: resolved.channelUrl,
+      title: resolved.channelTitle,
+      avatarUrl: channelAvatarUrl,
+      bannerUrl: channelBannerUrl,
+    });
+  } catch (sourcePageError) {
+    return res.status(500).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_SUBSCRIBE_FAILED',
+      message: sourcePageError instanceof Error ? sourcePageError.message : 'Could not prepare source page.',
+      data: null,
+    });
+  }
+
+  const { data: existingSub } = await db
+    .from('user_source_subscriptions')
+    .select('id, is_active')
+    .eq('user_id', userId)
+    .eq('source_type', 'youtube')
+    .eq('source_channel_id', resolved.channelId)
+    .maybeSingle();
+  const isCreateOrReactivate = !existingSub || !existingSub.is_active;
+
+  const { data: upserted, error: upsertError } = await db
+    .from('user_source_subscriptions')
+    .upsert(
+      {
+        user_id: userId,
+        source_type: 'youtube',
+        source_channel_id: resolved.channelId,
+        source_channel_url: resolved.channelUrl,
+        source_channel_title: resolved.channelTitle,
+        source_page_id: sourcePage.id,
+        mode: 'auto',
+        is_active: true,
+        last_sync_error: null,
+      },
+      { onConflict: 'user_id,source_type,source_channel_id' },
+    )
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+    .single();
+  if (upsertError) {
+    return res.status(400).json({ ok: false, error_code: 'SOURCE_PAGE_SUBSCRIBE_FAILED', message: upsertError.message, data: null });
+  }
+
+  let sync: SyncSubscriptionResult | null = null;
+  try {
+    sync = await syncSingleSubscription(db, upserted, { trigger: 'subscription_create' });
+  } catch (error) {
+    await markSubscriptionSyncError(db, upserted.id, error);
+  }
+
+  if (isCreateOrReactivate) {
+    try {
+      const noticeSource = await upsertSubscriptionNoticeSourceItem(db, {
+        channelId: resolved.channelId,
+        channelTitle: resolved.channelTitle,
+        channelUrl: resolved.channelUrl,
+        channelAvatarUrl,
+        channelBannerUrl,
+      });
+      await insertFeedItem(db, {
+        userId,
+        sourceItemId: noticeSource.id,
+        blueprintId: null,
+        state: 'subscription_notice',
+      });
+    } catch (noticeError) {
+      console.log('[subscription_notice_insert_failed]', JSON.stringify({
+        user_id: userId,
+        source_channel_id: resolved.channelId,
+        error: noticeError instanceof Error ? noticeError.message : String(noticeError),
+      }));
+    }
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'source page subscribed',
+    data: {
+      source_page: {
+        ...sourcePage,
+        path: buildSourcePagePath(sourcePage.platform, sourcePage.external_id),
+      },
+      subscription: {
+        ...upserted,
+        source_page_path: buildSourcePagePath(sourcePage.platform, sourcePage.external_id),
+      },
+      sync,
+    },
+  });
+});
+
+app.delete('/api/source-pages/:platform/:externalId/subscribe', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const platform = normalizeSourcePagePlatform(req.params.platform || '');
+  if (!platform) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Unsupported source page platform.',
+      data: null,
+    });
+  }
+  if (platform !== 'youtube') {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Only YouTube source pages are supported in this version.',
+      data: null,
+    });
+  }
+
+  const externalId = String(req.params.externalId || '').trim();
+  if (!externalId) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'externalId required', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+  const sourcePageDb = getServiceSupabaseClient();
+  if (!sourcePageDb) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  let sourcePage;
+  try {
+    sourcePage = await getSourcePageByPlatformExternalId(sourcePageDb, { platform, externalId });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not read source page.',
+      data: null,
+    });
+  }
+  if (!sourcePage) {
+    return res.status(404).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_NOT_FOUND',
+      message: 'Source page not found.',
+      data: null,
+    });
+  }
+
+  const { data, error } = await db
+    .from('user_source_subscriptions')
+    .update({ is_active: false })
+    .eq('user_id', userId)
+    .eq('source_type', 'youtube')
+    .eq('source_channel_id', sourcePage.external_id)
+    .select('id, source_channel_id')
+    .maybeSingle();
+  if (error) return res.status(400).json({ ok: false, error_code: 'SOURCE_PAGE_UNSUBSCRIBE_FAILED', message: error.message, data: null });
+  if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
+
+  await cleanupSubscriptionNoticeForChannel(db, {
+    userId,
+    subscriptionId: data.id,
+    channelId: data.source_channel_id,
+  });
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'source page unsubscribed',
+    data: {
+      source_page: {
+        ...sourcePage,
+        path: buildSourcePagePath(sourcePage.platform, sourcePage.external_id),
+      },
+      subscription: data,
     },
   });
 });
@@ -3877,7 +4346,7 @@ app.get('/api/source-subscriptions', async (_req, res) => {
 
   const { data, error } = await db
     .from('user_source_subscriptions')
-    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false });
   if (error) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
@@ -3895,10 +4364,14 @@ app.get('/api/source-subscriptions', async (_req, res) => {
       error: avatarError instanceof Error ? avatarError.message : String(avatarError),
     }));
   }
-  const withAvatars = rows.map((row) => ({
-    ...row,
-    source_channel_avatar_url: assetMap.get(String(row.source_channel_id || '').trim())?.avatarUrl || null,
-  }));
+  const withAvatars = rows.map((row) => {
+    const sourceChannelId = String(row.source_channel_id || '').trim();
+    return {
+      ...row,
+      source_channel_avatar_url: assetMap.get(sourceChannelId)?.avatarUrl || null,
+      source_page_path: sourceChannelId ? buildSourcePagePath('youtube', sourceChannelId) : null,
+    };
+  });
 
   return res.json({
     ok: true,
@@ -4129,7 +4602,7 @@ app.patch('/api/source-subscriptions/:id', async (req, res) => {
     .update(updates)
     .eq('id', req.params.id)
     .eq('user_id', userId)
-    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
     .maybeSingle();
   if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
   if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
@@ -4157,35 +4630,16 @@ app.delete('/api/source-subscriptions/:id', async (req, res) => {
     .update({ is_active: false })
     .eq('id', req.params.id)
     .eq('user_id', userId)
-    .select('id, source_channel_id')
+    .select('id, source_channel_id, source_page_id')
     .maybeSingle();
   if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
   if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
 
-  try {
-    const { data: noticeSource } = await db
-      .from('source_items')
-      .select('id')
-      .eq('source_type', 'subscription_notice')
-      .eq('source_native_id', data.source_channel_id)
-      .maybeSingle();
-
-    if (noticeSource?.id) {
-      await db
-        .from('user_feed_items')
-        .delete()
-        .eq('user_id', userId)
-        .eq('source_item_id', noticeSource.id)
-        .eq('state', 'subscription_notice');
-    }
-  } catch (cleanupError) {
-    console.log('[subscription_notice_cleanup_failed]', JSON.stringify({
-      user_id: userId,
-      subscription_id: data.id,
-      source_channel_id: data.source_channel_id,
-      error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-    }));
-  }
+  await cleanupSubscriptionNoticeForChannel(db, {
+    userId,
+    subscriptionId: data.id,
+    channelId: data.source_channel_id,
+  });
 
   return res.json({
     ok: true,
@@ -4207,7 +4661,7 @@ app.post('/api/source-subscriptions/:id/sync', async (req, res) => {
 
   const { data: subscription, error: subscriptionError } = await db
     .from('user_source_subscriptions')
-    .select('id, user_id, mode, source_channel_id, last_seen_published_at, last_seen_video_id, is_active')
+    .select('id, user_id, mode, source_channel_id, source_page_id, last_seen_published_at, last_seen_video_id, is_active')
     .eq('id', req.params.id)
     .eq('user_id', userId)
     .maybeSingle();
@@ -4428,7 +4882,7 @@ app.post('/api/ingestion/jobs/trigger', async (req, res) => {
 
   const { data: subscriptions, error: subscriptionsError } = await db
     .from('user_source_subscriptions')
-    .select('id, user_id, mode, source_channel_id, last_seen_published_at, last_seen_video_id, is_active')
+    .select('id, user_id, mode, source_channel_id, source_page_id, last_seen_published_at, last_seen_video_id, is_active')
     .eq('is_active', true)
     .eq('source_type', 'youtube')
     .order('updated_at', { ascending: false });
@@ -4681,7 +5135,7 @@ app.post('/api/debug/subscriptions/:id/simulate-new-uploads', async (req, res) =
 
   const { data: subscription, error: subscriptionError } = await db
     .from('user_source_subscriptions')
-    .select('id, user_id, mode, source_channel_id, last_seen_published_at, last_seen_video_id, is_active')
+    .select('id, user_id, mode, source_channel_id, source_page_id, last_seen_published_at, last_seen_video_id, is_active')
     .eq('id', req.params.id)
     .maybeSingle();
 

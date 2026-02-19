@@ -10,6 +10,8 @@ export type SourceSubscription = {
   source_channel_url: string | null;
   source_channel_title: string | null;
   source_channel_avatar_url?: string | null;
+  source_page_id?: string | null;
+  source_page_path?: string | null;
   mode: SubscriptionMode;
   is_active: boolean;
   last_polled_at: string | null;

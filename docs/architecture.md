@@ -45,6 +45,10 @@
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
   - Blueprint detail in `src/pages/BlueprintDetail.tsx` now prefers source-channel attribution for imported YouTube blueprints and hides edit CTA in default MVP UI.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
+  - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
+    - public-readable source header (avatar/title/follower count + source link)
+    - authenticated subscribe/unsubscribe actions
+    - source-content list is intentionally deferred in this step.
     - active subscription rows are copy-light; avatar is the channel-open link target.
     - includes YouTube OAuth connect + bulk import flow (`Connect YouTube` -> preview -> select channels -> import).
     - import selection defaults to none selected; users explicitly choose channels to import.
@@ -61,8 +65,13 @@
   - subscription ingestion APIs:
     - `POST|GET|PATCH|DELETE /api/source-subscriptions`
       - `GET` enriches rows with optional `source_channel_avatar_url` from YouTube API (no DB write path required)
+      - rows now carry `source_page_id` and `source_page_path` when resolvable.
       - `POST` notice insertion stores channel avatar + optional banner metadata for My Feed notice-card rendering
+      - `POST` ensures a platform-agnostic source-page row and dual-writes `source_page_id`.
       - `DELETE` deactivates subscription and removes user-scoped `subscription_notice` feed row for that channel
+    - `GET /api/source-pages/:platform/:externalId` (public-readable source page + follower count + viewer subscription state)
+    - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)
+    - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth-only, unsubscribe parity + notice cleanup)
     - `POST /api/source-subscriptions/:id/sync`
     - `POST /api/source-subscriptions/refresh-scan` (auth-only scan, returns candidate videos; no blueprint generation side effects)
     - `POST /api/source-subscriptions/refresh-generate` (auth-only enqueue for selected videos; starts async background generation job)
@@ -90,6 +99,7 @@
 - Data:
   - Supabase is system of record for blueprints, tags, follows, likes/comments, telemetry.
   - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables + auto-banner policy/queue tables.
+  - source-identity foundation: `source_pages` table and FK links from `user_source_subscriptions` + `source_items` via `source_page_id`.
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
 - Eval assets:
   - Runtime policy/config under `eval/methods/v0/*`.
@@ -112,6 +122,7 @@
    - optional onboarding accelerator: user connects YouTube on `/subscriptions` and imports selected subscriptions in bulk.
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.
    - resolve channel id and set first-sync checkpoint only (`last_seen_published_at`, `last_seen_video_id`).
+   - ensure platform-agnostic source page row (`source_pages`) and link subscription/source items via `source_page_id`.
    - no historical prefill on first subscribe in MVP.
    - create one persistent notice card (`user_feed_items.state = subscription_notice`) with avatar + optional banner metadata.
    - unsubscribe removes that user-scoped notice card while preserving other My Feed blueprint items.

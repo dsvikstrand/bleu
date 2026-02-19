@@ -43,6 +43,7 @@
 - 2026-02-19 note: YouTube OAuth connect/import endpoints (`/api/youtube/connection/*`, `/api/youtube/subscriptions/*`) are additive onboarding paths and do not alter the YT2BP endpoint envelope.
 - 2026-02-19 note: optional first-login onboarding route (`/welcome`) and onboarding-state table (`user_youtube_onboarding`) are additive product surfaces and do not alter the YT2BP endpoint envelope.
 - 2026-02-19 note: `/api/youtube/subscriptions/import` now may mark onboarding complete after successful import, which is outside the YT2BP request/response envelope.
+- 2026-02-19 note: Source Pages foundation (`source_pages` table + `/api/source-pages/:platform/:externalId` subscribe/read endpoints + `source_page_id` linkage on subscriptions/source_items) is additive and does not alter the YT2BP endpoint envelope.
 
 ## Request
 ```json
@@ -135,6 +136,7 @@
 - Auto-channel classifier mode/fallback controls (`AUTO_CHANNEL_CLASSIFIER_MODE`, `AUTO_CHANNEL_FALLBACK_SLUG`) are intentionally outside this endpoint contract.
 - YouTube OAuth connect/import lifecycle (`/api/youtube/connection/*`, `/api/youtube/subscriptions/*`) is intentionally outside this endpoint contract.
 - Optional onboarding state lifecycle (`user_youtube_onboarding`, `/welcome`) is intentionally outside this endpoint contract.
+- Source-page lifecycle (`source_pages`, `/api/source-pages/*`, `source_page_id` dual-write links) is intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: env-controlled via `YT2BP_CORE_TIMEOUT_MS` (default `120s`).

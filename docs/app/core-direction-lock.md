@@ -23,6 +23,8 @@ Status: `canonical`
 15. Import selection defaults to none-selected, and import is idempotent with inactive-row reactivation.
 16. New-account optional onboarding uses `/welcome` as a first-login setup entrypoint; existing accounts are not auto-prompted.
 17. Onboarding completion requires successful subscription import (connect-only is insufficient).
+18. Source identity is moving to platform-agnostic `Source Pages` (`/s/:platform/:externalId`), with YouTube channel `UC...` as the current canonical key.
+19. Source pages are public-readable and subscribe/unsubscribe capable; legacy `/api/source-subscriptions*` endpoints remain compatibility-safe during migration.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.

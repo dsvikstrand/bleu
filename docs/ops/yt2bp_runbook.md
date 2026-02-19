@@ -25,6 +25,10 @@
   - `POST /api/channel-candidates/:id/reject`
 - Auto-channel endpoint:
   - `POST /api/my-feed/items/:id/auto-publish`
+- Source-page endpoints:
+  - `GET /api/source-pages/:platform/:externalId` (public read)
+  - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
+  - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
 - Profile feed read endpoint:
   - `GET /api/profile/:userId/feed` (optional auth; public profiles readable, private profiles owner-only)
 
@@ -258,6 +262,21 @@ npm run smoke:yt2bp -- --base-url https://bapi.vdsai.cloud
 - Metrics summary (Oracle logs):
 ```bash
 ssh oracle-free 'cd /home/ubuntu/remix-of-stackwise-advisor && npm run metrics:yt2bp -- --source journalctl --json'
+```
+
+## Source-page migration verification
+- Confirm schema objects exist:
+```sql
+select to_regclass('public.source_pages') as source_pages_table,
+       to_regclass('public.user_source_subscriptions') as subscriptions_table,
+       to_regclass('public.source_items') as source_items_table;
+```
+- Confirm backfill linkage counts are non-zero:
+```sql
+select
+  (select count(*) from public.source_pages where platform = 'youtube') as source_pages_youtube,
+  (select count(*) from public.user_source_subscriptions where source_page_id is not null) as subscriptions_linked,
+  (select count(*) from public.source_items where source_page_id is not null) as source_items_linked;
 ```
 
 ## Candidate lifecycle smoke (auth required)

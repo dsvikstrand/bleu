@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
@@ -41,6 +41,7 @@ import {
   type YouTubeImportPreviewItem,
   type YouTubeImportResult,
 } from '@/lib/youtubeConnectionApi';
+import { buildSourcePagePath } from '@/lib/sourcePagesApi';
 
 function getChannelUrl(subscription: SourceSubscription) {
   if (subscription.source_channel_url) return subscription.source_channel_url;
@@ -53,6 +54,13 @@ function getChannelInitials(subscription: SourceSubscription) {
   const parts = raw.split(/\s+/).filter(Boolean);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+}
+
+function getSourcePagePath(subscription: SourceSubscription) {
+  if (subscription.source_page_path) return subscription.source_page_path;
+  const channelId = String(subscription.source_channel_id || '').trim();
+  if (!channelId) return null;
+  return buildSourcePagePath('youtube', channelId);
 }
 
 function formatDateTime(value: string | null) {
@@ -1270,26 +1278,59 @@ export default function Subscriptions() {
                   <p className="text-sm text-muted-foreground">No subscriptions yet.</p>
                 ) : (
                   activeSubscriptions.map((subscription) => {
+                    const sourcePagePath = getSourcePagePath(subscription);
                     return (
                       <div key={subscription.id} className="rounded-md border border-border/40 p-3 space-y-2">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <a href={getChannelUrl(subscription)} target="_blank" rel="noreferrer" className="shrink-0">
-                              {subscription.source_channel_avatar_url ? (
-                                <img
-                                  src={subscription.source_channel_avatar_url}
-                                  alt={subscription.source_channel_title || subscription.source_channel_id}
-                                  className="h-10 w-10 rounded-full object-cover border border-border/40"
-                                />
+                            {sourcePagePath ? (
+                              <Link to={sourcePagePath} className="shrink-0">
+                                {subscription.source_channel_avatar_url ? (
+                                  <img
+                                    src={subscription.source_channel_avatar_url}
+                                    alt={subscription.source_channel_title || subscription.source_channel_id}
+                                    className="h-10 w-10 rounded-full object-cover border border-border/40"
+                                  />
+                                ) : (
+                                  <div className="h-10 w-10 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center">
+                                    {getChannelInitials(subscription)}
+                                  </div>
+                                )}
+                              </Link>
+                            ) : (
+                              <div className="shrink-0">
+                                {subscription.source_channel_avatar_url ? (
+                                  <img
+                                    src={subscription.source_channel_avatar_url}
+                                    alt={subscription.source_channel_title || subscription.source_channel_id}
+                                    className="h-10 w-10 rounded-full object-cover border border-border/40"
+                                  />
+                                ) : (
+                                  <div className="h-10 w-10 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center">
+                                    {getChannelInitials(subscription)}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              {sourcePagePath ? (
+                                <Link to={sourcePagePath} className="text-sm font-medium truncate min-w-0 hover:underline block">
+                                  {subscription.source_channel_title || subscription.source_channel_id}
+                                </Link>
                               ) : (
-                                <div className="h-10 w-10 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center">
-                                  {getChannelInitials(subscription)}
-                                </div>
+                                <p className="text-sm font-medium truncate min-w-0">
+                                  {subscription.source_channel_title || subscription.source_channel_id}
+                                </p>
                               )}
-                            </a>
-                            <p className="text-sm font-medium truncate min-w-0">
-                              {subscription.source_channel_title || subscription.source_channel_id}
-                            </p>
+                              <a
+                                href={getChannelUrl(subscription)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs text-muted-foreground underline underline-offset-2"
+                              >
+                                Open on YouTube
+                              </a>
+                            </div>
                           </div>
                           <Button
                             size="sm"

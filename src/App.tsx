@@ -16,6 +16,7 @@ import PostDetail from "./pages/PostDetail";
 import SearchPage from "./pages/Search";
 import MyFeed from "./pages/MyFeed";
 import Subscriptions from "./pages/Subscriptions";
+import SourcePage from "./pages/SourcePage";
 import Inventory from "./pages/Inventory";
 import InventoryCreate from "./pages/InventoryCreate";
 import InventoryDetail from "./pages/InventoryDetail";
@@ -54,6 +55,7 @@ const App = () => (
             {config.features.myFeedV1 && (
               <Route path="/subscriptions" element={<RequireAuth><Subscriptions /></RequireAuth>} />
             )}
+            <Route path="/s/:platform/:externalId" element={<SourcePage />} />
             <Route path="/welcome" element={<RequireAuth><WelcomeOnboarding /></RequireAuth>} />
             <Route path="/wall" element={<Wall />} />
             <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />

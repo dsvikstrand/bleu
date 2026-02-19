@@ -58,6 +58,8 @@ a46) [have] Landing use-case strip is now explicit (`fitness`, `recipes`, `study
 a47) [have] New-account onboarding now supports an optional first-login `/welcome` setup path for YouTube connect + import.
 a48) [have] Onboarding completion requires successful import (`imported_count > 0` or `reactivated_count > 0`); connect-only does not complete setup.
 a49) [have] Home now shows a small dismissible YouTube-setup reminder card for skipped/incomplete onboarding users.
+a50) [have] Source Pages foundation is active: YouTube channels are now represented as platform-agnostic shared source entities with route `/s/:platform/:externalId`.
+a51) [have] Subscription surfaces now deep-link to Source Pages, while legacy `/api/source-subscriptions*` contracts remain active for compatibility.
 
 ## Core Model
 b1) `Source Item`
@@ -157,6 +159,7 @@ r12) [have] Signed-in primary nav is community-first: `Home / Channels / Explore
 r13) [have] Personal workspace is profile-first: `/u/:userId` tabs are `Feed / Comments / Liked / Subscriptions` (subscriptions tab is owner-only); `/my-feed` remains compatibility/direct route.
 r14) [have] Header `Create` action (next to profile) is the primary entrypoint to `/search`.
 r15) [have] Optional onboarding route: `/welcome` (auth-only, first-login entrypoint for new users only).
+r16) [have] Source page route: `/s/:platform/:externalId` (public-readable, subscribe/unsubscribe capable for authenticated users).
 
 ## Scope Boundaries (MVP)
 s1) In scope
@@ -180,6 +183,7 @@ d4) [have] Channel candidate + decision logs (`channel_candidates`, `channel_gat
 d5) [have] Scheduled/user-triggered ingestion jobs + trace table (`ingestion_jobs`).
 d6) [have] Auto-banner policy + queue tables (`channel_default_banners`, `auto_banner_jobs`).
 d7) [have] Onboarding state table for new-user YouTube setup (`user_youtube_onboarding`).
+d8) [have] Source-page foundation tables/links (`source_pages`, `user_source_subscriptions.source_page_id`, `source_items.source_page_id`).
 
 ## Subscription Interfaces (MVP)
 si1) `POST /api/source-subscriptions` with `{ channel_input, mode? }` (`mode` accepted but ignored/coerced to `auto` in MVP path)
@@ -216,6 +220,10 @@ si31) user endpoint: `GET /api/youtube/subscriptions/preview` (fetches all avail
 si32) user endpoint: `POST /api/youtube/subscriptions/import` (bulk import selected channels; idempotent + inactive reactivation)
 si33) user endpoint: `DELETE /api/youtube/connection` (revoke+unlink OAuth connection while preserving existing app subscriptions)
 si34) `/subscriptions` now includes a `YouTube account` connect/import surface; import selection defaults to none selected.
+si35) public/auth endpoint: `GET /api/source-pages/:platform/:externalId` (source header + follower count + viewer subscription state).
+si36) auth endpoint: `POST /api/source-pages/:platform/:externalId/subscribe` (idempotent subscribe, source-page auto-create for YouTube).
+si37) auth endpoint: `DELETE /api/source-pages/:platform/:externalId/subscribe` (unsubscribe parity + subscription notice cleanup).
+si38) compatibility note: legacy `POST/GET/PATCH/DELETE /api/source-subscriptions*` remains live while Source Pages rollout expands.
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.
