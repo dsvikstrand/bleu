@@ -48,7 +48,7 @@
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
     - public-readable source header (avatar/title/follower count + source link)
     - authenticated subscribe/unsubscribe actions
-    - authenticated `Video Library` section for creator back-catalog selection (`select -> queue -> async generation`).
+    - authenticated `Video Library` section for creator back-catalog selection (`select -> queue -> async generation`) with two filters: `Full videos` and `Shorts` (`<=60s` threshold).
     - source blueprint feed is now live: public-only channel-published cards, deduped by source video (`source_item_id`), newest-first, with `Load more` cursor pagination.
     - source feed cards are Home-style read-only (`open blueprint` on card click, no like/comment/share controls in this step).
     - active subscription rows are copy-light; avatar is the channel-open link target.
@@ -74,7 +74,7 @@
     - `GET /api/source-pages/:platform/:externalId` (public-readable source page + follower count + viewer subscription state)
       - includes opportunistic lazy hydration for missing source avatar/banner assets on legacy backfilled rows.
     - `GET /api/source-pages/:platform/:externalId/blueprints` (public-readable source blueprint feed, deduped by `source_item_id`, cursor-paginated via `next_cursor`)
-    - `GET /api/source-pages/:platform/:externalId/videos` (auth-only source video-library listing with duplicate state flags for requester)
+    - `GET /api/source-pages/:platform/:externalId/videos` (auth-only source video-library listing with duplicate state flags for requester and `kind=full|shorts` filter)
     - `POST /api/source-pages/:platform/:externalId/videos/generate` (auth-only async queue for selected source-library videos, ingestion scope `source_page_video_library_selection`)
     - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)
     - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth-only, unsubscribe parity + notice cleanup)

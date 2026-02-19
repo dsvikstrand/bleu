@@ -228,7 +228,7 @@ si36) auth endpoint: `POST /api/source-pages/:platform/:externalId/subscribe` (i
 si37) auth endpoint: `DELETE /api/source-pages/:platform/:externalId/subscribe` (unsubscribe parity + subscription notice cleanup).
 si38) compatibility note: legacy `POST/GET/PATCH/DELETE /api/source-subscriptions*` remains live while Source Pages rollout expands.
 si39) public/auth endpoint: `GET /api/source-pages/:platform/:externalId/blueprints?limit=<1..24>&cursor=<opaque?>` (public channel-published feed for the source page, deduped by `source_item_id` with `next_cursor` pagination).
-si40) auth endpoint: `GET /api/source-pages/:platform/:externalId/videos?page_token=<optional>&limit=<1..25>` (source-page video-library listing for signed-in users, includes duplicate flags per row).
+si40) auth endpoint: `GET /api/source-pages/:platform/:externalId/videos?page_token=<optional>&limit=<1..25>&kind=<full|shorts>` (source-page video-library listing for signed-in users, includes duplicate flags per row; shorts threshold is `<=60s`).
 si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/generate` (queues async generation for selected source videos, skips user duplicates, returns `job_id` + queue summary).
 
 ## Next Milestone (Hardening)

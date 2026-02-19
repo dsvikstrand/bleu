@@ -159,11 +159,12 @@ export default function SourcePage() {
   const sourceBlueprintItems = sourceBlueprintsQuery.data?.pages.flatMap((page) => page.items) || [];
 
   const [selectedVideoIds, setSelectedVideoIds] = useState<Record<string, boolean>>({});
+  const [videoLibraryKind, setVideoLibraryKind] = useState<'full' | 'shorts'>('full');
   const [activeVideoLibraryJobId, setActiveVideoLibraryJobId] = useState<string | null>(null);
   const [handledVideoLibraryTerminalJobId, setHandledVideoLibraryTerminalJobId] = useState<string | null>(null);
 
   const sourceVideosQuery = useInfiniteQuery({
-    queryKey: ['source-page-videos', platform, externalId, user?.id],
+    queryKey: ['source-page-videos', platform, externalId, user?.id, videoLibraryKind],
     enabled: backendEnabled && isValidRoute && Boolean(sourcePage) && Boolean(user),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => getSourcePageVideos({
@@ -171,6 +172,7 @@ export default function SourcePage() {
       externalId,
       limit: 12,
       pageToken: pageParam ?? null,
+      kind: videoLibraryKind,
     }),
     getNextPageParam: (lastPage) => lastPage.next_page_token || undefined,
   });
@@ -277,6 +279,10 @@ export default function SourcePage() {
     user?.id,
     videoLibraryJobQuery.data,
   ]);
+
+  useEffect(() => {
+    setSelectedVideoIds({});
+  }, [videoLibraryKind]);
 
   const handleSubscribeToggle = () => {
     if (!user) return;
@@ -433,6 +439,24 @@ export default function SourcePage() {
                   {user ? (
                     <>
                       <div className="flex items-center gap-2">
+                        <div className="inline-flex items-center rounded-md border border-border/40 bg-muted/20 p-1">
+                          <Button
+                            size="sm"
+                            variant={videoLibraryKind === 'full' ? 'default' : 'ghost'}
+                            className="h-7 px-3 text-xs"
+                            onClick={() => setVideoLibraryKind('full')}
+                          >
+                            Full videos
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={videoLibraryKind === 'shorts' ? 'default' : 'ghost'}
+                            className="h-7 px-3 text-xs"
+                            onClick={() => setVideoLibraryKind('shorts')}
+                          >
+                            Shorts
+                          </Button>
+                        </div>
                         <Button
                           size="sm"
                           variant="outline"
@@ -492,7 +516,9 @@ export default function SourcePage() {
 
                       {!sourceVideosQuery.isFetching && !sourceVideosQuery.error && sourceVideoItems.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                          No videos found for this source page right now.
+                          {videoLibraryKind === 'shorts'
+                            ? 'No shorts found for this source page right now.'
+                            : 'No full-length videos found for this source page right now.'}
                         </p>
                       ) : null}
 

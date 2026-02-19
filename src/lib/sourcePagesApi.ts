@@ -55,6 +55,7 @@ export type SourcePageVideoLibraryItem = {
   description: string;
   thumbnail_url: string | null;
   published_at: string | null;
+  duration_seconds: number | null;
   channel_id: string;
   channel_title: string;
   already_exists_for_user: boolean;
@@ -65,6 +66,8 @@ export type SourcePageVideoLibraryItem = {
 export type SourcePageVideoLibraryPage = {
   items: SourcePageVideoLibraryItem[];
   next_page_token: string | null;
+  kind: 'full' | 'shorts' | 'all';
+  shorts_max_seconds: number;
 };
 
 export type SourcePageVideoGenerateSummary = {
@@ -209,11 +212,13 @@ export async function getSourcePageVideos(input: {
   externalId: string;
   limit?: number;
   pageToken?: string | null;
+  kind?: 'full' | 'shorts' | 'all';
 }) {
   const params = new URLSearchParams();
   const safeLimit = Math.max(1, Math.min(25, Number(input.limit || 12)));
   params.set('limit', String(Number.isFinite(safeLimit) ? safeLimit : 12));
   if (input.pageToken) params.set('page_token', String(input.pageToken));
+  if (input.kind) params.set('kind', input.kind);
 
   const authHeader = await getRequiredAuthHeader();
   const response = await apiRequest<SourcePageVideoLibraryPage>(

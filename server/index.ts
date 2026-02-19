@@ -28,6 +28,7 @@ import {
 import {
   clampYouTubeSourceVideoLimit,
   listYouTubeSourceVideos,
+  normalizeYouTubeSourceVideoKind,
   YouTubeSourceVideosError,
 } from './services/youtubeSourceVideos';
 import {
@@ -4572,6 +4573,8 @@ app.get('/api/source-pages/:platform/:externalId/videos', sourceVideoListLimiter
 
   const limit = clampYouTubeSourceVideoLimit(Number(req.query.limit), 12);
   const pageToken = String(req.query.page_token || '').trim();
+  const kind = normalizeYouTubeSourceVideoKind(String(req.query.kind || ''), 'full');
+  const shortsMaxSeconds = 60;
 
   const db = getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
@@ -4605,6 +4608,8 @@ app.get('/api/source-pages/:platform/:externalId/videos', sourceVideoListLimiter
       channelId: sourcePage.external_id,
       limit,
       pageToken: pageToken || undefined,
+      kind,
+      shortsMaxSeconds,
     });
   } catch (error) {
     if (error instanceof YouTubeSourceVideosError) {
@@ -4669,6 +4674,7 @@ app.get('/api/source-pages/:platform/:externalId/videos', sourceVideoListLimiter
           description: item.description,
           thumbnail_url: item.thumbnail_url,
           published_at: item.published_at,
+          duration_seconds: item.duration_seconds,
           channel_id: item.channel_id,
           channel_title: item.channel_title,
           already_exists_for_user: Boolean(existing?.already_exists_for_user),
@@ -4677,6 +4683,8 @@ app.get('/api/source-pages/:platform/:externalId/videos', sourceVideoListLimiter
         };
       }),
       next_page_token: page.nextPageToken,
+      kind,
+      shorts_max_seconds: shortsMaxSeconds,
     },
   });
 });
