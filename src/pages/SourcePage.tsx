@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
@@ -6,14 +7,18 @@ import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { config } from '@/config/runtime';
-import { ApiRequestError } from '@/lib/subscriptionsApi';
+import { ApiRequestError, getIngestionJob, type IngestionJobStatus } from '@/lib/subscriptionsApi';
 import {
+  type SourcePageVideoLibraryItem,
+  generateSourcePageVideos,
   getSourcePage,
   getSourcePageBlueprints,
+  getSourcePageVideos,
   subscribeToSourcePage,
   unsubscribeFromSourcePage,
 } from '@/lib/sourcePagesApi';
@@ -50,6 +55,30 @@ function getSourcePageErrorMessage(error: unknown, fallback: string) {
     }
   }
   return error instanceof Error ? error.message : fallback;
+}
+
+function getSourceVideoLibraryErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiRequestError) {
+    switch (error.errorCode) {
+      case 'AUTH_REQUIRED':
+        return 'Sign in required.';
+      case 'RATE_LIMITED':
+        return 'Video library is cooling down. Please retry shortly.';
+      case 'SOURCE_VIDEO_LIST_FAILED':
+        return 'Could not load source videos right now.';
+      case 'SOURCE_VIDEO_GENERATE_INVALID_INPUT':
+        return 'Select one or more valid videos to generate.';
+      case 'SOURCE_VIDEO_GENERATE_FAILED':
+        return 'Could not queue generation for selected videos.';
+      default:
+        return error.message || fallback;
+    }
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
+function getVideoSelectionKey(item: Pick<SourcePageVideoLibraryItem, 'video_id'>) {
+  return item.video_id;
 }
 
 export default function SourcePage() {
@@ -129,6 +158,126 @@ export default function SourcePage() {
 
   const sourceBlueprintItems = sourceBlueprintsQuery.data?.pages.flatMap((page) => page.items) || [];
 
+  const [selectedVideoIds, setSelectedVideoIds] = useState<Record<string, boolean>>({});
+  const [activeVideoLibraryJobId, setActiveVideoLibraryJobId] = useState<string | null>(null);
+  const [handledVideoLibraryTerminalJobId, setHandledVideoLibraryTerminalJobId] = useState<string | null>(null);
+
+  const sourceVideosQuery = useInfiniteQuery({
+    queryKey: ['source-page-videos', platform, externalId, user?.id],
+    enabled: backendEnabled && isValidRoute && Boolean(sourcePage) && Boolean(user),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => getSourcePageVideos({
+      platform,
+      externalId,
+      limit: 12,
+      pageToken: pageParam ?? null,
+    }),
+    getNextPageParam: (lastPage) => lastPage.next_page_token || undefined,
+  });
+
+  const sourceVideoItems = sourceVideosQuery.data?.pages.flatMap((page) => page.items) || [];
+  const selectedSourceVideoItems = useMemo(
+    () => sourceVideoItems.filter((item) => selectedVideoIds[getVideoSelectionKey(item)]),
+    [selectedVideoIds, sourceVideoItems],
+  );
+
+  const videoLibraryGenerateMutation = useMutation({
+    mutationFn: (items: SourcePageVideoLibraryItem[]) => generateSourcePageVideos({
+      platform,
+      externalId,
+      items: items.map((item) => ({
+        video_id: item.video_id,
+        video_url: item.video_url,
+        title: item.title,
+        published_at: item.published_at,
+        thumbnail_url: item.thumbnail_url,
+      })),
+    }),
+    onSuccess: (data) => {
+      if (data.job_id) {
+        setActiveVideoLibraryJobId(data.job_id);
+        setHandledVideoLibraryTerminalJobId(null);
+      }
+      setSelectedVideoIds({});
+      queryClient.invalidateQueries({ queryKey: ['source-page-videos', platform, externalId, user?.id] });
+      toast({
+        title: data.job_id ? 'Generation queued' : 'Nothing new to queue',
+        description: data.job_id
+          ? `Queued ${data.queued_count}, skipped existing ${data.skipped_existing_count}.`
+          : `All selected videos already exist for you (${data.skipped_existing_count} skipped).`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Generate failed',
+        description: getSourceVideoLibraryErrorMessage(error, 'Could not queue source videos for generation.'),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const videoLibraryJobQuery = useQuery({
+    queryKey: ['source-page-video-library-job', user?.id, activeVideoLibraryJobId],
+    enabled: Boolean(user) && Boolean(activeVideoLibraryJobId),
+    queryFn: () => getIngestionJob(activeVideoLibraryJobId as string),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status as IngestionJobStatus | undefined;
+      if (!status) return 3500;
+      return status === 'queued' || status === 'running' ? 3500 : false;
+    },
+  });
+
+  const videoLibraryJobStatus = (videoLibraryJobQuery.data?.status
+    || (activeVideoLibraryJobId ? 'queued' : null)) as IngestionJobStatus | null;
+  const videoLibraryJobProcessed = videoLibraryJobQuery.data?.processed_count || 0;
+  const videoLibraryJobInserted = videoLibraryJobQuery.data?.inserted_count || 0;
+  const videoLibraryJobSkipped = videoLibraryJobQuery.data?.skipped_count || 0;
+  const videoLibraryJobFailed = Math.max(0, videoLibraryJobProcessed - videoLibraryJobInserted - videoLibraryJobSkipped);
+  const videoLibraryJobRunning = videoLibraryJobStatus === 'queued' || videoLibraryJobStatus === 'running';
+  const videoLibraryJobLabel = videoLibraryJobStatus === 'succeeded'
+    ? 'Succeeded'
+    : videoLibraryJobStatus === 'failed'
+      ? 'Failed'
+      : videoLibraryJobStatus === 'running'
+        ? 'Running'
+        : videoLibraryJobStatus === 'queued'
+          ? 'Queued'
+          : null;
+
+  useEffect(() => {
+    const job = videoLibraryJobQuery.data;
+    if (!job?.job_id) return;
+    if (job.status !== 'succeeded' && job.status !== 'failed') return;
+    if (handledVideoLibraryTerminalJobId === job.job_id) return;
+
+    setHandledVideoLibraryTerminalJobId(job.job_id);
+    queryClient.invalidateQueries({ queryKey: ['source-page-videos', platform, externalId, user?.id] });
+    queryClient.invalidateQueries({ queryKey: ['source-page-blueprints', platform, externalId] });
+    queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
+
+    if (job.status === 'succeeded') {
+      toast({
+        title: 'Video Library generation finished',
+        description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${Math.max(0, job.processed_count - job.inserted_count - job.skipped_count)}.`,
+      });
+      return;
+    }
+
+    toast({
+      title: 'Video Library generation failed',
+      description: job.error_message || 'Could not complete source video generation.',
+      variant: 'destructive',
+    });
+  }, [
+    externalId,
+    handledVideoLibraryTerminalJobId,
+    platform,
+    queryClient,
+    toast,
+    user?.id,
+    videoLibraryJobQuery.data,
+  ]);
+
   const handleSubscribeToggle = () => {
     if (!user) return;
     if (subscribed) {
@@ -136,6 +285,31 @@ export default function SourcePage() {
       return;
     }
     subscribeMutation.mutate();
+  };
+
+  const toggleVideoSelection = (item: SourcePageVideoLibraryItem, nextChecked: boolean) => {
+    const key = getVideoSelectionKey(item);
+    setSelectedVideoIds((previous) => ({
+      ...previous,
+      [key]: nextChecked,
+    }));
+  };
+
+  const handleSelectAllVisibleVideos = () => {
+    const next: Record<string, boolean> = {};
+    for (const item of sourceVideoItems) {
+      next[getVideoSelectionKey(item)] = true;
+    }
+    setSelectedVideoIds(next);
+  };
+
+  const handleClearVisibleVideoSelection = () => {
+    setSelectedVideoIds({});
+  };
+
+  const handleGenerateSelectedVideos = () => {
+    if (selectedSourceVideoItems.length === 0) return;
+    videoLibraryGenerateMutation.mutate(selectedSourceVideoItems);
   };
 
   return (
@@ -237,6 +411,175 @@ export default function SourcePage() {
                       Open on source platform
                     </a>
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/40">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Video Library</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {!user ? (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Sign in to browse this creator&apos;s video library and queue older videos for blueprint generation.
+                      </p>
+                      <Button asChild size="sm">
+                        <Link to="/auth">Sign in</Link>
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  {user ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => sourceVideosQuery.refetch()}
+                          disabled={sourceVideosQuery.isFetching || videoLibraryGenerateMutation.isPending}
+                        >
+                          {sourceVideosQuery.isFetching ? 'Loading...' : 'Reload list'}
+                        </Button>
+                        {sourceVideoItems.length > 0 ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={handleSelectAllVisibleVideos}
+                              disabled={videoLibraryGenerateMutation.isPending}
+                            >
+                              Select all visible
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={handleClearVisibleVideoSelection}
+                              disabled={videoLibraryGenerateMutation.isPending}
+                            >
+                              Clear
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
+
+                      {videoLibraryJobLabel ? (
+                        <div className="rounded-md border border-border/40 bg-muted/10 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium">Video Library generation</p>
+                            <Badge variant={videoLibraryJobStatus === 'failed' ? 'destructive' : 'secondary'}>
+                              {videoLibraryJobLabel}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Inserted {videoLibraryJobInserted}, skipped {videoLibraryJobSkipped}, failed {videoLibraryJobFailed}.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      {!sourceVideosQuery.isFetching && sourceVideosQuery.error ? (
+                        <p className="text-sm text-destructive">
+                          {getSourceVideoLibraryErrorMessage(sourceVideosQuery.error, 'Could not load source videos.')}
+                        </p>
+                      ) : null}
+
+                      {sourceVideosQuery.isFetching && sourceVideoItems.length === 0 ? (
+                        <div className="space-y-2">
+                          <Skeleton className="h-16 rounded-md" />
+                          <Skeleton className="h-16 rounded-md" />
+                        </div>
+                      ) : null}
+
+                      {!sourceVideosQuery.isFetching && !sourceVideosQuery.error && sourceVideoItems.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No videos found for this source page right now.
+                        </p>
+                      ) : null}
+
+                      {sourceVideoItems.length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="space-y-2 max-h-[52vh] overflow-y-auto pr-1">
+                            {sourceVideoItems.map((item) => {
+                              const key = getVideoSelectionKey(item);
+                              const checked = Boolean(selectedVideoIds[key]);
+                              const createdLabel = item.published_at ? formatRelativeShort(item.published_at) : 'Unknown time';
+
+                              return (
+                                <div key={key} className="rounded-md border border-border/40 p-3">
+                                  <div className="flex items-start gap-3">
+                                    <Checkbox
+                                      checked={checked}
+                                      disabled={item.already_exists_for_user || videoLibraryGenerateMutation.isPending}
+                                      onCheckedChange={(value) => toggleVideoSelection(item, value === true)}
+                                      className="mt-0.5"
+                                    />
+                                    <div className="min-w-0 flex-1 space-y-1">
+                                      <p className="text-sm font-medium line-clamp-2">{item.title}</p>
+                                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                        <span>{createdLabel}</span>
+                                        <a href={item.video_url} target="_blank" rel="noreferrer" className="underline">
+                                          Open video
+                                        </a>
+                                        {item.already_exists_for_user ? (
+                                          <Badge variant="secondary" className="h-5 px-2 text-[10px]">
+                                            Already in your feed
+                                          </Badge>
+                                        ) : null}
+                                        {item.existing_blueprint_id ? (
+                                          <Link className="underline" to={`/blueprint/${item.existing_blueprint_id}`}>
+                                            Open blueprint
+                                          </Link>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                    {item.thumbnail_url ? (
+                                      <img
+                                        src={item.thumbnail_url}
+                                        alt={item.title}
+                                        className="h-12 w-20 rounded-md object-cover border border-border/40 shrink-0"
+                                        loading="lazy"
+                                      />
+                                    ) : null}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {sourceVideosQuery.hasNextPage ? (
+                            <div className="flex justify-center">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => sourceVideosQuery.fetchNextPage()}
+                                disabled={sourceVideosQuery.isFetchingNextPage}
+                              >
+                                {sourceVideosQuery.isFetchingNextPage ? 'Loading...' : 'Load more'}
+                              </Button>
+                            </div>
+                          ) : null}
+
+                          <div className="flex items-center justify-between gap-2 pt-1">
+                            <p className="text-xs text-muted-foreground">
+                              Selected: {selectedSourceVideoItems.length} / {sourceVideoItems.length}
+                            </p>
+                            <Button
+                              size="sm"
+                              onClick={handleGenerateSelectedVideos}
+                              disabled={
+                                selectedSourceVideoItems.length === 0
+                                || videoLibraryGenerateMutation.isPending
+                                || sourceVideosQuery.isFetching
+                                || videoLibraryJobRunning
+                              }
+                            >
+                              {videoLibraryGenerateMutation.isPending ? 'Queueing...' : 'Generate selected'}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
                 </CardContent>
               </Card>
 

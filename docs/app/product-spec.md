@@ -62,6 +62,7 @@ a50) [have] Source Pages foundation is active: YouTube channels are now represen
 a51) [have] Subscription surfaces now deep-link to Source Pages, while legacy `/api/source-subscriptions*` contracts remain active for compatibility.
 a52) [have] Source page reads now lazily hydrate missing avatar/banner assets for legacy backfilled rows, so first open can populate visuals without requiring re-subscribe.
 a53) [have] Source pages now expose a public, deduped blueprint feed (`latest + load more`) via `GET /api/source-pages/:platform/:externalId/blueprints`, and `/s/:platform/:externalId` renders Home-style read-only blueprint cards.
+a54) [have] Source pages now include an auth-only `Video Library` section for back-catalog generation (`GET /videos`, `POST /videos/generate`) with async queue execution and duplicate skip visibility.
 
 ## Core Model
 b1) `Source Item`
@@ -227,6 +228,8 @@ si36) auth endpoint: `POST /api/source-pages/:platform/:externalId/subscribe` (i
 si37) auth endpoint: `DELETE /api/source-pages/:platform/:externalId/subscribe` (unsubscribe parity + subscription notice cleanup).
 si38) compatibility note: legacy `POST/GET/PATCH/DELETE /api/source-subscriptions*` remains live while Source Pages rollout expands.
 si39) public/auth endpoint: `GET /api/source-pages/:platform/:externalId/blueprints?limit=<1..24>&cursor=<opaque?>` (public channel-published feed for the source page, deduped by `source_item_id` with `next_cursor` pagination).
+si40) auth endpoint: `GET /api/source-pages/:platform/:externalId/videos?page_token=<optional>&limit=<1..25>` (source-page video-library listing for signed-in users, includes duplicate flags per row).
+si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/generate` (queues async generation for selected source videos, skips user duplicates, returns `job_id` + queue summary).
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

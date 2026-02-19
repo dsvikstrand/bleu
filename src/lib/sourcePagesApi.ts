@@ -48,6 +48,37 @@ export type SourcePageBlueprintFeedPage = {
   next_cursor: string | null;
 };
 
+export type SourcePageVideoLibraryItem = {
+  video_id: string;
+  video_url: string;
+  title: string;
+  description: string;
+  thumbnail_url: string | null;
+  published_at: string | null;
+  channel_id: string;
+  channel_title: string;
+  already_exists_for_user: boolean;
+  existing_blueprint_id: string | null;
+  existing_feed_item_id: string | null;
+};
+
+export type SourcePageVideoLibraryPage = {
+  items: SourcePageVideoLibraryItem[];
+  next_page_token: string | null;
+};
+
+export type SourcePageVideoGenerateSummary = {
+  job_id: string | null;
+  queued_count: number;
+  skipped_existing_count: number;
+  skipped_existing: Array<{
+    video_id: string;
+    title: string;
+    existing_blueprint_id: string | null;
+    existing_feed_item_id: string | null;
+  }>;
+};
+
 function getApiBase() {
   if (!config.agenticBackendUrl) return null;
   return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
@@ -168,6 +199,59 @@ export async function getSourcePageBlueprints(input: {
         'Content-Type': 'application/json',
         ...authHeader,
       },
+    },
+  );
+  return response.data;
+}
+
+export async function getSourcePageVideos(input: {
+  platform: string;
+  externalId: string;
+  limit?: number;
+  pageToken?: string | null;
+}) {
+  const params = new URLSearchParams();
+  const safeLimit = Math.max(1, Math.min(25, Number(input.limit || 12)));
+  params.set('limit', String(Number.isFinite(safeLimit) ? safeLimit : 12));
+  if (input.pageToken) params.set('page_token', String(input.pageToken));
+
+  const authHeader = await getRequiredAuthHeader();
+  const response = await apiRequest<SourcePageVideoLibraryPage>(
+    `/source-pages/${encodeURIComponent(input.platform)}/${encodeURIComponent(input.externalId)}/videos?${params.toString()}`,
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader,
+      },
+    },
+  );
+  return response.data;
+}
+
+export async function generateSourcePageVideos(input: {
+  platform: string;
+  externalId: string;
+  items: Array<{
+    video_id: string;
+    video_url: string;
+    title: string;
+    published_at?: string | null;
+    thumbnail_url?: string | null;
+  }>;
+}) {
+  const authHeader = await getRequiredAuthHeader();
+  const response = await apiRequest<SourcePageVideoGenerateSummary>(
+    `/source-pages/${encodeURIComponent(input.platform)}/${encodeURIComponent(input.externalId)}/videos/generate`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader,
+      },
+      body: JSON.stringify({
+        items: input.items,
+      }),
     },
   );
   return response.data;

@@ -55,6 +55,7 @@ Execution mode:
 36. [have] Step 35 - New-account onboarding entry (`/welcome`) for optional YouTube connect/import setup
 37. [have] Step 36 - Source Pages foundation (platform-agnostic source entity + additive APIs + minimal `/s/:platform/:externalId` UI)
 38. [have] Step 37 - Source Page blueprint feed (public deduped list + latest/load-more UX)
+39. [have] Step 38 - Source Page Video Library (auth-only creator backlog list + async selected generation)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -303,6 +304,28 @@ Completion evidence (2026-02-19)
 - Added `GET /api/source-pages/:platform/:externalId/blueprints` with cursor pagination and public feed payload.
 - Implemented source-page dedupe by `source_item_id` and YouTube legacy fallback match (`source_channel_id`) for older unlinked rows.
 - Updated `src/pages/SourcePage.tsx` to render Home-style read-only blueprint cards with `Load more`.
+
+### Step 38 - Source Page Video Library
+Scope
+- add auth-only creator back-catalog listing on source pages (`Video Library` section).
+- add async selected generation from source page into existing ingestion pipeline (`My Feed` + auto-channel).
+- keep discovery feed-first (no new source directory route).
+
+Definition of done
+- `GET /api/source-pages/:platform/:externalId/videos` returns paginated source videos with duplicate flags.
+- `POST /api/source-pages/:platform/:externalId/videos/generate` queues async generation and returns `job_id`.
+- `/s/:platform/:externalId` shows signed-in select/generate UI and lightweight job status.
+
+Evaluation
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+Completion evidence (2026-02-19)
+- Added auth-only source-page video-library endpoints (`GET /videos`, `POST /videos/generate`) with deterministic duplicate skip reporting.
+- Added ingestion scope `source_page_video_library_selection` and async worker path that reuses existing blueprint/feed + auto-channel flow.
+- Updated `src/pages/SourcePage.tsx` with `Video Library` select/generate UI, duplicate badges, and background job polling card.
 
 ### Step 12 - Subscriptions management actions
 Scope

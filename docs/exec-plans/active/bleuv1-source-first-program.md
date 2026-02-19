@@ -203,6 +203,10 @@ Rules:
   - new endpoint `GET /api/source-pages/:platform/:externalId/blueprints` serves public source-page feed items.
   - feed includes public, channel-published blueprints only; deduped by source video (`source_item_id`).
   - `/s/:platform/:externalId` now renders Home-style read-only blueprint cards with latest-first `Load more` pagination.
+- Source page Video Library activation (2026-02-19):
+  - added auth-only source backlog listing endpoint `GET /api/source-pages/:platform/:externalId/videos`.
+  - added async selected-generation endpoint `POST /api/source-pages/:platform/:externalId/videos/generate`.
+  - `/s/:platform/:externalId` now lets signed-in users select older creator videos and queue generation with duplicate skip visibility and job polling.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.
