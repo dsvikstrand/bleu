@@ -145,6 +145,19 @@ Safe defaults:
 - `SUBSCRIPTION_AUTO_BANNER_CONCURRENCY=1`
 - `AUTO_BANNER_STALE_RUNNING_MS=1200000`
 
+## Onboarding rollout checks
+- Schema check:
+  - `public.user_youtube_onboarding` exists.
+  - trigger `on_auth_user_created_youtube_onboarding` exists on `auth.users`.
+- Behavior check (new account only):
+  1. create a fresh account and sign in.
+  2. verify first authenticated navigation is redirected to `/welcome`.
+  3. click `Skip for now` and verify redirect to `/wall`.
+  4. verify Home shows dismissible setup reminder card.
+  5. complete import with at least one imported/reactivated channel and verify reminder no longer appears.
+- Existing-account check:
+  - existing users created before migration should not be auto-redirected to `/welcome`.
+
 ## Failure playbooks
 
 ### `PROVIDER_FAIL`

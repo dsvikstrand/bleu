@@ -55,6 +55,9 @@ a43) [have] Landing now includes an above-the-fold proof card (live example when
 a44) [have] Landing social-proof sections (`Top Blueprints`, `Trending Topics`) now show curated fallback content instead of disappearing when live data is empty.
 a45) [have] Frontend bootstrap now guards missing Supabase env (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`) and shows a user-facing configuration screen instead of a blank page.
 a46) [have] Landing use-case strip is now explicit (`fitness`, `recipes`, `study`, `productivity`) to communicate practical value before sign-in.
+a47) [have] New-account onboarding now supports an optional first-login `/welcome` setup path for YouTube connect + import.
+a48) [have] Onboarding completion requires successful import (`imported_count > 0` or `reactivated_count > 0`); connect-only does not complete setup.
+a49) [have] Home now shows a small dismissible YouTube-setup reminder card for skipped/incomplete onboarding users.
 
 ## Core Model
 b1) `Source Item`
@@ -136,6 +139,7 @@ f8) User scans, remixes, and adds insights.
 f9) Eligible items are promoted to Home feed channels after gates.
 f10) Community votes/comments to surface higher-value items.
 f11) User can manually refresh subscriptions from `/subscriptions`, preview new videos, and launch async background generation without blocking app usage.
+f12) New accounts can optionally complete source setup at `/welcome` before normal usage.
 
 ## Route and IA Snapshot
 r1) [have] Home: `/`
@@ -152,6 +156,7 @@ r11) [have] Compatibility redirects: `/tags` -> `/channels`, `/blueprints` -> `/
 r12) [have] Signed-in primary nav is community-first: `Home / Channels / Explore`.
 r13) [have] Personal workspace is profile-first: `/u/:userId` tabs are `Feed / Comments / Liked / Subscriptions` (subscriptions tab is owner-only); `/my-feed` remains compatibility/direct route.
 r14) [have] Header `Create` action (next to profile) is the primary entrypoint to `/search`.
+r15) [have] Optional onboarding route: `/welcome` (auth-only, first-login entrypoint for new users only).
 
 ## Scope Boundaries (MVP)
 s1) In scope
@@ -174,6 +179,7 @@ d3) [have] Source ingestion + feed tables (`source_items`, `user_source_subscrip
 d4) [have] Channel candidate + decision logs (`channel_candidates`, `channel_gate_decisions`).
 d5) [have] Scheduled/user-triggered ingestion jobs + trace table (`ingestion_jobs`).
 d6) [have] Auto-banner policy + queue tables (`channel_default_banners`, `auto_banner_jobs`).
+d7) [have] Onboarding state table for new-user YouTube setup (`user_youtube_onboarding`).
 
 ## Subscription Interfaces (MVP)
 si1) `POST /api/source-subscriptions` with `{ channel_input, mode? }` (`mode` accepted but ignored/coerced to `auto` in MVP path)

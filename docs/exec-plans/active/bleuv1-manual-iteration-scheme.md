@@ -52,6 +52,7 @@ Execution mode:
 33. [have] Step 32 - Nav/profile IA refinement (`Home / Channels / Explore`, `Create` -> `/search`, dropdown + profile-tab subscriptions entrypoints)
 34. [have] Step 33 - Core copy harmonization for source-first runtime language (Home/Create/auto-publish wording on high-traffic surfaces)
 35. [have] Step 34 - Landing cold-user pass (benefit-first hero, proof/use-case blocks, empty-state fallbacks, runtime config guard)
+36. [have] Step 35 - New-account onboarding entry (`/welcome`) for optional YouTube connect/import setup
 
 Interpretation note
 - Step entries capture execution timeline.

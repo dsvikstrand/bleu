@@ -87,6 +87,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 14 polish pass simplifies subscription popup/list copy and moves channel-open affordance to avatar click.
 - Step 15 IA refinement adds `Subscriptions` shortcut in user dropdown and owner-only lightweight `Subscriptions` tab in profile workspace.
 - Step 16 YouTube onboarding import adds OAuth connect + bulk subscription import on `/subscriptions` with none-selected default and idempotent reactivation behavior.
+- Step 17 optional new-account setup adds `/welcome` first-login onboarding entry with skip path, Home reminder card, and import-success completion state.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Added user endpoint `GET /api/ingestion/jobs/:id` for owner-scoped manual refresh progress.
 - Added user endpoint `GET /api/ingestion/jobs/latest-mine` for owner-scoped latest refresh-job restore after page reload.

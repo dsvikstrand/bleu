@@ -24,6 +24,10 @@
     - social-proof sections keep curated fallback content when live data is empty
   - Signed-in primary nav uses `Home / Channels / Explore`.
   - Header `Create` action (next to profile menu) routes to `/search` for search/create discovery.
+  - New-account onboarding is optional and route-based:
+    - first-login redirect for new accounts goes to `/welcome`
+    - existing pre-rollout accounts are not auto-prompted
+    - users can skip setup and continue to Home
   - Core copy across high-traffic surfaces is intentionally aligned to runtime terms (`Home`, `Create`, auto-channel publish) to avoid legacy flow drift.
   - Frontend bootstrap has required-env guard:
     - missing `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY` renders a configuration screen instead of a blank page.
@@ -46,6 +50,10 @@
     - import selection defaults to none selected; users explicitly choose channels to import.
     - disconnect revokes+unlinks OAuth tokens but keeps existing app subscriptions unchanged.
     - includes manual `Refresh` popup flow: scan new subscription videos, select items, and start async background generation.
+  - Onboarding setup surface in `src/pages/WelcomeOnboarding.tsx`:
+    - reuses OAuth connect/import APIs
+    - marks completion only after successful import (`imported` or `reactivated` > 0)
+    - skip path records non-blocking onboarding state.
   - User menu includes a direct `Subscriptions` shortcut to `/subscriptions`; profile tab keeps a lightweight owner-only list with `Unsubscribe`.
 - Backend:
   - Express server in `server/index.ts`.
@@ -82,19 +90,24 @@
 - Data:
   - Supabase is system of record for blueprints, tags, follows, likes/comments, telemetry.
   - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables + auto-banner policy/queue tables.
+  - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
 - Eval assets:
   - Runtime policy/config under `eval/methods/v0/*`.
 - Operations:
   - Oracle VM runtime + logs-first runbook (`docs/ops/yt2bp_runbook.md`).
 
 ## 3) Core Lifecycle (`bleuV1`)
-1. Ingest source item (manual URL pull or subscription sync).
+1. (Optional) New-account onboarding:
+   - first authenticated session for new accounts is redirected once to `/welcome`.
+   - onboarding remains optional (`Skip for now`) and never blocks normal usage after skip.
+   - completion is import-success-only; connect-only does not complete onboarding.
+2. Ingest source item (manual URL pull or subscription sync).
    - discovery option: user can search YouTube results in `/search` before selecting a source video.
    - Search-generated `/youtube` handoff carries channel context (id/title/url) so saved source items retain channel subtitle data in My Feed.
    - My Feed source subtitle mapping also falls back to source metadata channel title when column-level channel title is absent.
    - `/youtube` core request is timeout-bounded by `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
    - optional review/banner generation is executed outside the core endpoint request and may attach after save.
-2. Subscription create/reactivate:
+3. Subscription create/reactivate:
    - user opens `/subscriptions`, launches `Add Subscription`, searches channels, then clicks subscribe.
    - optional onboarding accelerator: user connects YouTube on `/subscriptions` and imports selected subscriptions in bulk.
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.
@@ -102,7 +115,7 @@
    - no historical prefill on first subscribe in MVP.
    - create one persistent notice card (`user_feed_items.state = subscription_notice`) with avatar + optional banner metadata.
    - unsubscribe removes that user-scoped notice card while preserving other My Feed blueprint items.
-3. Subscription sync after checkpoint:
+4. Subscription sync after checkpoint:
    - new uploads generate immediately to `my_feed_published`.
    - auto-ingest path enables review generation by default.
    - auto-banner mode is controlled by env:
@@ -121,14 +134,14 @@
      - successful manual generation advances subscription checkpoint forward to prevent future auto-poll duplicates.
      - frontend restores active manual refresh status after reload via `GET /api/ingestion/jobs/latest-mine`.
    - stale running ingestion jobs are recovered before new service/manual trigger paths execute (`STALE_RUNNING_RECOVERY`).
-4. Optional user remix/insight.
-5. Channel candidate evaluation (all-gates-run default, aggregated decision).
+5. Optional user remix/insight.
+6. Channel candidate evaluation (all-gates-run default, aggregated decision).
    - channel resolution mode is env-driven via `AUTO_CHANNEL_CLASSIFIER_MODE`:
      - `deterministic_v1`: tag+alias mapping with deterministic tie-break.
      - `llm_labeler_v1`: post-artifact sync label pass using title/review/tags/step hints against allowed channel list.
      - `general_placeholder`: rollback mode, routes everything to fallback slug.
    - `llm_labeler_v1` invalid output handling: retry once, then fallback slug (`AUTO_CHANNEL_FALLBACK_SLUG`, default `general`).
-6. Gate decision:
+7. Gate decision:
    - pass -> publish to Home feed (`/wall`)
    - warn/block -> remain personal-only
 

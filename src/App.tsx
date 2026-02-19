@@ -27,6 +27,8 @@ import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "@/components/shared/RequireAuth";
 import { config } from "@/config/runtime";
+import { YouTubeOnboardingRedirectGate } from "@/components/onboarding/YouTubeOnboardingRedirectGate";
+import WelcomeOnboarding from "./pages/WelcomeOnboarding";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +39,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter basename={config.basePath}>
+          <YouTubeOnboardingRedirectGate />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<Explore />} />
@@ -51,6 +54,7 @@ const App = () => (
             {config.features.myFeedV1 && (
               <Route path="/subscriptions" element={<RequireAuth><Subscriptions /></RequireAuth>} />
             )}
+            <Route path="/welcome" element={<RequireAuth><WelcomeOnboarding /></RequireAuth>} />
             <Route path="/wall" element={<Wall />} />
             <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
             <Route path="/auth" element={<Auth />} />

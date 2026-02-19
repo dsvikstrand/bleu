@@ -194,6 +194,11 @@ Rules:
   - backend adds OAuth start/callback/status/disconnect and import preview/import endpoints.
   - import is idempotent, defaults to none-selected, and reactivates inactive rows.
   - disconnect revokes+unlinks OAuth tokens while preserving existing app subscriptions.
+- New-account onboarding entry (2026-02-19):
+  - optional first-login redirect for new accounts routes to `/welcome`.
+  - onboarding completion requires successful import (`imported` or `reactivated` > 0).
+  - skip remains non-blocking and Home can show a dismissible setup reminder until completion.
+  - existing pre-rollout users are not auto-prompted.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

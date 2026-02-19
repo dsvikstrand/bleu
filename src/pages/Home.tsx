@@ -12,9 +12,11 @@ import { ArrowRight, Inbox, Search, Users, Youtube } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
 import { Card, CardContent } from '@/components/ui/card';
+import { useYouTubeOnboarding } from '@/hooks/useYouTubeOnboarding';
 
 export default function Home() {
   const { user } = useAuth();
+  const onboardingQuery = useYouTubeOnboarding();
   const hasLoggedVisit = useRef(false);
 
   useEffect(() => {
@@ -53,6 +55,14 @@ export default function Home() {
       metadata,
     });
   };
+
+  const showYouTubeOnboardingReminder = Boolean(
+    user
+      && onboardingQuery.data
+      && onboardingQuery.data.status !== 'completed'
+      && onboardingQuery.data.first_prompted_at
+      && !onboardingQuery.data.reminder_dismissed_at,
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -112,6 +122,36 @@ export default function Home() {
             </Button>
           </div>
         </section>
+
+        {showYouTubeOnboardingReminder ? (
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Complete YouTube setup</p>
+                <p className="text-xs text-muted-foreground">
+                  Connect your YouTube account and import subscriptions to activate your source feed faster.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button asChild size="sm">
+                  <Link to="/welcome">Set up YouTube import</Link>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={onboardingQuery.isUpdating}
+                  onClick={() =>
+                    onboardingQuery.updateOnboarding({
+                      reminder_dismissed_at: new Date().toISOString(),
+                    }).catch(() => undefined)
+                  }
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <LandingProofCard
           onOpenExample={(kind) =>

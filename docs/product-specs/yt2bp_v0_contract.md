@@ -41,6 +41,8 @@
 - 2026-02-18 note: profile workspace feed endpoint (`GET /api/profile/:userId/feed`) is additive and does not alter the YT2BP endpoint envelope.
 - 2026-02-18 note: high-traffic wording harmonization (`Home`, `Create`, auto-publish phrasing) is UI-only and does not alter this endpoint envelope.
 - 2026-02-19 note: YouTube OAuth connect/import endpoints (`/api/youtube/connection/*`, `/api/youtube/subscriptions/*`) are additive onboarding paths and do not alter the YT2BP endpoint envelope.
+- 2026-02-19 note: optional first-login onboarding route (`/welcome`) and onboarding-state table (`user_youtube_onboarding`) are additive product surfaces and do not alter the YT2BP endpoint envelope.
+- 2026-02-19 note: `/api/youtube/subscriptions/import` now may mark onboarding complete after successful import, which is outside the YT2BP request/response envelope.
 
 ## Request
 ```json
@@ -132,6 +134,7 @@
 - Auto-channel endpoint (`POST /api/my-feed/items/:id/auto-publish`) is intentionally outside this endpoint contract.
 - Auto-channel classifier mode/fallback controls (`AUTO_CHANNEL_CLASSIFIER_MODE`, `AUTO_CHANNEL_FALLBACK_SLUG`) are intentionally outside this endpoint contract.
 - YouTube OAuth connect/import lifecycle (`/api/youtube/connection/*`, `/api/youtube/subscriptions/*`) is intentionally outside this endpoint contract.
+- Optional onboarding state lifecycle (`user_youtube_onboarding`, `/welcome`) is intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: env-controlled via `YT2BP_CORE_TIMEOUT_MS` (default `120s`).

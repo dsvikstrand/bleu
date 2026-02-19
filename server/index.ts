@@ -1912,6 +1912,17 @@ app.post('/api/youtube/subscriptions/import', youtubeImportLimiter, async (req, 
     })
     .eq('user_id', userId);
 
+  const successfulImports = importedCount + reactivatedCount;
+  if (successfulImports > 0) {
+    await db
+      .from('user_youtube_onboarding')
+      .update({
+        status: 'completed',
+        completed_at: nowIso,
+      })
+      .eq('user_id', userId);
+  }
+
   const failedCount = failures.length;
   return res.json({
     ok: true,
