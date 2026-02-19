@@ -4018,6 +4018,47 @@ app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
     });
   }
 
+  // Opportunistic lazy hydration: older backfilled rows can miss avatar/banner
+  // until a subscribe/import rewrite occurs. Fill once on read when possible.
+  if (
+    platform === 'youtube'
+    && youtubeDataApiKey
+    && (!sourcePage.avatar_url || !sourcePage.banner_url)
+  ) {
+    try {
+      const assetMap = await fetchYouTubeChannelAssetMap({
+        apiKey: youtubeDataApiKey,
+        channelIds: [sourcePage.external_id],
+      });
+      const assets = assetMap.get(sourcePage.external_id);
+      const nextAvatarUrl = sourcePage.avatar_url || assets?.avatarUrl || null;
+      const nextBannerUrl = sourcePage.banner_url || assets?.bannerUrl || null;
+      const needsUpdate = nextAvatarUrl !== sourcePage.avatar_url || nextBannerUrl !== sourcePage.banner_url;
+
+      if (needsUpdate) {
+        const { data: updatedSourcePage, error: updateError } = await db
+          .from('source_pages')
+          .update({
+            avatar_url: nextAvatarUrl,
+            banner_url: nextBannerUrl,
+          })
+          .eq('id', sourcePage.id)
+          .select('id, platform, external_id, external_url, title, avatar_url, banner_url, metadata, is_active, created_at, updated_at')
+          .single();
+
+        if (!updateError && updatedSourcePage) {
+          sourcePage = updatedSourcePage as typeof sourcePage;
+        }
+      }
+    } catch (assetError) {
+      console.log('[source_page_assets_lookup_failed]', JSON.stringify({
+        source_page_id: sourcePage.id,
+        source_channel_id: sourcePage.external_id,
+        error: assetError instanceof Error ? assetError.message : String(assetError),
+      }));
+    }
+  }
+
   const { count: linkedFollowerCount, error: linkedFollowerCountError } = await db
     .from('user_source_subscriptions')
     .select('id', { count: 'exact', head: true })

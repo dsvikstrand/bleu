@@ -70,6 +70,7 @@
       - `POST` ensures a platform-agnostic source-page row and dual-writes `source_page_id`.
       - `DELETE` deactivates subscription and removes user-scoped `subscription_notice` feed row for that channel
     - `GET /api/source-pages/:platform/:externalId` (public-readable source page + follower count + viewer subscription state)
+      - includes opportunistic lazy hydration for missing source avatar/banner assets on legacy backfilled rows.
     - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)
     - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth-only, unsubscribe parity + notice cleanup)
     - `POST /api/source-subscriptions/:id/sync`

@@ -277,6 +277,10 @@ Evaluation
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
 
+Completion evidence (2026-02-19)
+- Patched `GET /api/source-pages/:platform/:externalId` with lazy YouTube asset hydration for missing `avatar_url`/`banner_url` on legacy backfilled rows.
+- Source page visuals now populate on first read without requiring unsubscribe/resubscribe cycle.
+
 ### Step 12 - Subscriptions management actions
 Scope
 - simplify `/subscriptions` to one management action (`Unsubscribe`) without changing backend contracts

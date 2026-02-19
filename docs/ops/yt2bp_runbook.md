@@ -276,8 +276,11 @@ select to_regclass('public.source_pages') as source_pages_table,
 select
   (select count(*) from public.source_pages where platform = 'youtube') as source_pages_youtube,
   (select count(*) from public.user_source_subscriptions where source_page_id is not null) as subscriptions_linked,
-  (select count(*) from public.source_items where source_page_id is not null) as source_items_linked;
+       (select count(*) from public.source_items where source_page_id is not null) as source_items_linked;
 ```
+- Visual hydration check (legacy rows):
+  - open `GET /api/source-pages/youtube/<channel_id>` for a known backfilled channel.
+  - if `avatar_url`/`banner_url` were null, first read now attempts YouTube asset hydration and persists filled values.
 
 ## Candidate lifecycle smoke (auth required)
 Use a valid bearer token and existing `user_feed_item_id`.

@@ -60,6 +60,7 @@ a48) [have] Onboarding completion requires successful import (`imported_count > 
 a49) [have] Home now shows a small dismissible YouTube-setup reminder card for skipped/incomplete onboarding users.
 a50) [have] Source Pages foundation is active: YouTube channels are now represented as platform-agnostic shared source entities with route `/s/:platform/:externalId`.
 a51) [have] Subscription surfaces now deep-link to Source Pages, while legacy `/api/source-subscriptions*` contracts remain active for compatibility.
+a52) [have] Source page reads now lazily hydrate missing avatar/banner assets for legacy backfilled rows, so first open can populate visuals without requiring re-subscribe.
 
 ## Core Model
 b1) `Source Item`

@@ -25,6 +25,7 @@ Status: `canonical`
 17. Onboarding completion requires successful subscription import (connect-only is insufficient).
 18. Source identity is moving to platform-agnostic `Source Pages` (`/s/:platform/:externalId`), with YouTube channel `UC...` as the current canonical key.
 19. Source pages are public-readable and subscribe/unsubscribe capable; legacy `/api/source-subscriptions*` endpoints remain compatibility-safe during migration.
+20. Source pages may lazily hydrate missing avatar/banner metadata on first read so backfilled legacy rows render complete visuals without requiring unsubscribe/resubscribe.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.
