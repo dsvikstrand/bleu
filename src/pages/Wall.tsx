@@ -10,13 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, Share2, Tag, MessageCircle, Layers, ChevronsUpDown, Check, Sparkles, Grid3X3 } from 'lucide-react';
+import { Tag, Layers, ChevronsUpDown, Check, Sparkles, Grid3X3, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useTagFollows } from '@/hooks/useTagFollows';
 import type { Json } from '@/integrations/supabase/types';
 import { buildFeedSummary } from '@/lib/feedPreview';
-import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { matchesChannelByTags, resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { normalizeTag } from '@/lib/tagging';
@@ -28,6 +27,12 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useMyFeed } from '@/hooks/useMyFeed';
+import { extractYouTubeVideoId } from '@/lib/sourceIdentity';
+import { ApiRequestError, getIngestionJob, type IngestionJobStatus } from '@/lib/subscriptionsApi';
+import { unlockSourcePageVideos } from '@/lib/sourcePagesApi';
+import { WallBlueprintCard } from '@/components/wall/WallBlueprintCard';
+import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
 
 interface BlueprintPost {
   id: string;
@@ -47,6 +52,35 @@ interface BlueprintPost {
   published_channel_slug?: string | null;
 }
 
+type ForYouLockedItem = {
+  kind: 'locked';
+  feedItemId: string;
+  sourceItemId: string;
+  createdAt: string;
+  title: string;
+  sourceChannelTitle: string | null;
+  sourceUrl: string;
+  unlockCost: number;
+  sourcePageId: string | null;
+  sourceChannelId: string | null;
+  unlockInProgress: boolean;
+};
+
+type ForYouBlueprintItem = {
+  kind: 'blueprint';
+  feedItemId: string;
+  sourceItemId: string;
+  createdAt: string;
+  blueprintId: string;
+  title: string;
+  llmReview: string | null;
+  bannerUrl: string | null;
+  tags: string[];
+  publishedChannelSlug: string | null;
+};
+
+type ForYouStreamItem = ForYouLockedItem | ForYouBlueprintItem;
+
 const SORT_TABS = [
   { value: 'latest', label: 'Latest' },
   { value: 'trending', label: 'Trending' },
@@ -55,7 +89,18 @@ const SORT_TABS = [
 type FeedSort = (typeof SORT_TABS)[number]['value'];
 
 const SCOPE_FOR_YOU = 'for-you';
+const SCOPE_YOUR_CHANNELS = 'your-channels';
 const SCOPE_ALL = 'all';
+
+function getForYouErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiRequestError) {
+    if (error.errorCode === 'INSUFFICIENT_CREDITS') {
+      return 'Not enough credits to unlock this blueprint yet.';
+    }
+    return error.message || fallback;
+  }
+  return error instanceof Error ? error.message : fallback;
+}
 
 export default function Wall() {
   const { user, isLoading: authLoading } = useAuth();
@@ -65,6 +110,9 @@ export default function Wall() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [scopeOpen, setScopeOpen] = useState(false);
   const [selectedTagSlug, setSelectedTagSlug] = useState<string | null>(null);
+  const [optimisticUnlockingSourceItemIds, setOptimisticUnlockingSourceItemIds] = useState<Record<string, boolean>>({});
+  const [activeUnlockJobId, setActiveUnlockJobId] = useState<string | null>(null);
+  const [terminalUnlockJobId, setTerminalUnlockJobId] = useState<string | null>(null);
 
   const scopeOptions = useMemo(() => {
     const base = user
@@ -73,6 +121,11 @@ export default function Wall() {
             value: SCOPE_FOR_YOU,
             label: 'For You',
             icon: Sparkles,
+          },
+          {
+            value: SCOPE_YOUR_CHANNELS,
+            label: 'Your channels',
+            icon: Users,
           },
         ]
       : [];
@@ -101,7 +154,13 @@ export default function Wall() {
   const sortParam = (searchParams.get('sort') || '').trim();
   const defaultScope = user ? SCOPE_FOR_YOU : SCOPE_ALL;
   const feedScope = scopeValues.has(scopeParam) ? scopeParam : defaultScope;
-  const feedSort: FeedSort = sortParam === 'trending' ? 'trending' : 'latest';
+  const requestedSort: FeedSort = sortParam === 'trending' ? 'trending' : 'latest';
+
+  const isPersonalScope = feedScope === SCOPE_FOR_YOU || feedScope === SCOPE_YOUR_CHANNELS;
+  const effectiveScope = !user && isPersonalScope ? SCOPE_ALL : feedScope;
+  const isForYouScope = effectiveScope === SCOPE_FOR_YOU && !!user;
+  const isYourChannelsScope = effectiveScope === SCOPE_YOUR_CHANNELS && !!user;
+  const feedSort: FeedSort = isForYouScope ? 'latest' : requestedSort;
 
   const updateSearchParams = (updates: { scope?: string; sort?: FeedSort }) => {
     const next = new URLSearchParams(searchParams);
@@ -110,12 +169,26 @@ export default function Wall() {
     setSearchParams(next, { replace: true });
   };
 
+  useEffect(() => {
+    if (!isForYouScope || requestedSort !== 'trending') return;
+    updateSearchParams({ sort: 'latest' });
+  }, [isForYouScope, requestedSort]);
+
   const handleScopeSelect = (scope: string) => {
-    updateSearchParams({ scope });
+    const nextSort = scope === SCOPE_FOR_YOU ? 'latest' : feedSort;
+    updateSearchParams({ scope, sort: nextSort });
     setScopeOpen(false);
+
+    logP3Event({
+      eventName: 'wall_scope_selected',
+      surface: 'wall',
+      user,
+      metadata: {
+        scope,
+      },
+    });
   };
-  
-  // Popular channels (tag-backed) for empty state
+
   const { data: popularTags = [] } = usePopularInventoryTags(6);
   const { followedTags } = useTagFollows();
 
@@ -132,9 +205,6 @@ export default function Wall() {
   const joinedCuratedCount = useMemo(() => {
     return followedTags.filter((tag) => curatedJoinableSlugs.has(normalizeTag(tag.slug))).length;
   }, [curatedJoinableSlugs, followedTags]);
-
-  const effectiveScope = !user && feedScope === SCOPE_FOR_YOU ? SCOPE_ALL : feedScope;
-  const isForYouScope = effectiveScope === SCOPE_FOR_YOU && !!user;
 
   const handleTagFilter = (tagSlug: string) => {
     setSelectedTagSlug((current) => {
@@ -156,16 +226,17 @@ export default function Wall() {
 
   const wallQueryKey = ['wall-blueprints', effectiveScope, feedSort, user?.id] as const;
 
-  const { data: posts, isLoading } = useQuery({
+  const { data: posts, isLoading: isBlueprintFeedLoading, error: blueprintFeedError } = useQuery({
     queryKey: wallQueryKey,
+    enabled: !isForYouScope,
     queryFn: async () => {
       const scopedChannel =
-        effectiveScope !== SCOPE_ALL && effectiveScope !== SCOPE_FOR_YOU
+        effectiveScope !== SCOPE_ALL && effectiveScope !== SCOPE_FOR_YOU && effectiveScope !== SCOPE_YOUR_CHANNELS
           ? CHANNELS_CATALOG.find((channel) => channel.slug === effectiveScope)
           : null;
       const isSpecificChannelScope = !!scopedChannel;
 
-      const limit = isForYouScope || isSpecificChannelScope ? 140 : 90;
+      const limit = isYourChannelsScope || isSpecificChannelScope ? 140 : 90;
       let query = supabase
         .from('blueprints')
         .select('id, creator_user_id, title, selected_items, llm_review, banner_url, likes_count, created_at')
@@ -219,6 +290,7 @@ export default function Wall() {
       const likedIds = new Set((likesRes.data || []).map((row) => row.blueprint_id));
       const profilesMap = new Map((profilesRes.data || []).map((profile) => [profile.user_id, profile]));
       if (feedItemsRes.error) throw feedItemsRes.error;
+
       const publishedChannelByBlueprint = new Map<string, { slug: string; createdAtMs: number }>();
       const feedItems = (feedItemsRes.data || []) as Array<{ id: string; blueprint_id: string }>;
       const feedItemIds = feedItems.map((row) => row.id);
@@ -228,6 +300,7 @@ export default function Wall() {
         created_at: string;
         user_feed_item_id: string;
       }> = [];
+
       if (feedItemIds.length > 0) {
         const { data: candidatesData, error: candidatesError } = await supabase
           .from('channel_candidates')
@@ -255,7 +328,7 @@ export default function Wall() {
       }
 
       let followTagIds = new Set<string>();
-      if (isForYouScope) {
+      if (isYourChannelsScope && user) {
         const followsRes = await supabase.from('tag_follows').select('tag_id').eq('user_id', user.id);
         followTagIds = new Set((followsRes.data || []).map((row) => row.tag_id));
       }
@@ -277,7 +350,7 @@ export default function Wall() {
         });
       }
 
-      if (isForYouScope) {
+      if (isYourChannelsScope) {
         if (followTagIds.size === 0) return hydrated;
 
         const joinedChannelPosts: BlueprintPost[] = [];
@@ -302,7 +375,7 @@ export default function Wall() {
 
   const { data: commentCountsByBlueprintId = {} } = useQuery({
     queryKey: ['wall-blueprint-comment-counts', postIds],
-    enabled: postIds.length > 0,
+    enabled: !isForYouScope && postIds.length > 0,
     staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -319,6 +392,133 @@ export default function Wall() {
     },
   });
 
+  const myFeedQuery = useMyFeed({ enabled: isForYouScope });
+
+  const forYouSubscriptionsQuery = useQuery({
+    queryKey: ['wall-for-you-subscriptions', user?.id],
+    enabled: isForYouScope && !!user,
+    queryFn: async () => {
+      if (!user) return [] as Array<{ source_page_id: string | null; source_channel_id: string | null }>;
+      const { data, error } = await supabase
+        .from('user_source_subscriptions')
+        .select('source_page_id, source_channel_id')
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+      if (error) throw error;
+      return (data || []) as Array<{ source_page_id: string | null; source_channel_id: string | null }>;
+    },
+  });
+
+  const forYouStream = useMemo(() => {
+    if (!isForYouScope || !myFeedQuery.data || !forYouSubscriptionsQuery.data) return [] as ForYouStreamItem[];
+
+    const activeSourcePageIds = new Set(
+      forYouSubscriptionsQuery.data
+        .map((row) => String(row.source_page_id || '').trim())
+        .filter(Boolean),
+    );
+    const activeSourceChannelIds = new Set(
+      forYouSubscriptionsQuery.data
+        .map((row) => String(row.source_channel_id || '').trim())
+        .filter(Boolean),
+    );
+
+    const items: ForYouStreamItem[] = [];
+
+    myFeedQuery.data.forEach((item) => {
+      if (!item.source) return;
+      if (item.state === 'subscription_notice') return;
+
+      const sourcePageId = String(item.source.sourcePageId || '').trim();
+      const sourceChannelId = String(item.source.sourceChannelId || '').trim();
+      const isSubscribedSource =
+        (sourcePageId && activeSourcePageIds.has(sourcePageId))
+        || (sourceChannelId && activeSourceChannelIds.has(sourceChannelId));
+
+      if (!isSubscribedSource) return;
+
+      if (item.blueprint) {
+        items.push({
+          kind: 'blueprint',
+          feedItemId: item.id,
+          sourceItemId: item.source.id,
+          createdAt: item.createdAt,
+          blueprintId: item.blueprint.id,
+          title: item.blueprint.title,
+          llmReview: item.blueprint.llmReview,
+          bannerUrl: item.blueprint.bannerUrl,
+          tags: item.blueprint.tags,
+          publishedChannelSlug: item.candidate?.status === 'published' ? item.candidate.channelSlug : null,
+        });
+        return;
+      }
+
+      items.push({
+        kind: 'locked',
+        feedItemId: item.id,
+        sourceItemId: item.source.id,
+        createdAt: item.createdAt,
+        title: item.source.title,
+        sourceChannelTitle: item.source.sourceChannelTitle,
+        sourceUrl: item.source.sourceUrl,
+        unlockCost: Number(item.source.unlockCost || 0),
+        sourcePageId: item.source.sourcePageId,
+        sourceChannelId: item.source.sourceChannelId,
+        unlockInProgress: Boolean(item.source.unlockInProgress) || Boolean(optimisticUnlockingSourceItemIds[item.source.id]),
+      });
+    });
+
+    return items;
+  }, [isForYouScope, myFeedQuery.data, forYouSubscriptionsQuery.data, optimisticUnlockingSourceItemIds]);
+
+  const forYouBlueprintIds = useMemo(
+    () => forYouStream.filter((item): item is ForYouBlueprintItem => item.kind === 'blueprint').map((item) => item.blueprintId),
+    [forYouStream],
+  );
+
+  const forYouStatsQuery = useQuery({
+    queryKey: ['wall-for-you-blueprint-stats', user?.id, forYouBlueprintIds],
+    enabled: isForYouScope && !!user && forYouBlueprintIds.length > 0,
+    queryFn: async () => {
+      const [{ data: blueprintRows, error: blueprintError }, { data: likedRows, error: likedError }, { data: commentRows, error: commentError }] = await Promise.all([
+        supabase
+          .from('blueprints')
+          .select('id, likes_count')
+          .in('id', forYouBlueprintIds),
+        supabase
+          .from('blueprint_likes')
+          .select('blueprint_id')
+          .eq('user_id', user!.id)
+          .in('blueprint_id', forYouBlueprintIds),
+        supabase
+          .from('blueprint_comments')
+          .select('blueprint_id')
+          .in('blueprint_id', forYouBlueprintIds),
+      ]);
+
+      if (blueprintError) throw blueprintError;
+      if (likedError) throw likedError;
+      if (commentError) throw commentError;
+
+      const likes = (blueprintRows || []).reduce<Record<string, number>>((acc, row) => {
+        acc[row.id] = Number(row.likes_count || 0);
+        return acc;
+      }, {});
+
+      const likedIds = new Set((likedRows || []).map((row) => row.blueprint_id));
+      const comments = (commentRows || []).reduce<Record<string, number>>((acc, row) => {
+        acc[row.blueprint_id] = (acc[row.blueprint_id] || 0) + 1;
+        return acc;
+      }, {});
+
+      return {
+        likes,
+        likedIds,
+        comments,
+      };
+    },
+  });
+
   const likeMutation = useMutation({
     mutationFn: async ({ blueprintId, liked }: { blueprintId: string; liked: boolean }) => {
       if (!user) throw new Error('Must be logged in');
@@ -329,26 +529,13 @@ export default function Wall() {
         await supabase.from('blueprint_likes').insert({ blueprint_id: blueprintId, user_id: user.id });
       }
     },
-    onMutate: async ({ blueprintId, liked }) => {
-      await queryClient.cancelQueries({ queryKey: wallQueryKey });
-      const previousPosts = queryClient.getQueryData(wallQueryKey);
-
-      queryClient.setQueryData(wallQueryKey, (old: BlueprintPost[] | undefined) =>
-        old?.map((post) =>
-          post.id === blueprintId
-            ? {
-                ...post,
-                user_liked: !liked,
-                likes_count: liked ? post.likes_count - 1 : post.likes_count + 1,
-              }
-            : post
-        )
-      );
-
-      return { previousPosts };
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] }),
+        queryClient.invalidateQueries({ queryKey: ['wall-for-you-blueprint-stats'] }),
+      ]);
     },
-    onError: (_err, _variables, context) => {
-      queryClient.setQueryData(wallQueryKey, context?.previousPosts);
+    onError: () => {
       toast({
         title: 'Error',
         description: 'Failed to update like. Please try again.',
@@ -356,6 +543,157 @@ export default function Wall() {
       });
     },
   });
+
+  const unlockMutation = useMutation({
+    mutationFn: async (item: ForYouLockedItem) => {
+      const externalId = String(item.sourcePageId || item.sourceChannelId || '').trim();
+      if (!externalId) {
+        throw new Error('Could not resolve source channel for unlock.');
+      }
+
+      const sourceUrl = String(item.sourceUrl || '').trim();
+      const videoId = extractYouTubeVideoId(sourceUrl);
+      if (!videoId) {
+        throw new Error('Could not resolve source video id.');
+      }
+
+      return unlockSourcePageVideos({
+        platform: 'youtube',
+        externalId,
+        items: [{
+          video_id: videoId,
+          video_url: sourceUrl,
+          title: item.title,
+        }],
+      });
+    },
+    onMutate: async (item) => {
+      setOptimisticUnlockingSourceItemIds((current) => ({
+        ...current,
+        [item.sourceItemId]: true,
+      }));
+
+      logP3Event({
+        eventName: 'wall_for_you_unlock_click',
+        surface: 'wall',
+        user,
+        metadata: {
+          source_item_id: item.sourceItemId,
+        },
+      });
+    },
+    onSuccess: async (result, item) => {
+      if (result.job_id) {
+        setActiveUnlockJobId(result.job_id);
+        setTerminalUnlockJobId(null);
+        logP3Event({
+          eventName: 'wall_for_you_unlock_queued',
+          surface: 'wall',
+          user,
+          metadata: {
+            source_item_id: item.sourceItemId,
+            job_id: result.job_id,
+            queued_count: result.queued_count,
+          },
+        });
+      } else {
+        setOptimisticUnlockingSourceItemIds((current) => {
+          const next = { ...current };
+          delete next[item.sourceItemId];
+          return next;
+        });
+      }
+
+      toast({
+        title: result.job_id ? 'Unlock queued' : 'No unlock queued',
+        description: result.job_id
+          ? `Queued ${result.queued_count} item${result.queued_count === 1 ? '' : 's'} for generation.`
+          : `No new unlock started. Ready ${result.ready_count}, in progress ${result.in_progress_count}.`,
+      });
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
+        queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] }),
+      ]);
+    },
+    onError: (error, item) => {
+      setOptimisticUnlockingSourceItemIds((current) => {
+        const next = { ...current };
+        delete next[item.sourceItemId];
+        return next;
+      });
+
+      logP3Event({
+        eventName: 'wall_for_you_unlock_failed',
+        surface: 'wall',
+        user,
+        metadata: {
+          source_item_id: item.sourceItemId,
+          error: error instanceof Error ? error.message : 'unknown',
+        },
+      });
+
+      toast({
+        title: 'Unlock failed',
+        description: getForYouErrorMessage(error, 'Could not start unlock.'),
+        variant: 'destructive',
+      });
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
+    },
+  });
+
+  const unlockJobQuery = useQuery({
+    queryKey: ['wall-for-you-unlock-job', user?.id, activeUnlockJobId],
+    enabled: isForYouScope && !!activeUnlockJobId,
+    queryFn: () => getIngestionJob(activeUnlockJobId as string),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return 3_000;
+      const status = data.status as IngestionJobStatus;
+      return status === 'succeeded' || status === 'failed' ? false : 3_000;
+    },
+  });
+
+  useEffect(() => {
+    const job = unlockJobQuery.data;
+    if (!job) return;
+    if (job.status !== 'succeeded' && job.status !== 'failed') return;
+    if (terminalUnlockJobId === job.job_id) return;
+
+    setTerminalUnlockJobId(job.job_id);
+    setActiveUnlockJobId(null);
+    setOptimisticUnlockingSourceItemIds({});
+
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] }),
+      queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] }),
+      queryClient.invalidateQueries({ queryKey: ['wall-for-you-blueprint-stats'] }),
+      queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
+    ]);
+
+    if (job.status === 'succeeded') {
+      toast({
+        title: 'Unlock complete',
+        description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}.`,
+      });
+      return;
+    }
+
+    toast({
+      title: 'Unlock failed',
+      description: job.error_message || 'Could not complete unlock generation.',
+      variant: 'destructive',
+    });
+  }, [
+    queryClient,
+    toast,
+    unlockJobQuery.data,
+    terminalUnlockJobId,
+    user?.id,
+  ]);
 
   const handleLike = (blueprintId: string, currentlyLiked: boolean) => {
     if (!user) {
@@ -368,10 +706,10 @@ export default function Wall() {
     likeMutation.mutate({ blueprintId, liked: currentlyLiked });
   };
 
-  const showZeroJoinForYouCta = !!user && isForYouScope && joinedCuratedCount === 0;
+  const showZeroJoinYourChannelsCta = !!user && isYourChannelsScope && joinedCuratedCount === 0;
 
   useEffect(() => {
-    if (!showZeroJoinForYouCta) return;
+    if (!showZeroJoinYourChannelsCta) return;
     logOncePerSession('p3_wall_zero_join_cta_impression', () => {
       logP3Event({
         eventName: 'wall_zero_join_cta_impression',
@@ -383,7 +721,8 @@ export default function Wall() {
         },
       });
     });
-  }, [effectiveScope, showZeroJoinForYouCta, user]);
+  }, [effectiveScope, showZeroJoinYourChannelsCta, user]);
+
   const visiblePosts = useMemo(() => {
     if (!posts) return [];
     if (!selectedTagSlug) return posts;
@@ -393,6 +732,9 @@ export default function Wall() {
   const selectedScope = useMemo(() => {
     return scopeOptions.find((option) => option.value === effectiveScope) || scopeOptions[0];
   }, [effectiveScope, scopeOptions]);
+
+  const isForYouLoading = isForYouScope && (myFeedQuery.isLoading || forYouSubscriptionsQuery.isLoading);
+  const isForYouError = isForYouScope && (myFeedQuery.isError || forYouSubscriptionsQuery.isError || forYouStatsQuery.isError);
 
   if (authLoading) {
     return (
@@ -404,7 +746,6 @@ export default function Wall() {
 
   return (
     <div className="min-h-screen bg-background">
-
       <AppHeader />
 
       <main className="max-w-3xl mx-auto px-0 pb-24">
@@ -413,7 +754,7 @@ export default function Wall() {
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
             <h1 className="text-2xl font-semibold">Live blueprint stream</h1>
             <p className="text-sm text-muted-foreground">
-              Explore auto-published blueprints from followed sources, organized by channel.
+              For You shows subscribed sources, while Your channels keeps your followed-channel lane.
             </p>
           </div>
         </section>
@@ -433,6 +774,7 @@ export default function Wall() {
             </div>
           </div>
         )}
+
         <div className="space-y-3">
           <div className="px-3 sm:px-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             {isMobile ? (
@@ -448,14 +790,14 @@ export default function Wall() {
                 </SheetTrigger>
                 <SheetContent side="bottom" className="h-[72vh] overflow-hidden px-0">
                   <SheetHeader className="px-4 pb-2">
-                    <SheetTitle>Choose channel scope</SheetTitle>
-                    <SheetDescription>Select which channel lane you want to browse.</SheetDescription>
+                    <SheetTitle>Choose Home scope</SheetTitle>
+                    <SheetDescription>Select which lane you want to browse.</SheetDescription>
                   </SheetHeader>
                   <div className="px-4 pb-4">
                     <Command className="rounded-lg border">
-                      <CommandInput placeholder="Search channels..." />
+                      <CommandInput placeholder="Search scopes..." />
                       <CommandList className="max-h-[54vh]">
-                        <CommandEmpty>No channels found.</CommandEmpty>
+                        <CommandEmpty>No scopes found.</CommandEmpty>
                         <CommandGroup>
                           {scopeOptions.map((option) => (
                             <CommandItem
@@ -493,9 +835,9 @@ export default function Wall() {
                 </PopoverTrigger>
                 <PopoverContent className="w-[320px] p-0" align="start" side="bottom" sideOffset={8} collisionPadding={12}>
                   <Command>
-                    <CommandInput placeholder="Search channels..." />
+                    <CommandInput placeholder="Search scopes..." />
                     <CommandList>
-                      <CommandEmpty>No channels found.</CommandEmpty>
+                      <CommandEmpty>No scopes found.</CommandEmpty>
                       <CommandGroup>
                         {scopeOptions.map((option) => (
                           <CommandItem
@@ -521,19 +863,23 @@ export default function Wall() {
               </Popover>
             )}
 
-            <Tabs value={feedSort} onValueChange={(v) => updateSearchParams({ sort: v as FeedSort })}>
-              <TabsList className="h-9 w-full sm:w-fit rounded-md bg-muted/40 p-0.5">
-                {SORT_TABS.map((tab) => (
-                  <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none">
-                    {tab.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+            {isForYouScope ? (
+              <Badge variant="secondary" className="w-fit">Latest only</Badge>
+            ) : (
+              <Tabs value={feedSort} onValueChange={(v) => updateSearchParams({ sort: v as FeedSort })}>
+                <TabsList className="h-9 w-full sm:w-fit rounded-md bg-muted/40 p-0.5">
+                  {SORT_TABS.map((tab) => (
+                    <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none">
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            )}
           </div>
 
           <div className="mt-0">
-            {selectedTagSlug && (
+            {!isForYouScope && selectedTagSlug && (
               <div className="mb-3 mx-3 sm:mx-4 border border-border/40 px-3 py-2 flex items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
                   Filtered by <span className="font-semibold text-foreground">{selectedTagSlug}</span>
@@ -543,12 +889,13 @@ export default function Wall() {
                 </Button>
               </div>
             )}
-            {showZeroJoinForYouCta && (
+
+            {showZeroJoinYourChannelsCta && (
               <div className="mb-3 mx-3 sm:mx-4 border border-border/40 px-3 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-semibold">Join channels to shape your feed</p>
+                  <p className="text-sm font-semibold">Join channels to shape this lane</p>
                   <p className="text-xs text-muted-foreground">
-                    Start with a few channels and your For You feed will prioritize those lanes.
+                    Start with a few channels and Your channels will prioritize those lanes.
                   </p>
                 </div>
                 <Button asChild size="sm">
@@ -570,7 +917,100 @@ export default function Wall() {
                 </Button>
               </div>
             )}
-            {isLoading ? (
+
+            {isForYouScope ? (
+              isForYouLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="px-3 sm:px-4 py-4 border-t border-border/40 first:border-t-0">
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-5 w-3/4" />
+                      <Skeleton className="h-14 w-full" />
+                    </div>
+                  </div>
+                ))
+              ) : isForYouError ? (
+                <Card className="mx-3 sm:mx-4">
+                  <CardContent className="py-6 text-sm text-muted-foreground">
+                    Could not load For You right now. Please refresh and try again.
+                  </CardContent>
+                </Card>
+              ) : forYouStream.length > 0 ? (
+                <div className="divide-y divide-border/40">
+                  {forYouStream.map((item) => {
+                    if (item.kind === 'locked') {
+                      return (
+                        <ForYouLockedSourceCard
+                          key={item.sourceItemId}
+                          title={item.title}
+                          sourceChannelTitle={item.sourceChannelTitle}
+                          createdAt={item.createdAt}
+                          sourceUrl={item.sourceUrl}
+                          unlockCost={item.unlockCost}
+                          isUnlocking={item.unlockInProgress}
+                          onUnlock={() => unlockMutation.mutate(item)}
+                        />
+                      );
+                    }
+
+                    const fallbackChannelSlug = resolveChannelLabelForBlueprint(item.tags).replace(/^b\//, '');
+                    const channelSlug = item.publishedChannelSlug || fallbackChannelSlug;
+                    const summary = buildFeedSummary({
+                      primary: item.llmReview,
+                      fallback: 'Open to view the full step-by-step guide.',
+                      maxChars: 220,
+                    });
+                    const likesCount = forYouStatsQuery.data?.likes[item.blueprintId] || 0;
+                    const userLiked = Boolean(forYouStatsQuery.data?.likedIds.has(item.blueprintId));
+                    const commentsCount = forYouStatsQuery.data?.comments[item.blueprintId] || 0;
+
+                    return (
+                      <WallBlueprintCard
+                        key={item.sourceItemId}
+                        to={`/blueprint/${item.blueprintId}`}
+                        title={item.title}
+                        summary={summary}
+                        bannerUrl={item.bannerUrl}
+                        createdLabel={formatRelativeShort(item.createdAt)}
+                        channelSlug={channelSlug}
+                        likesCount={likesCount}
+                        userLiked={userLiked}
+                        commentsCount={commentsCount}
+                        tags={item.tags.map((tag) => ({ key: tag, label: tag }))}
+                        onLike={(event) => {
+                          event.preventDefault();
+                          handleLike(item.blueprintId, userLiked);
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <Card className="mx-3 sm:mx-4 text-center py-12">
+                  <CardContent>
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+                        <Tag className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold">No source items yet</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Subscribe to a source and new videos will appear here for unlock.
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button asChild size="sm">
+                          <Link to="/subscriptions">Manage subscriptions</Link>
+                        </Button>
+                        <Button asChild size="sm" variant="outline">
+                          <Link to="/channels">Explore Channels</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            ) : isBlueprintFeedLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="px-3 sm:px-4 py-4 border-t border-border/40 first:border-t-0">
                   <div className="flex flex-row items-center gap-3 mb-3">
@@ -583,6 +1023,12 @@ export default function Wall() {
                   <Skeleton className="h-20 w-full" />
                 </div>
               ))
+            ) : blueprintFeedError ? (
+              <Card className="mx-3 sm:mx-4">
+                <CardContent className="py-6 text-sm text-muted-foreground">
+                  Could not load Home right now. Please refresh and try again.
+                </CardContent>
+              </Card>
             ) : visiblePosts.length > 0 ? (
               <div className="divide-y divide-border/40">
                 {visiblePosts.map((post) => {
@@ -593,93 +1039,35 @@ export default function Wall() {
                   });
                   const fallbackChannelSlug = resolveChannelLabelForBlueprint(post.tags.map((tag) => tag.slug)).replace(/^b\//, '');
                   const channelSlug = post.published_channel_slug || fallbackChannelSlug;
-                  const channelLabel = `b/${channelSlug}`;
-                  const channelConfig = CHANNELS_CATALOG.find((channel) => channel.slug === channelSlug);
-                  const ChannelIcon = getChannelIcon(channelConfig?.icon || 'sparkles');
-                  const createdLabel = formatRelativeShort(post.created_at);
                   const commentsCount = commentCountsByBlueprintId[post.id] || 0;
 
                   return (
-                    <Link
+                    <WallBlueprintCard
                       key={post.id}
                       to={`/blueprint/${post.id}`}
-                      className="block px-3 py-2.5 transition-colors hover:bg-muted/20"
-                    >
-                      <div className="relative overflow-hidden">
-                        {!!post.banner_url && (
-                          <>
-                            <img
-                              src={post.banner_url}
-                              alt=""
-                              className="absolute inset-0 h-full w-full object-cover opacity-35"
-                              loading="lazy"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-b from-background/35 via-background/60 to-background/80" />
-                          </>
-                        )}
-                        <div className="relative space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75">
-                              <ChannelIcon className="h-3.5 w-3.5" />
-                              {channelLabel}
-                            </p>
-                            <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
-                          </div>
-                          <h3 className="text-base font-semibold leading-tight">{post.title}</h3>
-                          <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
-
-                          {post.tags.length > 0 && (
-                            <OneRowTagChips
-                              className="flex flex-nowrap gap-1.5 overflow-hidden"
-                              items={post.tags.map((tag) => ({
-                                key: tag.id,
-                                label: tag.slug,
-                                variant: 'outline',
-                                className:
-                                  'text-xs transition-colors border bg-muted/40 text-muted-foreground border-border/60',
-                              }))}
-                            />
-                          )}
-
-                          <div className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className={`h-7 px-2 ${post.user_liked ? 'text-red-500' : ''}`}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                handleLike(post.id, post.user_liked);
-                              }}
-                            >
-                              <Heart className={`h-4 w-4 mr-1 ${post.user_liked ? 'fill-current' : ''}`} />
-                              {post.likes_count}
-                            </Button>
-                            <span className="inline-flex h-7 items-center gap-1 px-2">
-                              <MessageCircle className="h-4 w-4" />
-                              {commentsCount}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2"
-                              disabled
-                              onClick={(event) => event.preventDefault()}
-                            >
-                              <Share2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </Link>
+                      title={post.title}
+                      summary={preview}
+                      bannerUrl={post.banner_url}
+                      createdLabel={formatRelativeShort(post.created_at)}
+                      channelSlug={channelSlug}
+                      likesCount={post.likes_count}
+                      userLiked={post.user_liked}
+                      commentsCount={commentsCount}
+                      tags={post.tags.map((tag) => ({ key: tag.id, label: tag.slug }))}
+                      onLike={(event) => {
+                        event.preventDefault();
+                        handleLike(post.id, post.user_liked);
+                      }}
+                    />
                   );
                 })}
               </div>
             ) : (
-              <Card className="text-center py-12">
+              <Card className="text-center py-12 mx-3 sm:mx-4">
                 <CardContent>
                   <div className="flex flex-col items-center gap-4">
-                      <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-                      {isForYouScope ? (
+                    <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+                      {isYourChannelsScope ? (
                         <Tag className="h-8 w-8 text-muted-foreground" />
                       ) : (
                         <Layers className="h-8 w-8 text-muted-foreground" />
@@ -687,17 +1075,16 @@ export default function Wall() {
                     </div>
                     <div>
                       <h3 className="font-semibold">
-                        {isForYouScope ? 'Personalize your feed' : 'No blueprints yet'}
+                        {isYourChannelsScope ? 'Personalize your channels lane' : 'No blueprints yet'}
                       </h3>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {isForYouScope
-                          ? 'Join channels to see related blueprints here.'
+                        {isYourChannelsScope
+                          ? 'Join channels to see prioritized blueprints here.'
                           : 'Be the first to share a blueprint.'}
                       </p>
                     </div>
-                    
-                    {/* Inline topic suggestions for "For You" tab */}
-                    {isForYouScope && popularTags.length > 0 && (
+
+                    {isYourChannelsScope && popularTags.length > 0 && (
                       <div className="space-y-3 w-full max-w-md">
                         {!user && (
                           <div className="flex flex-col items-center gap-2">
@@ -727,8 +1114,8 @@ export default function Wall() {
                         </Button>
                       </div>
                     )}
-                    
-                    {!isForYouScope && (
+
+                    {!isYourChannelsScope && (
                       <div className="flex gap-2">
                         <Link to="/youtube">
                           <Button>Pull from YouTube</Button>
@@ -744,6 +1131,7 @@ export default function Wall() {
             )}
           </div>
         </div>
+
         <AppFooter />
       </main>
     </div>

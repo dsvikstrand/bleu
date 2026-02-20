@@ -57,6 +57,7 @@ Execution mode:
 38. [have] Step 37 - Source Page blueprint feed (public deduped list + latest/load-more UX)
 39. [have] Step 38 - Source Page Video Library (auth-only creator backlog list + async selected generation)
 40. [have] Step 39 - Shared source unlock + refill credits (unlock cards, wallet ledger, no historical backfill)
+41. [have] Step 40 - Home scope split (`For You` subscribed-source stream + `Your channels` followed-channel feed parity)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -355,6 +356,22 @@ Completion evidence (2026-02-20)
 - Updated `/api/credits` + frontend credit UI to refill-model fields (`balance/capacity/refill_rate_per_sec/seconds_to_full`).
 - Cut subscription sync to write unlockable feed items and attached unlock actions on `My Feed` + `Source Page` Video Library.
 - Unlock throttling now uses soft request caps (`8/10s` burst, `120/10m` sustained) instead of hard cooldown, and unlock actions now trigger immediate `ai-credits` cache invalidation.
+
+### Step 40 - Home scope split (`For You` + `Your channels`)
+Scope
+- repurpose `/wall` `For You` into subscribed-source stream (locked + unlocked mixed cards).
+- add `Your channels` scope as parity rename of previous followed-channel `For You` behavior.
+- keep public scopes (`All Channels`, `b/<slug>`) unchanged.
+
+Definition of done
+- `For You` is auth-only, latest-only, excludes subscription notices, and supports inline unlock actions.
+- unlocked items render channel-style blueprint cards with like/comment parity.
+- `Your channels` preserves previous ranking/fallback behavior and still supports `Latest/Trending`.
+
+Completion evidence (2026-02-20)
+- Updated `src/pages/Wall.tsx` scope selector and query split (`for-you` personal source stream, `your-channels` legacy behavior).
+- Added mixed stream rendering with locked-source cards and unlocked blueprint cards on `For You`.
+- Wired wall-level unlock action + ingestion job polling + telemetry (`wall_for_you_unlock_*`) with query invalidation to transition locked -> blueprint.
 
 ### Step 12 - Subscriptions management actions
 Scope

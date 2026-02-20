@@ -67,6 +67,7 @@ a55) [have] Shared source-video unlock model is active for new source-page gener
 a56) [have] Credit model now uses refill wallets (decimal balance) instead of daily reset counters (`10.000` cap, `+1.000 / 6 min` default).
 a57) [have] Subscription auto-ingestion now writes unlockable My Feed rows (`my_feed_unlockable`) for new uploads instead of immediately generating blueprints.
 a58) [have] Source-video unlock throttling now uses soft request caps (burst+sustained) instead of hard cooldown, and frontend credit meter refreshes immediately after unlock actions.
+a59) [have] `/wall` scope split is active: `For You` is now the subscribed-source stream (locked + unlocked), while `Your channels` keeps the previous followed-channel ranking behavior.
 
 ## Core Model
 b1) `Source Item`
@@ -83,7 +84,10 @@ b3) `User Insight/Remix` (secondary content type)
 
 b4) Feed surfaces
 - `My Feed`: personal timeline for all imported items and auto-channel outcomes.
-- `Home` (`/wall`): shared lane with voting/comments and auto-published items that pass checks.
+- `Home` (`/wall`) scopes:
+  - `For You` (auth-only): subscribed-source stream, latest-first, includes unlockable cards and unlocked blueprint cards.
+  - `Your channels` (auth-only): followed-channel ranked lane (previous `For You` behavior).
+  - `All Channels` + `b/<slug>` scopes: public channel-lane views.
 
 b5) Subscription behavior (MVP simplified)
 - UI behavior is auto-only.

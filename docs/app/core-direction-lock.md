@@ -33,12 +33,13 @@ Status: `canonical`
 25. Shared source-video unlock is the default generation model for new source-page requests: one source item can be generated once and reused across subscribers.
 26. Credit policy is refill-based (`capacity + regen`) with hold-first unlock reservations, settle-on-success, and refund-on-failure/expiry.
 27. Source-page unlock request control is soft-limited (burst+sustained) with credits as the primary user-facing throttle; strict unlock cooldown is not used.
+28. Home scope split is fixed for MVP: `For You` is the subscribed-source stream (locked + unlocked, latest-only) and `Your channels` preserves the followed-channel ranking lane.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.
 2. Generate/import blueprint into `My Feed`.
 3. System auto-evaluates and posts eligible blueprints to channels.
-4. Engage through community interactions in Home feed.
+4. Engage through community interactions in Home lanes (`For You`, `Your channels`, and channel scopes).
 5. Use profile workspace (`/u/:userId`) tabs `Feed / Comments / Liked / Subscriptions` for personal history; `/my-feed` remains a compatibility/direct route.
 
 ## What is not core right now

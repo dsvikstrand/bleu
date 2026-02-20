@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 const GLOSSARY: Record<string, string> = {
   inventory: 'Legacy concept: libraries remain in the codebase but are deprecated in the primary MVP journey.',
   blueprint: 'A bite-sized, step-by-step summary generated from source content, optionally remixed by users.',
-  wall: 'Home (channel feed): the shared lane where evaluated blueprints are published for community feedback.',
+  wall: 'Home: For You is your subscribed-source lane (locked + unlocked), and Your channels is your followed-channel lane.',
   tag: 'A label that helps organize and discover content.',
   remix: 'A user-edited insight variant attached to an imported blueprint.',
 };

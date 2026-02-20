@@ -38,12 +38,12 @@ export interface MyFeedItemView {
   } | null;
 }
 
-export function useMyFeed() {
+export function useMyFeed(options?: { enabled?: boolean }) {
   const { user } = useAuth();
 
   const query = useQuery({
     queryKey: ['my-feed-items', user?.id],
-    enabled: !!user,
+    enabled: !!user && (options?.enabled ?? true),
     queryFn: async () => {
       if (!user) return [] as MyFeedItemView[];
 

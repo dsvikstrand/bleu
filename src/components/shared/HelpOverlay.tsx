@@ -34,11 +34,11 @@ const FEATURE_CARDS = [
     title: 'Tags',
     description: 'Tags connect the community. Follow them to tailor what you see.',
     icon: Tag,
-    bullets: ['Follow tags you like', 'See trends in Home', 'Stay focused on your goals'],
+    bullets: ['Follow tags you like', 'See trends in Your channels', 'Stay focused on your goals'],
   },
   {
     title: 'Community',
-    description: 'Home is the shared lane for evaluated blueprints and community opinions.',
+    description: 'Home has two lanes: For You (subscribed sources) and Your channels (followed channels).',
     icon: Users,
     bullets: ['Vote and comment', 'Promote high-signal content', 'Discuss practical value'],
   },
@@ -78,8 +78,9 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <p className="text-sm font-semibold">Let’s get oriented</p>
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       Here’s the goal: turn source content into actionable blueprints you can consume
-                      in bite-sized form. My Feed is your personal intake lane, and Home is the
-                      shared lane after quality checks. You can remix insights, auto-publish keeps useful items moving,
+                      in bite-sized form. My Feed is your personal intake lane, and Home gives you
+                      For You (subscribed sources) plus Your channels (followed channels) after quality checks.
+                      You can remix insights, auto-publish keeps useful items moving,
                       and community feedback helps surface the best content.
                     </p>
                   </CardContent>
@@ -93,7 +94,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                       </div>
                       <div>
                         <p className="text-sm font-semibold">The Flow</p>
-                        <p className="text-xs text-muted-foreground">Source pull → My Feed → auto checks → Home</p>
+                        <p className="text-xs text-muted-foreground">Source pull → My Feed → unlock/publish → Home lanes</p>
                       </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">

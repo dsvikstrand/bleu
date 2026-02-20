@@ -213,6 +213,9 @@ Rules:
   - subscription auto-ingest now creates `my_feed_unlockable` rows for new uploads instead of immediate blueprint generation.
   - unlock success fans out the shared blueprint to subscribed users and preserves auto-channel publish for the unlocking user path.
   - unlock request guard is now soft-limited (`8/10s` burst, `120/10m` sustained) with credits as the primary user-facing throttle; frontend credit meter refreshes on unlock settle.
+- Home scope split (2026-02-20):
+  - `/wall` now separates `For You` (subscribed-source stream, latest-only, locked + unlocked) from `Your channels` (previous followed-channel `For You` behavior).
+  - `For You` includes inline unlock entrypoint and transitions unlocked items into channel-style blueprint cards with like/comment parity.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

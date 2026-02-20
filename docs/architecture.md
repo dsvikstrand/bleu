@@ -6,7 +6,10 @@
 - Product scope:
   - Source-first blueprint app.
   - Personal unfiltered feed (`My Feed`) as primary lane.
-  - Home feed (`/wall`) as shared lane with classifier-driven auto-channel publishing.
+  - Home feed (`/wall`) as split lane:
+    - `For You` (auth): subscribed-source stream with locked + unlocked items, latest-first.
+    - `Your channels` (auth): followed-channel ranked stream (legacy `For You` behavior).
+    - public channel scopes (`All Channels`, `b/<slug>`) unchanged.
 - Current adapter baseline:
   - YouTube adapter is production-ready for direct URL generation and subscription ingestion.
 - Non-goals in current MVP:
