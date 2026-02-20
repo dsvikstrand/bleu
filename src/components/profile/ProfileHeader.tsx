@@ -73,6 +73,10 @@ export function ProfileHeader({ profile, onFollowersClick, onFollowingClick }: P
             <span className="font-semibold">{profile.following_count}</span>{' '}
             <span className="text-muted-foreground">Following</span>
           </button>
+          <span>
+            <span className="font-semibold">{profile.unlocked_blueprints_count}</span>{' '}
+            <span className="text-muted-foreground">Score</span>
+          </span>
         </div>
       </div>
     </div>

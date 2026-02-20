@@ -11,6 +11,7 @@ export interface PublicProfile {
   is_public: boolean;
   follower_count: number;
   following_count: number;
+  unlocked_blueprints_count: number;
   created_at: string;
 }
 
@@ -24,7 +25,7 @@ export function useUserProfile(userId: string | undefined) {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, user_id, display_name, avatar_url, bio, is_public, follower_count, following_count, created_at')
+        .select('id, user_id, display_name, avatar_url, bio, is_public, follower_count, following_count, unlocked_blueprints_count, created_at')
         .eq('user_id', userId)
         .maybeSingle();
 
