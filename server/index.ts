@@ -3444,6 +3444,7 @@ async function loadExistingSourceVideoStateForUser(
       .from('user_feed_items')
       .select('id, source_item_id, blueprint_id')
       .eq('user_id', userId)
+      .not('blueprint_id', 'is', null)
       .in('source_item_id', sourceIds);
     if (feedRowsError) throw feedRowsError;
 
