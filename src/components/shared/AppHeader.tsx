@@ -63,10 +63,10 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
           <div className="flex items-center gap-2 justify-end">
             {actions}
             {user && !hideCreate && (
-              <Button asChild variant="outline" size="sm" className="gap-2 shrink-0 h-8 px-2 text-xs" aria-label="Create">
+              <Button asChild variant="outline" size="sm" className="gap-2 shrink-0 h-8 px-2 text-xs" aria-label="Add">
                 <Link to="/search">
                   <Plus className="h-4 w-4" />
-                  <span className="hidden lg:inline">Create</span>
+                  <span className="hidden lg:inline">Add</span>
                 </Link>
               </Button>
             )}

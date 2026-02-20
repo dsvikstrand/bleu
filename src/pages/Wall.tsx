@@ -116,6 +116,17 @@ export default function Wall() {
   const [optimisticUnlockingSourceItemIds, setOptimisticUnlockingSourceItemIds] = useState<Record<string, boolean>>({});
   const [activeUnlockJobId, setActiveUnlockJobId] = useState<string | null>(null);
   const [terminalUnlockJobId, setTerminalUnlockJobId] = useState<string | null>(null);
+  const { followedTags } = useTagFollows();
+
+  const joinedChannelSlugs = useMemo(() => {
+    if (!user) return null;
+    const followedTagSlugs = new Set(followedTags.map((tag) => normalizeTag(tag.slug)));
+    return new Set(
+      CHANNELS_CATALOG
+        .filter((channel) => channel.status === 'active' && followedTagSlugs.has(normalizeTag(channel.tagSlug)))
+        .map((channel) => channel.slug),
+    );
+  }, [followedTags, user]);
 
   const scopeOptions = useMemo(() => {
     const base = user
@@ -135,12 +146,16 @@ export default function Wall() {
 
     const allOption = {
       value: SCOPE_ALL,
-      label: 'All Channels',
+      label: 'Show all',
       icon: Grid3X3,
     };
 
     const channelOptions = CHANNELS_CATALOG
-      .filter((channel) => channel.status === 'active')
+      .filter((channel) => {
+        if (channel.status !== 'active') return false;
+        if (!user || !joinedChannelSlugs) return true;
+        return joinedChannelSlugs.has(channel.slug);
+      })
       .sort((a, b) => a.priority - b.priority)
       .map((channel) => ({
         value: channel.slug,
@@ -150,7 +165,7 @@ export default function Wall() {
       }));
 
     return [...base, allOption, ...channelOptions];
-  }, [user]);
+  }, [joinedChannelSlugs, user]);
 
   const scopeValues = useMemo(() => new Set(scopeOptions.map((option) => option.value)), [scopeOptions]);
   const scopeParam = (searchParams.get('scope') || '').trim();
@@ -203,7 +218,6 @@ export default function Wall() {
   };
 
   const { data: popularTags = [] } = usePopularInventoryTags(6);
-  const { followedTags } = useTagFollows();
 
   const curatedJoinableSlugs = useMemo(
     () =>
