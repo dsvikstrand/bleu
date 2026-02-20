@@ -111,7 +111,7 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
               {credits
                 ? credits.bypass
                   ? 'Unlimited'
-                  : `${credits.displayBalance.toFixed(3)}/${credits.displayCapacity.toFixed(3)}`
+                  : `${credits.displayBalance.toFixed(1)}/${credits.displayCapacity.toFixed(1)}`
                 : '—'}
             </span>
           </div>

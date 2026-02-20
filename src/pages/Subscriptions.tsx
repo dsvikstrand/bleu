@@ -769,9 +769,6 @@ export default function Subscriptions() {
         </PageSection>
 
         <Card className="border-border/40">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">YouTube account</CardTitle>
-          </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-2">
               <Button

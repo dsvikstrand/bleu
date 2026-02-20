@@ -70,6 +70,7 @@ type MyFeedTimelineProps = {
   isLoading: boolean;
   isOwnerView: boolean;
   profileUserId?: string;
+  showUnlockActivityPanel?: boolean;
   emptyMessage?: string;
   emptyActionHref?: string;
   emptyActionLabel?: string;
@@ -80,6 +81,7 @@ export function MyFeedTimeline({
   isLoading,
   isOwnerView,
   profileUserId,
+  showUnlockActivityPanel = true,
   emptyMessage = 'No content yet.',
   emptyActionHref,
   emptyActionLabel,
@@ -438,7 +440,7 @@ export function MyFeedTimeline({
   });
 
   const hasItems = (items || []).length > 0;
-  const showUnlockActivity = canMutate && unlockTracker.activity.visible;
+  const showUnlockActivity = showUnlockActivityPanel && canMutate && unlockTracker.activity.visible;
 
   const submissionDialogItem = useMemo(
     () => (items || []).find((item) => item.id === submissionDialogItemId) || null,

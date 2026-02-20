@@ -120,6 +120,7 @@ export function ProfileTabs({ userId, isOwnerView, profileIsPublic }: ProfileTab
             isLoading={feedLoading}
             isOwnerView={isOwnerView}
             profileUserId={userId}
+            showUnlockActivityPanel={false}
             emptyMessage="No feed items yet."
           />
         )}
