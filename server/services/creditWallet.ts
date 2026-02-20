@@ -134,13 +134,13 @@ async function ensureWalletRow(db: DbClient, userId: string) {
   const nowIso = getNowIso();
   const { error } = await db
     .from('user_credit_wallets')
-    .upsert({
+    .insert({
       user_id: userId,
       balance: DEFAULT_INITIAL_BALANCE,
       capacity: DEFAULT_CAPACITY,
       refill_rate_per_sec: DEFAULT_REFILL_RATE_PER_SEC,
       last_refill_at: nowIso,
-    }, { onConflict: 'user_id' });
+    }, { onConflict: 'user_id', ignoreDuplicates: true });
   if (error) throw error;
 }
 
