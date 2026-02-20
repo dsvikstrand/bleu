@@ -212,6 +212,7 @@ Rules:
   - new tables `source_item_unlocks`, `user_credit_wallets`, and `credit_ledger` enforce one-generation-per-source-item with hold -> settle/refund credit accounting.
   - subscription auto-ingest now creates `my_feed_unlockable` rows for new uploads instead of immediate blueprint generation.
   - unlock success fans out the shared blueprint to subscribed users and preserves auto-channel publish for the unlocking user path.
+  - unlock request guard is now soft-limited (`8/10s` burst, `120/10m` sustained) with credits as the primary user-facing throttle; frontend credit meter refreshes on unlock settle.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

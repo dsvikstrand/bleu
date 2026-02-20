@@ -42,7 +42,7 @@ export function useAiCredits(enabled: boolean) {
     queryKey: ['ai-credits'],
     queryFn: fetchCredits,
     enabled: enabled && !!config.agenticBackendUrl,
-    staleTime: 60_000,
-    refetchInterval: 60_000,
+    staleTime: 15_000,
+    refetchInterval: 15_000,
   });
 }

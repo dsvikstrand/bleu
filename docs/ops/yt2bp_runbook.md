@@ -31,6 +31,7 @@
   - `GET /api/source-pages/:platform/:externalId/videos` (auth source-page video-library list, supports `kind=full|shorts`)
     - rate policy: burst `4/15s` + sustained `40/10m` per user/IP.
   - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth shared unlock + async generation queue for selected source videos)
+    - rate policy: burst `8/10s` + sustained `120/10m` per user/IP.
   - `POST /api/source-pages/:platform/:externalId/videos/generate` (compatibility alias to `/videos/unlock`)
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
@@ -129,6 +130,10 @@ Required runtime variables:
 - `SOURCE_UNLOCK_RESERVATION_SECONDS` (default `300`)
 - `SOURCE_UNLOCK_GENERATE_MAX_ITEMS` (default `100`)
 - `SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH` (default `100`)
+- `SOURCE_VIDEO_UNLOCK_BURST_WINDOW_MS` (default `10000`)
+- `SOURCE_VIDEO_UNLOCK_BURST_MAX` (default `8`)
+- `SOURCE_VIDEO_UNLOCK_SUSTAINED_WINDOW_MS` (default `600000`)
+- `SOURCE_VIDEO_UNLOCK_SUSTAINED_MAX` (default `120`)
 
 Safe defaults:
 - `YT2BP_ENABLED=true`
@@ -165,6 +170,10 @@ Safe defaults:
 - `SOURCE_UNLOCK_RESERVATION_SECONDS=300`
 - `SOURCE_UNLOCK_GENERATE_MAX_ITEMS=100`
 - `SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH=100`
+- `SOURCE_VIDEO_UNLOCK_BURST_WINDOW_MS=10000`
+- `SOURCE_VIDEO_UNLOCK_BURST_MAX=8`
+- `SOURCE_VIDEO_UNLOCK_SUSTAINED_WINDOW_MS=600000`
+- `SOURCE_VIDEO_UNLOCK_SUSTAINED_MAX=120`
 
 ## Onboarding rollout checks
 - Schema check:

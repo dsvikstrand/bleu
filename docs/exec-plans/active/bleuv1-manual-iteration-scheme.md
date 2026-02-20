@@ -354,6 +354,7 @@ Completion evidence (2026-02-20)
 - Added `POST /api/source-pages/:platform/:externalId/videos/unlock` and kept `/videos/generate` as compatibility alias.
 - Updated `/api/credits` + frontend credit UI to refill-model fields (`balance/capacity/refill_rate_per_sec/seconds_to_full`).
 - Cut subscription sync to write unlockable feed items and attached unlock actions on `My Feed` + `Source Page` Video Library.
+- Unlock throttling now uses soft request caps (`8/10s` burst, `120/10m` sustained) instead of hard cooldown, and unlock actions now trigger immediate `ai-credits` cache invalidation.
 
 ### Step 12 - Subscriptions management actions
 Scope

@@ -347,6 +347,9 @@ export function MyFeedTimeline({
         variant: 'destructive',
       });
     },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
+    },
   });
 
   const hasItems = (items || []).length > 0;

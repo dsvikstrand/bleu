@@ -223,6 +223,9 @@ export default function SourcePage() {
         variant: 'destructive',
       });
     },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
+    },
   });
 
   const videoLibraryJobQuery = useQuery({
@@ -263,6 +266,7 @@ export default function SourcePage() {
     queryClient.invalidateQueries({ queryKey: ['source-page-videos', platform, externalId, user?.id] });
     queryClient.invalidateQueries({ queryKey: ['source-page-blueprints', platform, externalId] });
     queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
+    queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
 
     if (job.status === 'succeeded') {
       toast({

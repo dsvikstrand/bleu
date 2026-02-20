@@ -134,7 +134,10 @@ const sourceVideoListBurstWindowMs = clampInt(process.env.SOURCE_VIDEO_LIST_BURS
 const sourceVideoListBurstMax = clampInt(process.env.SOURCE_VIDEO_LIST_BURST_MAX, 4, 1, 20);
 const sourceVideoListSustainedWindowMs = clampInt(process.env.SOURCE_VIDEO_LIST_SUSTAINED_WINDOW_MS, 10 * 60_000, 60_000, 60 * 60_000);
 const sourceVideoListSustainedMax = clampInt(process.env.SOURCE_VIDEO_LIST_SUSTAINED_MAX, 40, 5, 500);
-const sourceVideoGenerateCooldownMs = clampInt(process.env.SOURCE_VIDEO_GENERATE_COOLDOWN_MS, 30_000, 5_000, 300_000);
+const sourceVideoUnlockBurstWindowMs = clampInt(process.env.SOURCE_VIDEO_UNLOCK_BURST_WINDOW_MS, 10_000, 5_000, 300_000);
+const sourceVideoUnlockBurstMax = clampInt(process.env.SOURCE_VIDEO_UNLOCK_BURST_MAX, 8, 1, 100);
+const sourceVideoUnlockSustainedWindowMs = clampInt(process.env.SOURCE_VIDEO_UNLOCK_SUSTAINED_WINDOW_MS, 10 * 60_000, 60_000, 60 * 60_000);
+const sourceVideoUnlockSustainedMax = clampInt(process.env.SOURCE_VIDEO_UNLOCK_SUSTAINED_MAX, 120, 10, 2_000);
 const sourceUnlockReservationSeconds = clampInt(process.env.SOURCE_UNLOCK_RESERVATION_SECONDS, 300, 60, 3600);
 const sourceUnlockGenerateMaxItems = clampInt(process.env.SOURCE_UNLOCK_GENERATE_MAX_ITEMS, 100, 1, 500);
 const sourceUnlockExpiredSweepBatch = clampInt(process.env.SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH, 100, 10, 1000);
@@ -299,13 +302,17 @@ const refreshGenerateLimiter = rateLimit({
   handler: (req, res) => refreshRateLimitHandler('generate', req, res),
 });
 
-function sourceVideoRateLimitHandler(kind: 'list_burst' | 'list_sustained' | 'generate', req: express.Request, res: express.Response) {
+function sourceVideoRateLimitHandler(
+  kind: 'list_burst' | 'list_sustained' | 'unlock_burst' | 'unlock_sustained',
+  req: express.Request,
+  res: express.Response,
+) {
   const retryAfter = getRetryAfterSeconds(req);
-  const message = kind === 'generate'
-    ? 'Video library generation is cooling down. Please retry shortly.'
-    : kind === 'list_burst'
-      ? 'Video library listing is cooling down. Please wait a few seconds.'
-      : 'Video library request limit reached. Please retry in a moment.';
+  const message = kind === 'list_burst'
+    ? 'Video library listing is cooling down. Please wait a few seconds.'
+    : kind === 'list_sustained'
+      ? 'Video library request limit reached. Please retry in a moment.'
+      : 'Too many unlock requests, retry shortly.';
   return res.status(429).json({
     ok: false,
     error_code: 'RATE_LIMITED',
@@ -333,13 +340,22 @@ const sourceVideoListSustainedLimiter = rateLimit({
   handler: (req, res) => sourceVideoRateLimitHandler('list_sustained', req, res),
 });
 
-const sourceVideoGenerateLimiter = rateLimit({
-  windowMs: sourceVideoGenerateCooldownMs,
-  max: 1,
+const sourceVideoUnlockBurstLimiter = rateLimit({
+  windowMs: sourceVideoUnlockBurstWindowMs,
+  max: sourceVideoUnlockBurstMax,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
-  handler: (req, res) => sourceVideoRateLimitHandler('generate', req, res),
+  handler: (req, res) => sourceVideoRateLimitHandler('unlock_burst', req, res),
+});
+
+const sourceVideoUnlockSustainedLimiter = rateLimit({
+  windowMs: sourceVideoUnlockSustainedWindowMs,
+  max: sourceVideoUnlockSustainedMax,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
+  handler: (req, res) => sourceVideoRateLimitHandler('unlock_sustained', req, res),
 });
 
 function youtubeConnectionRateLimitHandler(kind: 'start' | 'preview' | 'import' | 'disconnect', req: express.Request, res: express.Response) {
@@ -5467,8 +5483,18 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
   });
 }
 
-app.post('/api/source-pages/:platform/:externalId/videos/unlock', sourceVideoGenerateLimiter, handleSourcePageVideosUnlock);
-app.post('/api/source-pages/:platform/:externalId/videos/generate', sourceVideoGenerateLimiter, handleSourcePageVideosUnlock);
+app.post(
+  '/api/source-pages/:platform/:externalId/videos/unlock',
+  sourceVideoUnlockBurstLimiter,
+  sourceVideoUnlockSustainedLimiter,
+  handleSourcePageVideosUnlock,
+);
+app.post(
+  '/api/source-pages/:platform/:externalId/videos/generate',
+  sourceVideoUnlockBurstLimiter,
+  sourceVideoUnlockSustainedLimiter,
+  handleSourcePageVideosUnlock,
+);
 
 app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) => {
   const platform = normalizeSourcePagePlatform(req.params.platform || '');

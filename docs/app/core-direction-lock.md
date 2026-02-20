@@ -32,6 +32,7 @@ Status: `canonical`
 24. Source-page Video Library list traffic uses dual guardrails in backend (burst + sustained per-user/IP) so normal tab/list interaction is smooth while abuse remains capped.
 25. Shared source-video unlock is the default generation model for new source-page requests: one source item can be generated once and reused across subscribers.
 26. Credit policy is refill-based (`capacity + regen`) with hold-first unlock reservations, settle-on-success, and refund-on-failure/expiry.
+27. Source-page unlock request control is soft-limited (burst+sustained) with credits as the primary user-facing throttle; strict unlock cooldown is not used.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.

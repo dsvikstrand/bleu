@@ -77,6 +77,7 @@
     - `GET /api/source-pages/:platform/:externalId/videos` (auth-only source video-library listing with duplicate state flags for requester and `kind=full|shorts` filter)
       - list limiter policy: burst `4/15s` + sustained `40/10m` per user/IP.
     - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth-only shared unlock + queue start for selected source-library videos, ingestion scope `source_item_unlock_generation`)
+      - unlock limiter policy: burst `8/10s` + sustained `120/10m` per user/IP.
     - `POST /api/source-pages/:platform/:externalId/videos/generate` (compatibility alias to unlock flow)
     - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)
     - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth-only, unsubscribe parity + notice cleanup)
