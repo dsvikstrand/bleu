@@ -216,6 +216,10 @@ Rules:
 - Home scope split (2026-02-20):
   - `/wall` now separates `For You` (subscribed-source stream, latest-only, locked + unlocked) from `Your channels` (previous followed-channel `For You` behavior).
   - `For You` includes inline unlock entrypoint and transitions unlocked items into channel-style blueprint cards with like/comment parity.
+- Explore source search (2026-02-20):
+  - Explore adds a dedicated `Sources` filter and includes a `Sources` section in `All` results.
+  - backend adds additive public endpoint `GET /api/source-pages/search` (app source-pages only, no schema changes).
+  - source cards are minimal and link directly to `/s/:platform/:externalId`.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

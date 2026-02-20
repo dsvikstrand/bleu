@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Heart, Layers, MessageCircle, Share2 } from 'lucide-react';
 import { UserMiniCard } from './UserMiniCard';
-import type { BlueprintResult, InventoryResult, UserResult, ExploreResult } from '@/hooks/useExploreSearch';
+import type { BlueprintResult, InventoryResult, UserResult, SourceResult, ExploreResult } from '@/hooks/useExploreSearch';
 import { buildFeedSummary } from '@/lib/feedPreview';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
+import { buildSourcePagePath } from '@/lib/sourcePagesApi';
+import { Badge } from '@/components/ui/badge';
 
 interface ExploreResultCardProps {
   result: ExploreResult;
@@ -161,6 +163,49 @@ function UserCard({ result }: { result: UserResult }) {
   );
 }
 
+function getSourceInitials(value: string) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'SP';
+  const parts = raw.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+}
+
+function SourceCard({ result }: { result: SourceResult }) {
+  const path = result.path || buildSourcePagePath(result.platform, result.externalId);
+  const initials = getSourceInitials(result.title || result.externalId);
+
+  return (
+    <Link to={path}>
+      <Card className="p-3 border-border/40 bg-transparent rounded-sm hover:bg-muted/10 transition-colors shadow-none">
+        <div className="flex items-start gap-3">
+          {result.avatarUrl ? (
+            <img
+              src={result.avatarUrl}
+              alt={result.title || result.externalId}
+              className="h-10 w-10 rounded-full border border-border/50 object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="h-10 w-10 rounded-full border border-border/50 bg-muted text-xs font-semibold flex items-center justify-center text-muted-foreground">
+              {initials}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                {result.platform}
+              </Badge>
+            </div>
+            <h3 className="font-semibold text-base leading-tight line-clamp-2">{result.title || result.externalId}</h3>
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{result.externalId}</p>
+          </div>
+        </div>
+      </Card>
+    </Link>
+  );
+}
+
 export function ExploreResultCard({ result, commentCountByBlueprintId }: ExploreResultCardProps) {
   switch (result.type) {
     case 'blueprint':
@@ -174,6 +219,8 @@ export function ExploreResultCard({ result, commentCountByBlueprintId }: Explore
       return <InventoryCard result={result} />;
     case 'user':
       return <UserCard result={result} />;
+    case 'source':
+      return <SourceCard result={result} />;
     default:
       return null;
   }

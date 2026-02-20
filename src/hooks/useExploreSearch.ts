@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizeTag } from '@/lib/tagging';
+import { searchSourcePages } from '@/lib/sourcePagesApi';
 
-export type ExploreFilter = 'all' | 'blueprints' | 'inventories' | 'users';
+export type ExploreFilter = 'all' | 'blueprints' | 'inventories' | 'users' | 'sources';
 
 export interface BlueprintResult {
   type: 'blueprint';
@@ -38,7 +39,18 @@ export interface UserResult {
   followerCount: number;
 }
 
-export type ExploreResult = BlueprintResult | InventoryResult | UserResult;
+export interface SourceResult {
+  type: 'source';
+  id: string;
+  platform: string;
+  externalId: string;
+  title: string;
+  avatarUrl: string | null;
+  externalUrl: string;
+  path: string;
+}
+
+export type ExploreResult = BlueprintResult | InventoryResult | UserResult | SourceResult;
 
 interface UseExploreSearchOptions {
   query: string;
@@ -285,6 +297,28 @@ async function searchUsers(query: string): Promise<UserResult[]> {
   }));
 }
 
+async function searchSources(query: string): Promise<SourceResult[]> {
+  const trimmedQuery = String(query || '').trim();
+  if (trimmedQuery.length < 2) return [];
+
+  try {
+    const payload = await searchSourcePages({ q: trimmedQuery, limit: 20 });
+    return (payload.items || []).map((item) => ({
+      type: 'source' as const,
+      id: item.id,
+      platform: item.platform,
+      externalId: item.external_id,
+      title: item.title,
+      avatarUrl: item.avatar_url,
+      externalUrl: item.external_url,
+      path: item.path,
+    }));
+  } catch {
+    // Keep Explore resilient when backend source search is unavailable.
+    return [];
+  }
+}
+
 export function useExploreSearch({ query, filter, enabled = true }: UseExploreSearchOptions) {
   const trimmedQuery = query.trim();
   const isTagSearch = trimmedQuery.startsWith('#');
@@ -309,6 +343,11 @@ export function useExploreSearch({ query, filter, enabled = true }: UseExploreSe
       if ((filter === 'all' || filter === 'users') && !isTagSearch) {
         const users = await searchUsers(trimmedQuery);
         results.push(...users);
+      }
+
+      if ((filter === 'all' || filter === 'sources') && !isTagSearch) {
+        const sources = await searchSources(trimmedQuery);
+        results.push(...sources);
       }
 
       return results;

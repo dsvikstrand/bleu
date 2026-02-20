@@ -440,6 +440,7 @@ app.use((req, res, next) => {
   if (req.path === '/api/health') return next();
   const isDebugSimulationRoute = /^\/api\/debug\/subscriptions\/[^/]+\/simulate-new-uploads$/.test(req.path);
   const isPublicProfileFeedRoute = /^\/api\/profile\/[^/]+\/feed$/.test(req.path);
+  const isPublicSourcePageSearchRoute = req.method === 'GET' && req.path === '/api/source-pages/search';
   const isPublicSourcePageRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+$/.test(req.path);
   const isPublicSourcePageBlueprintFeedRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+\/blueprints$/.test(req.path);
   const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
@@ -449,6 +450,7 @@ app.use((req, res, next) => {
     || req.path === '/api/auto-banner/jobs/trigger'
     || req.path === '/api/auto-banner/jobs/latest'
     || isPublicProfileFeedRoute
+    || isPublicSourcePageSearchRoute
     || isPublicSourcePageRoute
     || isPublicSourcePageBlueprintFeedRoute
     || (debugEndpointsEnabled && isDebugSimulationRoute);
@@ -4800,6 +4802,110 @@ function buildSourcePageSummary(input: {
   if (candidate.length <= maxChars) return candidate;
   return `${candidate.slice(0, maxChars).trim()}...`;
 }
+
+type SourcePageSearchRow = {
+  id: string;
+  platform: string;
+  external_id: string;
+  external_url: string;
+  title: string;
+  avatar_url: string | null;
+  is_active: boolean;
+};
+
+function normalizeSourcePageSearchToken(raw: string) {
+  return String(raw || '').trim().toLowerCase();
+}
+
+function scoreSourcePageSearchRow(row: SourcePageSearchRow, normalizedQuery: string) {
+  const normalizedTitle = normalizeSourcePageSearchToken(row.title);
+  const normalizedExternalId = normalizeSourcePageSearchToken(row.external_id);
+  if (!normalizedQuery) return 99;
+  if (normalizedTitle === normalizedQuery || normalizedExternalId === normalizedQuery) return 0;
+  if (normalizedTitle.startsWith(normalizedQuery)) return 1;
+  if (normalizedExternalId.startsWith(normalizedQuery)) return 2;
+  if (normalizedTitle.includes(normalizedQuery)) return 3;
+  if (normalizedExternalId.includes(normalizedQuery)) return 4;
+  return 9;
+}
+
+app.get('/api/source-pages/search', async (req, res) => {
+  const rawQuery = String(req.query.q || '').trim();
+  if (rawQuery.length < 2) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_QUERY',
+      message: 'Query must be at least 2 characters.',
+      data: null,
+    });
+  }
+
+  const limit = clampInt(req.query.limit, 12, 1, 25);
+  const scanLimit = clampInt(limit * 4, 48, 20, 100);
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  const likePattern = `%${rawQuery}%`;
+  const [titleResult, externalResult] = await Promise.all([
+    db
+      .from('source_pages')
+      .select('id, platform, external_id, external_url, title, avatar_url, is_active')
+      .eq('is_active', true)
+      .ilike('title', likePattern)
+      .limit(scanLimit),
+    db
+      .from('source_pages')
+      .select('id, platform, external_id, external_url, title, avatar_url, is_active')
+      .eq('is_active', true)
+      .ilike('external_id', likePattern)
+      .limit(scanLimit),
+  ]);
+
+  if (titleResult.error || externalResult.error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_SEARCH_FAILED',
+      message: titleResult.error?.message || externalResult.error?.message || 'Could not search source pages.',
+      data: null,
+    });
+  }
+
+  const dedupedById = new Map<string, SourcePageSearchRow>();
+  for (const row of ([...(titleResult.data || []), ...(externalResult.data || [])] as SourcePageSearchRow[])) {
+    if (!row?.id) continue;
+    dedupedById.set(row.id, row);
+  }
+
+  const normalizedQuery = normalizeSourcePageSearchToken(rawQuery);
+  const items = Array.from(dedupedById.values())
+    .sort((a, b) => {
+      const scoreDelta = scoreSourcePageSearchRow(a, normalizedQuery) - scoreSourcePageSearchRow(b, normalizedQuery);
+      if (scoreDelta !== 0) return scoreDelta;
+      const titleDelta = String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
+      if (titleDelta !== 0) return titleDelta;
+      return String(a.external_id || '').localeCompare(String(b.external_id || ''), undefined, { sensitivity: 'base' });
+    })
+    .slice(0, limit)
+    .map((row) => ({
+      id: row.id,
+      platform: row.platform,
+      external_id: row.external_id,
+      external_url: row.external_url,
+      title: row.title,
+      avatar_url: row.avatar_url,
+      is_active: row.is_active,
+      path: buildSourcePagePath(row.platform, row.external_id),
+    }));
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'source page search',
+    data: {
+      items,
+    },
+  });
+});
 
 app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
   const platform = normalizeSourcePagePlatform(req.params.platform || '');

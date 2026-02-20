@@ -32,6 +32,7 @@
     - existing pre-rollout accounts are not auto-prompted
     - users can skip setup and continue to Home
   - Core copy across high-traffic surfaces is intentionally aligned to runtime terms (`Home`, `Create`, auto-channel publish) to avoid legacy flow drift.
+  - Explore search now includes app Source Page lookup (`Sources` filter + grouped `Sources` section in `All` results), linking directly to `/s/:platform/:externalId`.
   - Frontend bootstrap has required-env guard:
     - missing `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY` renders a configuration screen instead of a blank page.
   - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked / Subscriptions` (subscriptions tab owner-only); `/my-feed` remains direct-access compatible.
@@ -75,6 +76,7 @@
       - `POST` ensures a platform-agnostic source-page row and dual-writes `source_page_id`.
       - `DELETE` deactivates subscription and removes user-scoped `subscription_notice` feed row for that channel
     - `GET /api/source-pages/:platform/:externalId` (public-readable source page + follower count + viewer subscription state)
+    - `GET /api/source-pages/search` (public-readable source lookup for Explore; app source pages only)
       - includes opportunistic lazy hydration for missing source avatar/banner assets on legacy backfilled rows.
     - `GET /api/source-pages/:platform/:externalId/blueprints` (public-readable source blueprint feed, deduped by `source_item_id`, cursor-paginated via `next_cursor`)
     - `GET /api/source-pages/:platform/:externalId/videos` (auth-only source video-library listing with duplicate state flags for requester and `kind=full|shorts` filter)

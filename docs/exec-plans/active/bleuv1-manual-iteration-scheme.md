@@ -58,6 +58,7 @@ Execution mode:
 39. [have] Step 38 - Source Page Video Library (auth-only creator backlog list + async selected generation)
 40. [have] Step 39 - Shared source unlock + refill credits (unlock cards, wallet ledger, no historical backfill)
 41. [have] Step 40 - Home scope split (`For You` subscribed-source stream + `Your channels` followed-channel feed parity)
+42. [have] Step 41 - Explore sources search (`Sources` filter + app source-page search results + source cards)
 
 Interpretation note
 - Step entries capture execution timeline.

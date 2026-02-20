@@ -114,6 +114,10 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Keep results transient until explicit `Generate Blueprint`.
 - Enable per-result one-click `Subscribe Channel` with existing idempotent subscription API.
 - Keep direct URL route `/youtube` as fallback and unchanged baseline.
+- Explore now supports source-page discovery via app-managed source search:
+  - additive endpoint `GET /api/source-pages/search`
+  - `Sources` filter + grouped `Sources` results on `/explore`
+  - source cards deep-link to `/s/:platform/:externalId`.
 
 ## Acceptance Baseline Per Iteration
 1. Scope and behavior align with `docs/app/product-spec.md`.

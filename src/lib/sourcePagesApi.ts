@@ -25,6 +25,17 @@ export type SourcePage = {
   follower_count: number;
 };
 
+export type SourceSearchResult = {
+  id: string;
+  platform: string;
+  external_id: string;
+  external_url: string;
+  title: string;
+  avatar_url: string | null;
+  is_active: boolean;
+  path: string;
+};
+
 export type SourcePageSubscriptionState = {
   authenticated: boolean;
   subscribed: boolean;
@@ -156,6 +167,26 @@ export async function getSourcePage(input: { platform: string; externalId: strin
       ...authHeader,
     },
   });
+  return response.data;
+}
+
+export async function searchSourcePages(input: { q: string; limit?: number }) {
+  const params = new URLSearchParams();
+  params.set('q', String(input.q || '').trim());
+  const safeLimit = Math.max(1, Math.min(25, Number(input.limit || 12)));
+  params.set('limit', String(Number.isFinite(safeLimit) ? safeLimit : 12));
+
+  const authHeader = await getOptionalAuthHeader();
+  const response = await apiRequest<{ items: SourceSearchResult[] }>(
+    `/source-pages/search?${params.toString()}`,
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader,
+      },
+    },
+  );
   return response.data;
 }
 
