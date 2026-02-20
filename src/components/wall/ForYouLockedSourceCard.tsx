@@ -1,4 +1,14 @@
-import { Button } from '@/components/ui/button';
+import { useState } from 'react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { formatRelativeShort } from '@/lib/timeFormat';
 
@@ -21,9 +31,35 @@ export function ForYouLockedSourceCard({
   isUnlocking,
   onUnlock,
 }: ForYouLockedSourceCardProps) {
+  const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
+
+  const handleCardActivate = () => {
+    if (isUnlocking) return;
+    setShowUnlockConfirm(true);
+  };
+
+  const handleConfirmUnlock = () => {
+    setShowUnlockConfirm(false);
+    void onUnlock();
+  };
+
   return (
-    <div className="px-3 py-2 transition-colors hover:bg-muted/20">
-      <div className="relative overflow-hidden rounded-lg border border-border/50 bg-background/80 shadow-sm">
+    <>
+      <div className="px-3 py-2 transition-colors hover:bg-muted/20">
+      <div
+        className={`relative overflow-hidden rounded-lg border border-border/50 bg-background/80 shadow-sm ${isUnlocking ? 'cursor-default' : 'cursor-pointer'}`}
+        role="button"
+        tabIndex={isUnlocking ? -1 : 0}
+        aria-disabled={isUnlocking}
+        onClick={handleCardActivate}
+        onKeyDown={(event) => {
+          if (isUnlocking) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleCardActivate();
+          }
+        }}
+      >
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/50 via-primary/10 to-transparent" />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent" />
 
@@ -52,15 +88,13 @@ export function ForYouLockedSourceCard({
             </div>
 
             <div className="flex items-center gap-2">
-              <Button size="sm" className="h-7 px-2.5" onClick={onUnlock} disabled={isUnlocking}>
-                {isUnlocking ? 'Unlocking...' : 'Unlock blueprint'}
-              </Button>
               {sourceUrl ? (
                 <a
                   href={sourceUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="text-[11px] text-muted-foreground underline underline-offset-2"
+                  onClick={(event) => event.stopPropagation()}
                 >
                   Open source
                 </a>
@@ -69,6 +103,24 @@ export function ForYouLockedSourceCard({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+
+      <AlertDialog open={showUnlockConfirm} onOpenChange={setShowUnlockConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unlock this blueprint?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will spend {unlockCost.toFixed(3)} credits to unlock and generate it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUnlocking}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmUnlock} disabled={isUnlocking}>
+              {isUnlocking ? 'Unlocking...' : 'Confirm unlock'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

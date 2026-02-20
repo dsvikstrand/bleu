@@ -827,7 +827,7 @@ export default function Wall() {
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
             <h1 className="text-2xl font-semibold">Live blueprint stream</h1>
             <p className="text-sm text-muted-foreground">
-              For You is your subscribed-source stream (locked + open). Your channels is your followed-channel lane (latest/trending).
+              For You unlocks what you follow. Your channels keeps you in the loop.
             </p>
           </div>
         </section>
