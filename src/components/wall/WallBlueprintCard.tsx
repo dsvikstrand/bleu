@@ -15,6 +15,7 @@ type WallBlueprintCardProps = {
   to: string;
   title: string;
   summary: string;
+  sourceName?: string | null;
   bannerUrl?: string | null;
   createdLabel: string;
   channelSlug: string;
@@ -29,6 +30,7 @@ export function WallBlueprintCard({
   to,
   title,
   summary,
+  sourceName,
   bannerUrl,
   createdLabel,
   channelSlug,
@@ -65,6 +67,10 @@ export function WallBlueprintCard({
             </p>
             <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
           </div>
+
+          {sourceName ? (
+            <p className="text-xs text-muted-foreground line-clamp-1">{sourceName}</p>
+          ) : null}
 
           <h3 className="text-base font-semibold leading-tight">{title}</h3>
           <p className="text-sm text-muted-foreground line-clamp-3">{summary}</p>

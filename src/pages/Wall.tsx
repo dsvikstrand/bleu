@@ -50,6 +50,7 @@ interface BlueprintPost {
   tags: { id: string; slug: string }[];
   user_liked: boolean;
   published_channel_slug?: string | null;
+  source_channel_title?: string | null;
 }
 
 type ForYouLockedItem = {
@@ -73,6 +74,7 @@ type ForYouBlueprintItem = {
   createdAt: string;
   blueprintId: string;
   title: string;
+  sourceChannelTitle: string | null;
   llmReview: string | null;
   bannerUrl: string | null;
   tags: string[];
@@ -267,7 +269,10 @@ export default function Wall() {
           ? supabase.from('blueprint_likes').select('blueprint_id').eq('user_id', user.id).in('blueprint_id', blueprintIds)
           : Promise.resolve({ data: [] as { blueprint_id: string }[] }),
         supabase.from('profiles').select('user_id, display_name, avatar_url').in('user_id', userIds),
-        supabase.from('user_feed_items').select('id, blueprint_id').in('blueprint_id', blueprintIds),
+        supabase
+          .from('user_feed_items')
+          .select('id, blueprint_id, source_item_id, created_at')
+          .in('blueprint_id', blueprintIds),
       ]);
 
       const tagRows = tagsRes.data || [];
@@ -292,9 +297,37 @@ export default function Wall() {
       if (feedItemsRes.error) throw feedItemsRes.error;
 
       const publishedChannelByBlueprint = new Map<string, { slug: string; createdAtMs: number }>();
-      const feedItems = (feedItemsRes.data || []) as Array<{ id: string; blueprint_id: string }>;
+      const sourceChannelTitleByBlueprint = new Map<string, { title: string | null; createdAtMs: number }>();
+      const feedItems = (feedItemsRes.data || []) as Array<{ id: string; blueprint_id: string; source_item_id: string; created_at: string }>;
       const feedItemIds = feedItems.map((row) => row.id);
       const blueprintIdByFeedItemId = new Map(feedItems.map((row) => [row.id, row.blueprint_id]));
+      const sourceItemIds = [...new Set(feedItems.map((row) => String(row.source_item_id || '').trim()).filter(Boolean))];
+
+      const { data: sourceItemsData, error: sourceItemsError } = sourceItemIds.length > 0
+        ? await supabase
+          .from('source_items')
+          .select('id, source_channel_title, metadata')
+          .in('id', sourceItemIds)
+        : { data: [], error: null };
+      if (sourceItemsError) throw sourceItemsError;
+
+      const sourceItemsMap = new Map(
+        (sourceItemsData || []).map((row) => {
+          const metadata =
+            row.metadata && typeof row.metadata === 'object' && row.metadata !== null
+              ? (row.metadata as Record<string, unknown>)
+              : null;
+          const metadataSourceTitle =
+            metadata && typeof metadata.source_channel_title === 'string'
+              ? String(metadata.source_channel_title || '').trim() || null
+              : (
+                metadata && typeof metadata.channel_title === 'string'
+                  ? String(metadata.channel_title || '').trim() || null
+                  : null
+              );
+          return [row.id, row.source_channel_title || metadataSourceTitle || null] as const;
+        }),
+      );
       let publishedCandidateRows: Array<{
         channel_slug: string;
         created_at: string;
@@ -327,6 +360,16 @@ export default function Wall() {
         }
       }
 
+      for (const row of feedItems) {
+        const blueprintId = row.blueprint_id;
+        const sourceTitle = sourceItemsMap.get(row.source_item_id) || null;
+        const createdAtMs = Number.isFinite(Date.parse(row.created_at)) ? Date.parse(row.created_at) : 0;
+        const existing = sourceChannelTitleByBlueprint.get(blueprintId);
+        if (!existing || createdAtMs > existing.createdAtMs) {
+          sourceChannelTitleByBlueprint.set(blueprintId, { title: sourceTitle, createdAtMs });
+        }
+      }
+
       let followTagIds = new Set<string>();
       if (isYourChannelsScope && user) {
         const followsRes = await supabase.from('tag_follows').select('tag_id').eq('user_id', user.id);
@@ -339,6 +382,7 @@ export default function Wall() {
         tags: blueprintTags.get(blueprint.id) || [],
         user_liked: likedIds.has(blueprint.id),
         published_channel_slug: publishedChannelByBlueprint.get(blueprint.id)?.slug || null,
+        source_channel_title: sourceChannelTitleByBlueprint.get(blueprint.id)?.title || null,
       })) as BlueprintPost[];
 
       if (isSpecificChannelScope && scopedChannel) {
@@ -445,6 +489,7 @@ export default function Wall() {
           createdAt: item.createdAt,
           blueprintId: item.blueprint.id,
           title: item.blueprint.title,
+          sourceChannelTitle: item.source.sourceChannelTitle || null,
           llmReview: item.blueprint.llmReview,
           bannerUrl: item.blueprint.bannerUrl,
           tags: item.blueprint.tags,
@@ -971,6 +1016,7 @@ export default function Wall() {
                         to={`/blueprint/${item.blueprintId}`}
                         title={item.title}
                         summary={summary}
+                        sourceName={item.sourceChannelTitle}
                         bannerUrl={item.bannerUrl}
                         createdLabel={formatRelativeShort(item.createdAt)}
                         channelSlug={channelSlug}
@@ -1048,6 +1094,7 @@ export default function Wall() {
                       to={`/blueprint/${post.id}`}
                       title={post.title}
                       summary={preview}
+                      sourceName={post.source_channel_title || null}
                       bannerUrl={post.banner_url}
                       createdLabel={formatRelativeShort(post.created_at)}
                       channelSlug={channelSlug}
