@@ -33,7 +33,6 @@ import { ApiRequestError } from '@/lib/subscriptionsApi';
 import { unlockSourcePageVideos } from '@/lib/sourcePagesApi';
 import { WallBlueprintCard } from '@/components/wall/WallBlueprintCard';
 import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
-import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 
 interface BlueprintPost {
@@ -124,7 +123,6 @@ export default function Wall() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [scopeOpen, setScopeOpen] = useState(false);
   const [selectedTagSlug, setSelectedTagSlug] = useState<string | null>(null);
-  const [showScopeHelper, setShowScopeHelper] = useState(false);
   const [optimisticUnlockingSourceItemIds, setOptimisticUnlockingSourceItemIds] = useState<Record<string, boolean>>({});
   const { followedTags } = useTagFollows();
 
@@ -194,15 +192,6 @@ export default function Wall() {
     ? forYouFilterParam
     : 'all';
 
-  useEffect(() => {
-    if (!user) {
-      setShowScopeHelper(false);
-      return;
-    }
-    const dismissed = localStorage.getItem('home_scope_helper_dismissed_v1') === '1';
-    setShowScopeHelper(!dismissed);
-  }, [user?.id, user]);
-
   const updateSearchParams = (updates: { scope?: string; sort?: FeedSort; state?: ForYouFilter | null }) => {
     const next = new URLSearchParams(searchParams);
     if (updates.scope) next.set('scope', updates.scope);
@@ -210,11 +199,6 @@ export default function Wall() {
     if (updates.state === null) next.delete('state');
     else if (updates.state) next.set('state', updates.state);
     setSearchParams(next, { replace: true });
-  };
-
-  const dismissScopeHelper = () => {
-    localStorage.setItem('home_scope_helper_dismissed_v1', '1');
-    setShowScopeHelper(false);
   };
 
   useEffect(() => {
@@ -848,19 +832,6 @@ export default function Wall() {
           </div>
         </section>
 
-        {user && showScopeHelper ? (
-          <div className="mb-4 mx-3 sm:mx-4 border border-border/40 px-3 py-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-muted-foreground">
-                Tip: use <span className="font-medium text-foreground">For You</span> to unlock source videos directly, and <span className="font-medium text-foreground">Your channels</span> to browse followed channels.
-              </p>
-              <Button size="sm" variant="ghost" className="h-7 px-2.5 text-xs" onClick={dismissScopeHelper}>
-                Dismiss
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
         {!user && (
           <div className="mb-6 mx-3 sm:mx-4 border border-border/40 px-3 py-4">
             <div className="flex flex-col gap-2 text-center">
@@ -1025,16 +996,6 @@ export default function Wall() {
                 </Button>
               </div>
             )}
-
-            {isForYouScope && forYouUnlockTracker.activity.visible ? (
-              <div className="mb-3 mx-3 sm:mx-4">
-                <UnlockActivityCard
-                  title="For You unlock"
-                  activity={forYouUnlockTracker.activity}
-                  onClear={!forYouUnlockTracker.activity.isActive ? forYouUnlockTracker.clear : undefined}
-                />
-              </div>
-            ) : null}
 
             {isForYouScope ? (
               isForYouLoading ? (
