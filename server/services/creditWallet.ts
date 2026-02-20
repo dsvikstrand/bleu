@@ -134,7 +134,7 @@ async function ensureWalletRow(db: DbClient, userId: string) {
   const nowIso = getNowIso();
   const { error } = await db
     .from('user_credit_wallets')
-    .insert({
+    .upsert({
       user_id: userId,
       balance: DEFAULT_INITIAL_BALANCE,
       capacity: DEFAULT_CAPACITY,
