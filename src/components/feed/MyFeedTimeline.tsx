@@ -318,13 +318,14 @@ export function MyFeedTimeline({
       if (!source?.sourceChannelId) throw new Error('Source channel is missing.');
       const videoId = extractYouTubeVideoId(source.sourceUrl || '');
       if (!videoId) throw new Error('Could not resolve source video id.');
+      const normalizedVideoUrl = `https://www.youtube.com/watch?v=${videoId}`;
       return unlockSourcePageVideos({
         platform: 'youtube',
         externalId: source.sourceChannelId,
         items: [
           {
             video_id: videoId,
-            video_url: source.sourceUrl,
+            video_url: normalizedVideoUrl,
             title: source.title || 'Video',
           },
         ],

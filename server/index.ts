@@ -3364,13 +3364,20 @@ function extractYouTubeVideoIdFromUrl(rawUrl: string) {
   try {
     const parsed = new URL(value);
     const host = parsed.hostname.replace(/^www\./i, '').toLowerCase();
+    const pathParts = parsed.pathname.replace(/^\/+/, '').split('/').filter(Boolean);
     if (host === 'youtube.com' || host === 'm.youtube.com') {
-      if (parsed.pathname !== '/watch') return null;
-      const videoId = String(parsed.searchParams.get('v') || '').trim();
+      let videoId = '';
+      if (parsed.pathname === '/watch') {
+        videoId = String(parsed.searchParams.get('v') || '').trim();
+      } else if (pathParts[0] === 'shorts' || pathParts[0] === 'live' || pathParts[0] === 'embed') {
+        videoId = String(pathParts[1] || '').trim();
+      } else {
+        return null;
+      }
       return YOUTUBE_VIDEO_ID_REGEX.test(videoId) ? videoId : null;
     }
     if (host === 'youtu.be') {
-      const videoId = parsed.pathname.replace(/^\/+/, '').split('/')[0]?.trim() || '';
+      const videoId = String(pathParts[0] || '').trim();
       return YOUTUBE_VIDEO_ID_REGEX.test(videoId) ? videoId : null;
     }
     return null;

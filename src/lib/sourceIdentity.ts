@@ -8,15 +8,22 @@ export function extractYouTubeVideoId(rawUrl: string): string | null {
   try {
     const url = new URL(rawUrl.trim());
     const host = url.hostname.replace(/^www\./, '');
+    const pathParts = url.pathname.replace(/^\/+/, '').split('/').filter(Boolean);
 
     if (host === 'youtube.com' || host === 'm.youtube.com') {
-      if (url.pathname !== '/watch') return null;
-      const videoId = url.searchParams.get('v')?.trim() || '';
+      let videoId = '';
+      if (url.pathname === '/watch') {
+        videoId = url.searchParams.get('v')?.trim() || '';
+      } else if (pathParts[0] === 'shorts' || pathParts[0] === 'live' || pathParts[0] === 'embed') {
+        videoId = pathParts[1]?.trim() || '';
+      } else {
+        return null;
+      }
       return /^[a-zA-Z0-9_-]{8,15}$/.test(videoId) ? videoId : null;
     }
 
     if (host === 'youtu.be') {
-      const videoId = url.pathname.replace(/^\/+/, '').split('/')[0]?.trim() || '';
+      const videoId = pathParts[0]?.trim() || '';
       return /^[a-zA-Z0-9_-]{8,15}$/.test(videoId) ? videoId : null;
     }
 
