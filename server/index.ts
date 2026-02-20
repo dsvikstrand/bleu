@@ -71,6 +71,15 @@ import {
 import { refundReservation, reserveCredits, settleReservation } from './services/creditWallet';
 import { runUnlockReliabilitySweeps } from './services/unlockReliabilitySweeps';
 import { createUnlockTraceId, logUnlockEvent } from './services/unlockTrace';
+import { ProviderCircuitOpenError, getProviderCircuitSnapshot } from './services/providerCircuit';
+import { getProviderRetryDefaults, runWithProviderRetry } from './services/providerResilience';
+import {
+  claimQueuedIngestionJobs,
+  countQueueDepth,
+  failIngestionJob,
+  touchIngestionJobLease,
+  type IngestionJobRow,
+} from './services/ingestionQueue';
 import {
   clampInt,
   getFailureTransition,
@@ -91,13 +100,21 @@ import type {
 
 const app = express();
 const port = Number(process.env.PORT) || 8787;
+const isProduction = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
 
 // We run behind a single reverse proxy (nginx). Avoid permissive `true`.
 app.set('trust proxy', 1);
 
-const corsOrigin = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
-  : '*';
+const configuredCorsOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+  : [];
+const corsOrigin = isProduction
+  ? configuredCorsOrigins
+  : (configuredCorsOrigins.length ? configuredCorsOrigins : '*');
+
+if (isProduction && configuredCorsOrigins.length === 0) {
+  console.warn('[cors] NODE_ENV=production but CORS_ORIGIN is empty. Browser traffic will be blocked until explicit origins are configured.');
+}
 
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '1mb' }));
@@ -139,6 +156,15 @@ const sourceVideoUnlockBurstWindowMs = clampInt(process.env.SOURCE_VIDEO_UNLOCK_
 const sourceVideoUnlockBurstMax = clampInt(process.env.SOURCE_VIDEO_UNLOCK_BURST_MAX, 8, 1, 100);
 const sourceVideoUnlockSustainedWindowMs = clampInt(process.env.SOURCE_VIDEO_UNLOCK_SUSTAINED_WINDOW_MS, 10 * 60_000, 60_000, 60 * 60_000);
 const sourceVideoUnlockSustainedMax = clampInt(process.env.SOURCE_VIDEO_UNLOCK_SUSTAINED_MAX, 120, 10, 2_000);
+const queueDepthHardLimit = clampInt(process.env.QUEUE_DEPTH_HARD_LIMIT, 1000, 10, 200_000);
+const queueDepthPerUserLimit = clampInt(process.env.QUEUE_DEPTH_PER_USER_LIMIT, 50, 1, 10_000);
+const workerConcurrency = clampInt(process.env.WORKER_CONCURRENCY, 2, 1, 16);
+const workerBatchSize = clampInt(process.env.WORKER_BATCH_SIZE, 10, 1, 200);
+const workerLeaseMs = clampInt(process.env.WORKER_LEASE_MS, 90_000, 5_000, 15 * 60_000);
+const workerHeartbeatMs = clampInt(process.env.WORKER_HEARTBEAT_MS, 10_000, 1_000, 5 * 60_000);
+const jobExecutionTimeoutMs = clampInt(process.env.JOB_EXECUTION_TIMEOUT_MS, 120_000, 5_000, 10 * 60_000);
+const unlockIntakeEnabledRaw = String(process.env.UNLOCK_INTAKE_ENABLED || 'true').trim().toLowerCase();
+const unlockIntakeEnabled = !(unlockIntakeEnabledRaw === 'false' || unlockIntakeEnabledRaw === '0' || unlockIntakeEnabledRaw === 'off');
 const sourceUnlockReservationSeconds = clampInt(process.env.SOURCE_UNLOCK_RESERVATION_SECONDS, 300, 60, 3600);
 const sourceUnlockGenerateMaxItems = clampInt(process.env.SOURCE_UNLOCK_GENERATE_MAX_ITEMS, 100, 1, 500);
 const sourceUnlockExpiredSweepBatch = clampInt(process.env.SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH, 100, 10, 1000);
@@ -184,6 +210,7 @@ const autoChannelFallbackSlug = String(process.env.AUTO_CHANNEL_FALLBACK_SLUG ||
 const autoChannelLegacyManualFlowEnabledRaw = String(process.env.AUTO_CHANNEL_LEGACY_MANUAL_FLOW_ENABLED || 'true').trim().toLowerCase();
 const autoChannelLegacyManualFlowEnabled = !(autoChannelLegacyManualFlowEnabledRaw === 'false' || autoChannelLegacyManualFlowEnabledRaw === '0' || autoChannelLegacyManualFlowEnabledRaw === 'off');
 const autoChannelGateMode = normalizeGateMode(process.env.AUTO_CHANNEL_GATE_MODE, 'enforce');
+const providerRetryDefaults = getProviderRetryDefaults();
 const youtubeOAuthConfig: YouTubeOAuthConfig = {
   clientId: googleOAuthClientId,
   clientSecret: googleOAuthClientSecret,
@@ -207,6 +234,18 @@ if (!tokenEncryptionKey) {
 if (autoBannerMode !== 'off' && !String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) {
   console.warn('[auto-banner] SUBSCRIPTION_AUTO_BANNER_MODE is enabled but SUPABASE_SERVICE_ROLE_KEY is missing. Worker and uploads will be disabled.');
 }
+
+const QUEUED_INGESTION_SCOPES = [
+  'source_item_unlock_generation',
+  'manual_refresh_selection',
+  'all_active_subscriptions',
+] as const;
+type QueuedIngestionScope = (typeof QUEUED_INGESTION_SCOPES)[number];
+
+const queuedWorkerId = `ingestion-worker-${process.pid}`;
+let queuedWorkerTimer: ReturnType<typeof setTimeout> | null = null;
+let queuedWorkerRunning = false;
+let queuedWorkerRequested = false;
 
 function normalizeGateMode(raw: unknown, fallback: GateMode): GateMode {
   const normalized = String(raw || '').trim().toLowerCase();
@@ -455,6 +494,7 @@ app.use((req, res, next) => {
     || req.path === '/api/youtube/connection/callback'
     || req.path === '/api/ingestion/jobs/trigger'
     || req.path === '/api/ingestion/jobs/latest'
+    || req.path === '/api/ops/queue/health'
     || req.path === '/api/auto-banner/jobs/trigger'
     || req.path === '/api/auto-banner/jobs/latest'
     || isPublicProfileFeedRoute
@@ -3645,7 +3685,7 @@ async function getActiveManualRefreshJob(db: ReturnType<typeof createClient>, us
     .select('id, status, started_at')
     .eq('requested_by_user_id', userId)
     .eq('scope', 'manual_refresh_selection')
-    .eq('status', 'running')
+    .in('status', ['queued', 'running'])
     .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -4058,6 +4098,9 @@ async function processManualRefreshGenerateJob(input: {
     processed_count: processed,
     inserted_count: inserted,
     skipped_count: skipped,
+    lease_expires_at: null,
+    worker_id: null,
+    last_heartbeat_at: new Date().toISOString(),
     error_code: failures.length ? 'PARTIAL_FAILURE' : null,
     error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
   }).eq('id', input.jobId);
@@ -4179,6 +4222,9 @@ async function processSourcePageVideoLibraryJob(input: {
     processed_count: processed,
     inserted_count: inserted,
     skipped_count: skipped,
+    lease_expires_at: null,
+    worker_id: null,
+    last_heartbeat_at: new Date().toISOString(),
     error_code: failures.length ? 'PARTIAL_FAILURE' : null,
     error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
   }).eq('id', input.jobId);
@@ -4224,6 +4270,7 @@ async function processSourceItemUnlockGenerationJob(input: {
         unlockId: item.unlock_id,
         userId: item.reserved_by_user_id,
         jobId: input.jobId,
+        reservationSeconds: sourceUnlockReservationSeconds,
       });
 
       if (!processingUnlock) {
@@ -4420,6 +4467,9 @@ async function processSourceItemUnlockGenerationJob(input: {
     processed_count: processed,
     inserted_count: inserted,
     skipped_count: skipped,
+    lease_expires_at: null,
+    worker_id: null,
+    last_heartbeat_at: new Date().toISOString(),
     error_code: failures.length ? 'PARTIAL_FAILURE' : null,
     error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
   }).eq('id', input.jobId);
@@ -4435,6 +4485,389 @@ async function processSourceItemUnlockGenerationJob(input: {
       failures: failures.length,
     },
   );
+}
+
+class WorkerTimeoutError extends Error {
+  code: 'WORKER_TIMEOUT';
+
+  constructor(message: string) {
+    super(message);
+    this.code = 'WORKER_TIMEOUT';
+  }
+}
+
+function isQueuedIngestionScope(value: string): value is QueuedIngestionScope {
+  return QUEUED_INGESTION_SCOPES.includes(value as QueuedIngestionScope);
+}
+
+function asObjectPayload(value: unknown) {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+function normalizeSourceUnlockQueueItems(value: unknown): SourceUnlockQueueItem[] {
+  if (!Array.isArray(value)) return [];
+  const rows: SourceUnlockQueueItem[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue;
+    const row = raw as Record<string, unknown>;
+    const unlockId = String(row.unlock_id || '').trim();
+    const sourceItemId = String(row.source_item_id || '').trim();
+    const sourceChannelId = String(row.source_channel_id || '').trim();
+    const videoId = String(row.video_id || '').trim();
+    const videoUrl = String(row.video_url || '').trim();
+    const title = String(row.title || '').trim();
+    const reservedByUserId = String(row.reserved_by_user_id || '').trim();
+    if (!unlockId || !sourceItemId || !sourceChannelId || !videoId || !videoUrl || !title || !reservedByUserId) continue;
+    rows.push({
+      unlock_id: unlockId,
+      source_item_id: sourceItemId,
+      source_page_id: row.source_page_id == null ? null : String(row.source_page_id || '').trim() || null,
+      source_channel_id: sourceChannelId,
+      source_channel_title: row.source_channel_title == null ? null : String(row.source_channel_title || '').trim() || null,
+      video_id: videoId,
+      video_url: videoUrl,
+      title,
+      reserved_cost: Math.max(0, Number(row.reserved_cost || 0)),
+      reserved_by_user_id: reservedByUserId,
+    });
+  }
+  return rows;
+}
+
+function normalizeRefreshScanCandidates(value: unknown): RefreshScanCandidate[] {
+  if (!Array.isArray(value)) return [];
+  const rows: RefreshScanCandidate[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue;
+    const row = raw as Record<string, unknown>;
+    const subscriptionId = String(row.subscription_id || '').trim();
+    const sourceChannelId = String(row.source_channel_id || '').trim();
+    const videoId = String(row.video_id || '').trim();
+    const videoUrl = String(row.video_url || '').trim();
+    const title = String(row.title || '').trim();
+    if (!subscriptionId || !sourceChannelId || !videoId || !videoUrl || !title) continue;
+    rows.push({
+      subscription_id: subscriptionId,
+      source_channel_id: sourceChannelId,
+      source_channel_title: row.source_channel_title == null ? null : String(row.source_channel_title || '').trim() || null,
+      source_channel_url: row.source_channel_url == null ? null : String(row.source_channel_url || '').trim() || null,
+      video_id: videoId,
+      video_url: videoUrl,
+      title,
+      published_at: row.published_at == null ? null : String(row.published_at || '').trim() || null,
+      thumbnail_url: row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null,
+    });
+  }
+  return rows;
+}
+
+function getRetryDelayForErrorCode(errorCode: string) {
+  switch (errorCode) {
+    case 'PROVIDER_DEGRADED':
+      return 30;
+    case 'PROVIDER_FAIL':
+    case 'RATE_LIMITED':
+    case 'TIMEOUT':
+    case 'WORKER_TIMEOUT':
+      return 20;
+    default:
+      return 0;
+  }
+}
+
+function classifyQueuedJobError(error: unknown) {
+  if (error instanceof WorkerTimeoutError) {
+    return {
+      errorCode: 'WORKER_TIMEOUT',
+      message: error.message,
+      retryDelaySeconds: getRetryDelayForErrorCode('WORKER_TIMEOUT'),
+    };
+  }
+  if (error instanceof ProviderCircuitOpenError) {
+    return {
+      errorCode: 'PROVIDER_DEGRADED',
+      message: error.message,
+      retryDelaySeconds: getRetryDelayForErrorCode('PROVIDER_DEGRADED'),
+    };
+  }
+  if (error instanceof PipelineError) {
+    return {
+      errorCode: error.errorCode,
+      message: error.message,
+      retryDelaySeconds: getRetryDelayForErrorCode(error.errorCode),
+    };
+  }
+  const providerCode = String((error as { code?: string } | null)?.code || '').trim();
+  if (providerCode === 'PROVIDER_DEGRADED') {
+    return {
+      errorCode: 'PROVIDER_DEGRADED',
+      message: error instanceof Error ? error.message : 'Provider temporarily degraded.',
+      retryDelaySeconds: getRetryDelayForErrorCode('PROVIDER_DEGRADED'),
+    };
+  }
+  const message = error instanceof Error ? error.message : String(error || 'Unknown job error');
+  return {
+    errorCode: 'ASYNC_JOB_FAILED',
+    message,
+    retryDelaySeconds: 0,
+  };
+}
+
+async function runWithExecutionTimeout<T>(task: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      task,
+      new Promise<T>((_resolve, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(new WorkerTimeoutError(`Job timed out after ${timeoutMs}ms.`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
+
+async function processAllActiveSubscriptionsJob(input: {
+  jobId: string;
+  traceId: string;
+}) {
+  const db = getServiceSupabaseClient();
+  if (!db) throw new Error('Service role client not configured');
+
+  const { data: subscriptions, error: subscriptionsError } = await db
+    .from('user_source_subscriptions')
+    .select('id, user_id, mode, source_channel_id, source_page_id, last_seen_published_at, last_seen_video_id, is_active')
+    .eq('is_active', true)
+    .eq('source_type', 'youtube')
+    .order('updated_at', { ascending: false });
+  if (subscriptionsError) throw subscriptionsError;
+
+  let processed = 0;
+  let inserted = 0;
+  let skipped = 0;
+  const failures: Array<{ subscription_id: string; error: string }> = [];
+  for (const subscription of subscriptions || []) {
+    try {
+      const sync = await syncSingleSubscription(db, subscription, { trigger: 'service_cron' });
+      processed += sync.processed;
+      inserted += sync.inserted;
+      skipped += sync.skipped;
+    } catch (error) {
+      failures.push({
+        subscription_id: subscription.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await markSubscriptionSyncError(db, subscription.id, error);
+    }
+  }
+
+  await db.from('ingestion_jobs').update({
+    status: failures.length ? 'failed' : 'succeeded',
+    finished_at: new Date().toISOString(),
+    processed_count: processed,
+    inserted_count: inserted,
+    skipped_count: skipped,
+    lease_expires_at: null,
+    worker_id: null,
+    last_heartbeat_at: new Date().toISOString(),
+    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
+    error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
+  }).eq('id', input.jobId);
+
+  logUnlockEvent('unlock_job_terminal', { trace_id: input.traceId, job_id: input.jobId }, {
+    scope: 'all_active_subscriptions',
+    processed,
+    inserted,
+    skipped,
+    failures: failures.length,
+  });
+}
+
+async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, job: IngestionJobRow) {
+  const scope = String(job.scope || '').trim();
+  if (!isQueuedIngestionScope(scope)) {
+    await failIngestionJob(db, {
+      jobId: job.id,
+      errorCode: 'UNSUPPORTED_SCOPE',
+      errorMessage: `Unsupported queued scope: ${scope}`,
+      scheduleRetryInSeconds: 0,
+      maxAttempts: Number(job.max_attempts || 3),
+    });
+    return;
+  }
+
+  const payload = asObjectPayload(job.payload);
+  const traceId = String(job.trace_id || payload.trace_id || '').trim() || createUnlockTraceId();
+  const jobStartMs = Date.now();
+  const leaseSeconds = Math.max(5, Math.ceil(workerLeaseMs / 1000));
+  let heartbeatError: unknown = null;
+  const heartbeat = setInterval(() => {
+    void touchIngestionJobLease(db, {
+      jobId: job.id,
+      workerId: queuedWorkerId,
+      leaseSeconds,
+    }).then((ok) => {
+      if (!ok && !heartbeatError) {
+        heartbeatError = new Error('LEASE_HEARTBEAT_REJECTED');
+      }
+    }).catch((error) => {
+      if (!heartbeatError) heartbeatError = error;
+    });
+  }, workerHeartbeatMs);
+
+  try {
+    await runWithExecutionTimeout(
+      (async () => {
+        if (scope === 'source_item_unlock_generation') {
+          const userId = String(payload.user_id || job.requested_by_user_id || '').trim();
+          const items = normalizeSourceUnlockQueueItems(payload.items);
+          if (!userId || items.length === 0) {
+            throw new Error('INVALID_UNLOCK_JOB_PAYLOAD');
+          }
+          await processSourceItemUnlockGenerationJob({
+            jobId: job.id,
+            userId,
+            items,
+            traceId,
+          });
+          return;
+        }
+
+        if (scope === 'manual_refresh_selection') {
+          const userId = String(payload.user_id || job.requested_by_user_id || '').trim();
+          const items = normalizeRefreshScanCandidates(payload.items);
+          if (!userId || items.length === 0) {
+            throw new Error('INVALID_MANUAL_REFRESH_JOB_PAYLOAD');
+          }
+          await processManualRefreshGenerateJob({
+            jobId: job.id,
+            userId,
+            items,
+          });
+          return;
+        }
+
+        await processAllActiveSubscriptionsJob({
+          jobId: job.id,
+          traceId,
+        });
+      })(),
+      jobExecutionTimeoutMs,
+    );
+
+    if (heartbeatError) {
+      throw heartbeatError;
+    }
+
+    logUnlockEvent('unlock_job_finished', { trace_id: traceId, job_id: job.id }, {
+      scope,
+      duration_ms: Date.now() - jobStartMs,
+      attempts: Number(job.attempts || 0),
+      max_attempts: Number(job.max_attempts || 0),
+    });
+  } catch (error) {
+    const classified = classifyQueuedJobError(error);
+    const retriableDelaySeconds = getRetryDelayForErrorCode(classified.errorCode);
+    const nextRetryDelay = retriableDelaySeconds > 0 ? retriableDelaySeconds : classified.retryDelaySeconds;
+    await failIngestionJob(db, {
+      jobId: job.id,
+      errorCode: classified.errorCode,
+      errorMessage: classified.message,
+      scheduleRetryInSeconds: nextRetryDelay,
+      maxAttempts: Number(job.max_attempts || 3),
+    });
+
+    logUnlockEvent('unlock_job_failed', { trace_id: traceId, job_id: job.id }, {
+      scope,
+      error_code: classified.errorCode,
+      error: classified.message.slice(0, 220),
+      duration_ms: Date.now() - jobStartMs,
+      attempts: Number(job.attempts || 0),
+      max_attempts: Number(job.max_attempts || 0),
+      retry_delay_seconds: nextRetryDelay,
+    });
+
+    if (scope === 'source_item_unlock_generation' && nextRetryDelay === 0) {
+      await runUnlockSweeps(db, { mode: 'cron', force: true, traceId });
+    }
+  } finally {
+    clearInterval(heartbeat);
+  }
+}
+
+async function processClaimedIngestionJobs(db: ReturnType<typeof createClient>, jobs: IngestionJobRow[]) {
+  const queue = jobs.slice();
+  const concurrency = Math.max(1, Math.min(workerConcurrency, queue.length));
+  const workers = Array.from({ length: concurrency }, () => (async () => {
+    while (queue.length > 0) {
+      const next = queue.shift();
+      if (!next) return;
+      await processClaimedIngestionJob(db, next);
+    }
+  })());
+  await Promise.all(workers);
+}
+
+async function runQueuedIngestionProcessing() {
+  if (queuedWorkerRunning) {
+    queuedWorkerRequested = true;
+    return;
+  }
+  const db = getServiceSupabaseClient();
+  if (!db) return;
+
+  queuedWorkerRunning = true;
+  try {
+    do {
+      queuedWorkerRequested = false;
+      await runUnlockSweeps(db, { mode: 'cron', force: true });
+      for (const scope of QUEUED_INGESTION_SCOPES) {
+        const recovered = await recoverStaleIngestionJobs(db, { scope });
+        if (recovered.length > 0) {
+          console.log('[ingestion_stale_recovered]', JSON.stringify({
+            worker_id: queuedWorkerId,
+            scope,
+            recovered_count: recovered.length,
+            recovered_job_ids: recovered.map((row) => row.id),
+          }));
+        }
+      }
+
+      while (true) {
+        const claimed = await claimQueuedIngestionJobs(db, {
+          scopes: [...QUEUED_INGESTION_SCOPES],
+          maxJobs: workerBatchSize,
+          workerId: queuedWorkerId,
+          leaseSeconds: Math.max(5, Math.ceil(workerLeaseMs / 1000)),
+        });
+        if (claimed.length === 0) break;
+        await processClaimedIngestionJobs(db, claimed);
+      }
+    } while (queuedWorkerRequested);
+  } catch (error) {
+    console.log('[ingestion_queue_worker_failed]', JSON.stringify({
+      worker_id: queuedWorkerId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  } finally {
+    queuedWorkerRunning = false;
+  }
+}
+
+function scheduleQueuedIngestionProcessing(delayMs = 0) {
+  if (queuedWorkerRunning) {
+    queuedWorkerRequested = true;
+    return;
+  }
+
+  if (queuedWorkerTimer) return;
+  const waitMs = Math.max(0, Math.floor(delayMs));
+  queuedWorkerTimer = setTimeout(() => {
+    queuedWorkerTimer = null;
+    void runQueuedIngestionProcessing();
+  }, waitMs);
 }
 
 async function syncSingleSubscription(db: ReturnType<typeof createClient>, subscription: {
@@ -5603,14 +6036,54 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     });
   }
 
+  const queueDepth = await countQueueDepth(sourcePageDb, {
+    scope: 'source_item_unlock_generation',
+    includeRunning: true,
+  });
+  const userQueueDepth = await countQueueDepth(sourcePageDb, {
+    scope: 'source_item_unlock_generation',
+    userId,
+    includeRunning: true,
+  });
+  if (!unlockIntakeEnabled) {
+    return res.status(503).json({
+      ok: false,
+      error_code: 'QUEUE_INTAKE_DISABLED',
+      message: 'Unlock intake is temporarily paused.',
+      data: {
+        ...traceData,
+        queue_depth: queueDepth,
+      },
+    });
+  }
+  if (queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {
+    return res.status(429).json({
+      ok: false,
+      error_code: 'QUEUE_BACKPRESSURE',
+      message: 'Unlock queue is busy. Please retry shortly.',
+      retry_after_seconds: 30,
+      data: {
+        ...traceData,
+        queue_depth: queueDepth,
+        user_queue_depth: userQueueDepth,
+      },
+    });
+  }
+
   const { data: job, error: jobCreateError } = await db
     .from('ingestion_jobs')
     .insert({
       trigger: 'user_sync',
       scope: 'source_item_unlock_generation',
-      status: 'running',
+      status: 'queued',
       requested_by_user_id: userId,
-      started_at: new Date().toISOString(),
+      trace_id: traceId,
+      payload: {
+        user_id: userId,
+        trace_id: traceId,
+        items: queueItems,
+      },
+      next_run_at: new Date().toISOString(),
     })
     .select('id')
     .single();
@@ -5623,32 +6096,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     });
   }
 
-  setImmediate(() => {
-    void processSourceItemUnlockGenerationJob({
-      jobId: job.id,
-      userId,
-      items: queueItems,
-      traceId,
-    }).catch(async (error) => {
-      const serviceDb = getServiceSupabaseClient();
-      if (serviceDb) {
-        await serviceDb.from('ingestion_jobs').update({
-          status: 'failed',
-          finished_at: new Date().toISOString(),
-          error_code: 'ASYNC_JOB_FAILED',
-          error_message: (error instanceof Error ? error.message : String(error)).slice(0, 500),
-        }).eq('id', job.id);
-      }
-      logUnlockEvent(
-        'unlock_job_terminal',
-        { trace_id: traceId, job_id: job.id, user_id: userId, source_page_id: sourcePage.id },
-        {
-          status: 'failed',
-          error: error instanceof Error ? error.message : String(error),
-        },
-      );
-    });
-  });
+  scheduleQueuedIngestionProcessing();
 
   return res.status(202).json({
     ok: true,
@@ -5657,6 +6105,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     data: {
       ...traceData,
       job_id: job.id,
+      queue_depth: queueDepth + 1,
+      estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
       queued_count: queueItems.length,
       skipped_existing_count: duplicateRows.length,
       skipped_existing: duplicateRows.map((row) => ({
@@ -6397,7 +6847,8 @@ app.post('/api/source-subscriptions/refresh-generate', refreshGenerateLimiter, a
 
   const db = getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
-  if (!getServiceSupabaseClient()) {
+  const serviceDb = getServiceSupabaseClient();
+  if (!serviceDb) {
     return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
   }
 
@@ -6469,43 +6920,40 @@ app.post('/api/source-subscriptions/refresh-generate', refreshGenerateLimiter, a
     });
   }
 
+  const queueDepth = await countQueueDepth(serviceDb, { includeRunning: true });
+  const userQueueDepth = await countQueueDepth(serviceDb, { userId, includeRunning: true });
+  if (queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {
+    return res.status(429).json({
+      ok: false,
+      error_code: 'QUEUE_BACKPRESSURE',
+      message: 'Generation queue is busy. Please retry shortly.',
+      retry_after_seconds: 30,
+      data: {
+        queue_depth: queueDepth,
+        user_queue_depth: userQueueDepth,
+      },
+    });
+  }
+
   const { data: job, error: jobCreateError } = await db
     .from('ingestion_jobs')
     .insert({
       trigger: 'user_sync',
       scope: 'manual_refresh_selection',
-      status: 'running',
+      status: 'queued',
       requested_by_user_id: userId,
-      started_at: new Date().toISOString(),
+      payload: {
+        user_id: userId,
+        items: dedupedItems,
+      },
+      next_run_at: new Date().toISOString(),
     })
     .select('id')
     .single();
   if (jobCreateError) {
     return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
   }
-
-  setImmediate(() => {
-    void processManualRefreshGenerateJob({
-      jobId: job.id,
-      userId,
-      items: dedupedItems,
-    }).catch(async (error) => {
-      const serviceDb = getServiceSupabaseClient();
-      if (serviceDb) {
-        await serviceDb.from('ingestion_jobs').update({
-          status: 'failed',
-          finished_at: new Date().toISOString(),
-          error_code: 'ASYNC_JOB_FAILED',
-          error_message: (error instanceof Error ? error.message : String(error)).slice(0, 500),
-        }).eq('id', job.id);
-      }
-      console.log('[subscription_manual_refresh_job_failed]', JSON.stringify({
-        job_id: job.id,
-        user_id: userId,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
-  });
+  scheduleQueuedIngestionProcessing();
 
   return res.status(202).json({
     ok: true,
@@ -6513,6 +6961,7 @@ app.post('/api/source-subscriptions/refresh-generate', refreshGenerateLimiter, a
     message: 'background generation started',
     data: {
       job_id: job.id,
+      queue_depth: queueDepth + 1,
       queued_count: dedupedItems.length,
     },
   });
@@ -6678,7 +7127,7 @@ app.get('/api/ingestion/jobs/:id([0-9a-fA-F-]{36})', async (req, res) => {
 
   const { data, error } = await db
     .from('ingestion_jobs')
-    .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, created_at, updated_at')
+    .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id, created_at, updated_at')
     .eq('id', req.params.id)
     .eq('requested_by_user_id', userId)
     .maybeSingle();
@@ -6706,6 +7155,11 @@ app.get('/api/ingestion/jobs/:id([0-9a-fA-F-]{36})', async (req, res) => {
       skipped_count: data.skipped_count,
       error_code: data.error_code,
       error_message: data.error_message,
+      attempts: data.attempts,
+      max_attempts: data.max_attempts,
+      next_run_at: data.next_run_at,
+      lease_expires_at: data.lease_expires_at,
+      trace_id: data.trace_id || null,
       created_at: data.created_at,
       updated_at: data.updated_at,
     },
@@ -6724,7 +7178,7 @@ app.get('/api/ingestion/jobs/latest-mine', async (req, res) => {
 
   const scopeRaw = String(req.query.scope || '').trim();
   const scope = scopeRaw || 'manual_refresh_selection';
-  const selectColumns = 'id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, created_at, updated_at';
+  const selectColumns = 'id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id, created_at, updated_at';
 
   const { data: activeData, error: activeError } = await db
     .from('ingestion_jobs')
@@ -6732,7 +7186,7 @@ app.get('/api/ingestion/jobs/latest-mine', async (req, res) => {
     .eq('requested_by_user_id', userId)
     .eq('scope', scope)
     .in('status', ['queued', 'running'])
-    .order('started_at', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (activeError) {
@@ -6746,7 +7200,7 @@ app.get('/api/ingestion/jobs/latest-mine', async (req, res) => {
       .select(selectColumns)
       .eq('requested_by_user_id', userId)
       .eq('scope', scope)
-      .order('started_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
     if (latestError) {
@@ -6772,6 +7226,11 @@ app.get('/api/ingestion/jobs/latest-mine', async (req, res) => {
           skipped_count: data.skipped_count,
           error_code: data.error_code,
           error_message: data.error_message,
+          attempts: data.attempts,
+          max_attempts: data.max_attempts,
+          next_run_at: data.next_run_at,
+          lease_expires_at: data.lease_expires_at,
+          trace_id: data.trace_id || null,
           created_at: data.created_at,
           updated_at: data.updated_at,
         }
@@ -6798,96 +7257,65 @@ app.post('/api/ingestion/jobs/trigger', async (req, res) => {
   }
   await runUnlockSweeps(db, { mode: 'cron', force: true });
 
-  const { data: runningJob, error: runningJobError } = await db
+  const { data: existingJob, error: runningJobError } = await db
     .from('ingestion_jobs')
-    .select('id, started_at')
+    .select('id, status, started_at')
     .eq('scope', 'all_active_subscriptions')
-    .eq('status', 'running')
+    .in('status', ['queued', 'running'])
     .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (runningJobError) {
     return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: runningJobError.message, data: null });
   }
-  if (runningJob?.id) {
+  if (existingJob?.id) {
     return res.status(409).json({
       ok: false,
       error_code: 'JOB_ALREADY_RUNNING',
-      message: 'A subscription ingestion job is already running.',
-      data: { job_id: runningJob.id },
+      message: 'A subscription ingestion job is already queued or running.',
+      data: { job_id: existingJob.id, status: existingJob.status },
     });
   }
 
+  const queueDepth = await countQueueDepth(db, { includeRunning: true });
+  if (queueDepth >= queueDepthHardLimit) {
+    return res.status(429).json({
+      ok: false,
+      error_code: 'QUEUE_BACKPRESSURE',
+      message: 'Queue is busy. Retry shortly.',
+      retry_after_seconds: 30,
+      data: {
+        queue_depth: queueDepth,
+      },
+    });
+  }
+
+  const traceId = createUnlockTraceId();
   const { data: job, error: jobCreateError } = await db
     .from('ingestion_jobs')
     .insert({
       trigger: 'service_cron',
       scope: 'all_active_subscriptions',
-      status: 'running',
-      started_at: new Date().toISOString(),
+      status: 'queued',
+      trace_id: traceId,
+      payload: {
+        trace_id: traceId,
+      },
+      next_run_at: new Date().toISOString(),
     })
     .select('id')
     .single();
   if (jobCreateError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
 
-  const { data: subscriptions, error: subscriptionsError } = await db
-    .from('user_source_subscriptions')
-    .select('id, user_id, mode, source_channel_id, source_page_id, last_seen_published_at, last_seen_video_id, is_active')
-    .eq('is_active', true)
-    .eq('source_type', 'youtube')
-    .order('updated_at', { ascending: false });
-
-  if (subscriptionsError) {
-    await db.from('ingestion_jobs').update({
-      status: 'failed',
-      finished_at: new Date().toISOString(),
-      error_code: 'READ_FAILED',
-      error_message: subscriptionsError.message,
-    }).eq('id', job.id);
-    return res.status(500).json({ ok: false, error_code: 'READ_FAILED', message: subscriptionsError.message, data: { job_id: job.id } });
-  }
-
-  let processed = 0;
-  let inserted = 0;
-  let skipped = 0;
-  const failures: Array<{ subscription_id: string; error: string }> = [];
-
-  for (const subscription of subscriptions || []) {
-    try {
-      const sync = await syncSingleSubscription(db, subscription, { trigger: 'service_cron' });
-      processed += sync.processed;
-      inserted += sync.inserted;
-      skipped += sync.skipped;
-    } catch (error) {
-      failures.push({
-        subscription_id: subscription.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      await markSubscriptionSyncError(db, subscription.id, error);
-    }
-  }
-
-  await db.from('ingestion_jobs').update({
-    status: failures.length ? 'failed' : 'succeeded',
-    finished_at: new Date().toISOString(),
-    processed_count: processed,
-    inserted_count: inserted,
-    skipped_count: skipped,
-    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
-    error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
-  }).eq('id', job.id);
-
-  return res.status(failures.length ? 207 : 200).json({
+  scheduleQueuedIngestionProcessing();
+  return res.status(202).json({
     ok: true,
-    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
-    message: 'ingestion trigger complete',
+    error_code: null,
+    message: 'ingestion job queued',
     data: {
       job_id: job.id,
-      subscriptions_total: (subscriptions || []).length,
-      processed,
-      inserted,
-      skipped,
-      failures,
+      queue_depth: queueDepth + 1,
+      trace_id: traceId,
     },
   });
 });
@@ -6901,8 +7329,8 @@ app.get('/api/ingestion/jobs/latest', async (req, res) => {
 
   const { data, error } = await db
     .from('ingestion_jobs')
-    .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message')
-    .order('started_at', { ascending: false })
+    .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -6927,8 +7355,94 @@ app.get('/api/ingestion/jobs/latest', async (req, res) => {
           skipped_count: data.skipped_count,
           error_code: data.error_code,
           error_message: data.error_message,
+          attempts: data.attempts,
+          max_attempts: data.max_attempts,
+          next_run_at: data.next_run_at,
+          lease_expires_at: data.lease_expires_at,
+          trace_id: data.trace_id || null,
         }
       : null,
+  });
+});
+
+app.get('/api/ops/queue/health', async (req, res) => {
+  if (!isServiceRequestAuthorized(req)) {
+    return res.status(401).json({ ok: false, error_code: 'SERVICE_AUTH_REQUIRED', message: 'Missing or invalid service token', data: null });
+  }
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  const nowIso = new Date().toISOString();
+  const [queuedDepth, runningDepth] = await Promise.all([
+    countQueueDepth(db, { includeRunning: false }),
+    countQueueDepth(db, { includeRunning: true }),
+  ]);
+
+  const { count: staleLeaseCount, error: staleLeaseError } = await db
+    .from('ingestion_jobs')
+    .select('id', { head: true, count: 'exact' })
+    .eq('status', 'running')
+    .not('lease_expires_at', 'is', null)
+    .lt('lease_expires_at', nowIso);
+  if (staleLeaseError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: staleLeaseError.message, data: null });
+  }
+
+  const { data: byScopeRows, error: byScopeError } = await db
+    .from('ingestion_jobs')
+    .select('scope, status')
+    .in('status', ['queued', 'running'])
+    .in('scope', [...QUEUED_INGESTION_SCOPES]);
+  if (byScopeError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: byScopeError.message, data: null });
+  }
+  const byScope: Record<string, { queued: number; running: number }> = {};
+  for (const scope of QUEUED_INGESTION_SCOPES) {
+    byScope[scope] = { queued: 0, running: 0 };
+  }
+  for (const row of byScopeRows || []) {
+    const scope = String((row as { scope?: string }).scope || '').trim();
+    const status = String((row as { status?: string }).status || '').trim();
+    if (!isQueuedIngestionScope(scope)) continue;
+    if (status === 'queued') byScope[scope].queued += 1;
+    if (status === 'running') byScope[scope].running += 1;
+  }
+
+  const providerKeys = [
+    'transcript',
+    'llm_generate_blueprint',
+    'llm_quality_judge',
+    'llm_safety_judge',
+    'llm_review',
+    'llm_banner',
+  ];
+  const providerCircuitState: Record<string, unknown> = {};
+  for (const providerKey of providerKeys) {
+    providerCircuitState[providerKey] = await getProviderCircuitSnapshot(db, providerKey);
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'queue health',
+    data: {
+      worker_id: queuedWorkerId,
+      worker_running: queuedWorkerRunning,
+      queue_depth: queuedDepth,
+      running_depth: Math.max(0, runningDepth - queuedDepth),
+      stale_leases: Number(staleLeaseCount || 0),
+      limits: {
+        queue_depth_hard_limit: queueDepthHardLimit,
+        queue_depth_per_user_limit: queueDepthPerUserLimit,
+        worker_concurrency: workerConcurrency,
+        worker_batch_size: workerBatchSize,
+        worker_lease_ms: workerLeaseMs,
+        worker_heartbeat_ms: workerHeartbeatMs,
+        job_execution_timeout_ms: jobExecutionTimeoutMs,
+      },
+      by_scope: byScope,
+      provider_circuit_state: providerCircuitState,
+    },
   });
 });
 
@@ -7780,6 +8294,7 @@ type PipelineErrorCode =
   | 'INVALID_URL'
   | 'NO_CAPTIONS'
   | 'PROVIDER_FAIL'
+  | 'PROVIDER_DEGRADED'
   | 'TRANSCRIPT_EMPTY'
   | 'GENERATION_FAIL'
   | 'SAFETY_BLOCKED'
@@ -7807,6 +8322,13 @@ function makePipelineError(errorCode: PipelineErrorCode, message: string): never
 function mapPipelineError(error: unknown): PipelineErrorShape | null {
   if (error instanceof PipelineError) {
     return { error_code: error.errorCode, message: error.message };
+  }
+  const providerCode = String((error as { code?: string } | null)?.code || '').trim();
+  if (providerCode === 'PROVIDER_DEGRADED') {
+    return {
+      error_code: 'PROVIDER_DEGRADED',
+      message: error instanceof Error ? error.message : 'Provider temporarily degraded.',
+    };
   }
   if (error instanceof TranscriptProviderError) {
     if (error.code === 'TRANSCRIPT_FETCH_FAIL') {
@@ -7884,7 +8406,18 @@ async function runYouTubePipeline(input: {
   authToken: string;
 }) {
   const startedAt = Date.now();
-  const transcript = await getTranscriptForVideo(input.videoId);
+  const serviceDb = getServiceSupabaseClient();
+  const transcript = await runWithProviderRetry(
+    {
+      providerKey: 'transcript',
+      db: serviceDb,
+      maxAttempts: providerRetryDefaults.transcriptAttempts,
+      timeoutMs: providerRetryDefaults.transcriptTimeoutMs,
+      baseDelayMs: 250,
+      jitterMs: 150,
+    },
+    async () => getTranscriptForVideo(input.videoId),
+  );
   const client = createLLMClient();
   const qualityConfig = readYt2bpQualityConfig();
   const contentSafetyConfig = readYt2bpContentSafetyConfig();
@@ -7919,11 +8452,21 @@ async function runYouTubePipeline(input: {
     while (attemptRunCount < maxRunsForAttempt) {
       attemptRunCount += 1;
       const globalRunIndex = (attempt - 1) * maxRunsForAttempt + attemptRunCount;
-      const rawDraft = await client.generateYouTubeBlueprint({
-        videoUrl: input.videoUrl,
-        transcript: transcript.text,
-        additionalInstructions: safetyRetryHint || undefined,
-      });
+      const rawDraft = await runWithProviderRetry(
+        {
+          providerKey: 'llm_generate_blueprint',
+          db: serviceDb,
+          maxAttempts: providerRetryDefaults.llmAttempts,
+          timeoutMs: providerRetryDefaults.llmTimeoutMs,
+          baseDelayMs: 300,
+          jitterMs: 200,
+        },
+        async () => client.generateYouTubeBlueprint({
+          videoUrl: input.videoUrl,
+          transcript: transcript.text,
+          additionalInstructions: safetyRetryHint || undefined,
+        }),
+      );
       const draft = toDraft(rawDraft);
 
       if (!draft.steps.length) {
@@ -7948,7 +8491,17 @@ async function runYouTubePipeline(input: {
         break;
       }
       try {
-        const graded = await scoreYt2bpQualityWithOpenAI(draft, qualityConfig);
+        const graded = await runWithProviderRetry(
+          {
+            providerKey: 'llm_quality_judge',
+            db: serviceDb,
+            maxAttempts: providerRetryDefaults.llmAttempts,
+            timeoutMs: providerRetryDefaults.llmTimeoutMs,
+            baseDelayMs: 250,
+            jitterMs: 200,
+          },
+          async () => scoreYt2bpQualityWithOpenAI(draft, qualityConfig),
+        );
         const failIds = graded.failures.join(',') || 'none';
         console.log(
           `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} global_run=${globalRunIndex} pass=${graded.ok} overall=${graded.overall.toFixed(2)} failures=${failIds}`
@@ -7962,7 +8515,17 @@ async function runYouTubePipeline(input: {
 
         let safetyPassed = !contentSafetyConfig.enabled;
         if (contentSafetyConfig.enabled) {
-          const safetyScore = await scoreYt2bpContentSafetyWithOpenAI(draft, contentSafetyConfig);
+          const safetyScore = await runWithProviderRetry(
+            {
+              providerKey: 'llm_safety_judge',
+              db: serviceDb,
+              maxAttempts: providerRetryDefaults.llmAttempts,
+              timeoutMs: providerRetryDefaults.llmTimeoutMs,
+              baseDelayMs: 250,
+              jitterMs: 200,
+            },
+            async () => scoreYt2bpContentSafetyWithOpenAI(draft, contentSafetyConfig),
+          );
           const flagged = safetyScore.failedCriteria.join(',') || 'none';
           console.log(
             `[yt2bp-content-safety] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} global_run=${globalRunIndex} pass=${safetyScore.ok} flagged=${flagged}`
@@ -8019,24 +8582,44 @@ async function runYouTubePipeline(input: {
     const selectedItems = {
       transcript: draft.steps.map((step) => ({ name: step.name, context: step.timestamp || undefined })),
     };
-    reviewSummary = await client.analyzeBlueprint({
-      title: draft.title,
-      inventoryTitle: 'YouTube transcript',
-      selectedItems,
-      mixNotes: draft.notes || undefined,
-      reviewPrompt: 'Summarize quality and clarity in a concise way.',
-      reviewSections: ['Overview', 'Strengths', 'Suggestions'],
-      includeScore: true,
-    });
+    reviewSummary = await runWithProviderRetry(
+      {
+        providerKey: 'llm_review',
+        db: serviceDb,
+        maxAttempts: providerRetryDefaults.llmAttempts,
+        timeoutMs: providerRetryDefaults.llmTimeoutMs,
+        baseDelayMs: 300,
+        jitterMs: 200,
+      },
+      async () => client.analyzeBlueprint({
+        title: draft.title,
+        inventoryTitle: 'YouTube transcript',
+        selectedItems,
+        mixNotes: draft.notes || undefined,
+        reviewPrompt: 'Summarize quality and clarity in a concise way.',
+        reviewSections: ['Overview', 'Strengths', 'Suggestions'],
+        includeScore: true,
+      }),
+    );
   }
 
   let bannerUrl: string | null = null;
   if (input.generateBanner && input.authToken && supabaseUrl) {
-    const banner = await client.generateBanner({
-      title: draft.title,
-      inventoryTitle: 'YouTube transcript',
-      tags: draft.tags,
-    });
+    const banner = await runWithProviderRetry(
+      {
+        providerKey: 'llm_banner',
+        db: serviceDb,
+        maxAttempts: providerRetryDefaults.llmAttempts,
+        timeoutMs: providerRetryDefaults.llmTimeoutMs,
+        baseDelayMs: 300,
+        jitterMs: 200,
+      },
+      async () => client.generateBanner({
+        title: draft.title,
+        inventoryTitle: 'YouTube transcript',
+        tags: draft.tags,
+      }),
+    );
     bannerUrl = await uploadBannerToSupabase(banner.buffer.toString('base64'), banner.mimeType, input.authToken);
   }
 
@@ -8154,4 +8737,5 @@ app.post('/api/generate-banner', async (req, res) => {
 
 app.listen(port, () => {
   console.log(`[agentic-backend] listening on :${port}`);
+  scheduleQueuedIngestionProcessing(1500);
 });

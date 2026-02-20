@@ -55,6 +55,11 @@ curl -sS https://bapi.vdsai.cloud/api/health
 curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/latest \
   -H "x-service-token: $INGESTION_SERVICE_TOKEN"
 ```
+- Queue health snapshot (service auth):
+```bash
+curl -sS https://bapi.vdsai.cloud/api/ops/queue/health \
+  -H "x-service-token: $INGESTION_SERVICE_TOKEN"
+```
 - Latest auto-banner queue snapshot (service auth):
 ```bash
 curl -sS https://bapi.vdsai.cloud/api/auto-banner/jobs/latest \
@@ -142,6 +147,21 @@ Required runtime variables:
 - `SOURCE_VIDEO_UNLOCK_BURST_MAX` (default `8`)
 - `SOURCE_VIDEO_UNLOCK_SUSTAINED_WINDOW_MS` (default `600000`)
 - `SOURCE_VIDEO_UNLOCK_SUSTAINED_MAX` (default `120`)
+- `UNLOCK_INTAKE_ENABLED` (default `true`, fast pause for new unlock intake)
+- `QUEUE_DEPTH_HARD_LIMIT` (default `1000`)
+- `QUEUE_DEPTH_PER_USER_LIMIT` (default `50`)
+- `WORKER_CONCURRENCY` (default `2`)
+- `WORKER_BATCH_SIZE` (default `10`)
+- `WORKER_LEASE_MS` (default `90000`)
+- `WORKER_HEARTBEAT_MS` (default `10000`)
+- `JOB_EXECUTION_TIMEOUT_MS` (default `120000`)
+- `TRANSCRIPT_MAX_ATTEMPTS` (default `2`)
+- `TRANSCRIPT_TIMEOUT_MS` (default `25000`)
+- `LLM_MAX_ATTEMPTS` (default `2`)
+- `LLM_TIMEOUT_MS` (default `60000`)
+- `PROVIDER_CIRCUIT_FAILURE_THRESHOLD` (default `5`)
+- `PROVIDER_CIRCUIT_COOLDOWN_SECONDS` (default `60`)
+- `PROVIDER_FAIL_FAST_MODE` (default `false`)
 
 Safe defaults:
 - `YT2BP_ENABLED=true`
@@ -187,6 +207,21 @@ Safe defaults:
 - `SOURCE_VIDEO_UNLOCK_BURST_MAX=8`
 - `SOURCE_VIDEO_UNLOCK_SUSTAINED_WINDOW_MS=600000`
 - `SOURCE_VIDEO_UNLOCK_SUSTAINED_MAX=120`
+- `UNLOCK_INTAKE_ENABLED=true`
+- `QUEUE_DEPTH_HARD_LIMIT=1000`
+- `QUEUE_DEPTH_PER_USER_LIMIT=50`
+- `WORKER_CONCURRENCY=2`
+- `WORKER_BATCH_SIZE=10`
+- `WORKER_LEASE_MS=90000`
+- `WORKER_HEARTBEAT_MS=10000`
+- `JOB_EXECUTION_TIMEOUT_MS=120000`
+- `TRANSCRIPT_MAX_ATTEMPTS=2`
+- `TRANSCRIPT_TIMEOUT_MS=25000`
+- `LLM_MAX_ATTEMPTS=2`
+- `LLM_TIMEOUT_MS=60000`
+- `PROVIDER_CIRCUIT_FAILURE_THRESHOLD=5`
+- `PROVIDER_CIRCUIT_COOLDOWN_SECONDS=60`
+- `PROVIDER_FAIL_FAST_MODE=false`
 
 ## Onboarding rollout checks
 - Schema check:

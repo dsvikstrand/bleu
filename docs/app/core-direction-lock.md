@@ -39,6 +39,7 @@ Status: `canonical`
 31. Home should provide first-time scope clarity (`For You` vs `Your channels`) with dismissible helper copy.
 32. Unlock backend reliability uses safe auto-fix sweeps (expired/stale/orphan recovery) with idempotent refund/fail transitions; no destructive cleanup.
 33. Unlock/generate responses must include additive `trace_id` and unlock lifecycle logs must propagate that trace through request -> queue/job -> terminal outcome.
+34. Unlock/manual/service generation execution is queue-first with durable DB claim+lease workers, bounded retries, and queue backpressure/intake controls (Oracle + Supabase only).
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.

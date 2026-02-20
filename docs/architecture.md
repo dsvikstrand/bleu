@@ -87,6 +87,7 @@
     - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth-only shared unlock + queue start for selected source-library videos, ingestion scope `source_item_unlock_generation`)
       - unlock limiter policy: burst `8/10s` + sustained `120/10m` per user/IP.
       - response now includes additive `data.trace_id` for end-to-end unlock tracing.
+      - queue guardrails: `QUEUE_DEPTH_HARD_LIMIT`, `QUEUE_DEPTH_PER_USER_LIMIT`; overflow returns `QUEUE_BACKPRESSURE` with `retry_after_seconds`.
     - `POST /api/source-pages/:platform/:externalId/videos/generate` (compatibility alias to unlock flow)
       - alias mirrors unlock response contract, including additive `data.trace_id`.
     - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)
@@ -105,7 +106,9 @@
     - `POST /api/youtube/subscriptions/import` (auth-only bulk import with idempotent upsert + inactive reactivation)
     - `DELETE /api/youtube/connection` (auth-only revoke+unlink)
     - `POST /api/ingestion/jobs/trigger` (service auth)
+      - enqueue-only path for `all_active_subscriptions` scope; durable worker claim/lease executes outside request lifecycle.
     - `GET /api/ingestion/jobs/latest` (service auth, latest job snapshot)
+    - `GET /api/ops/queue/health` (service auth, queue depth/stale lease/provider circuit snapshot)
     - `POST /api/auto-banner/jobs/trigger` (service auth, queue worker + cap rebalance)
     - `GET /api/auto-banner/jobs/latest` (service auth, queue snapshot)
     - `POST /api/debug/subscriptions/:id/simulate-new-uploads` (debug-only, service auth + `ENABLE_DEBUG_ENDPOINTS=true`; middleware allows service-token access without bearer user auth)
@@ -124,6 +127,10 @@
     - opportunistic sweeps on source-page video list/unlock routes.
     - forced sweep on service cron trigger path.
     - stale/orphan recovery emits structured `unlock_sweep_*` logs and uses idempotent refund/fail transitions.
+  - ingestion worker hardening:
+    - queued claim uses DB lease (`claim_ingestion_jobs`) + heartbeat (`touch_ingestion_job_lease`).
+    - ingestion job rows now track attempts/max attempts, lease expiry, next-run retry time, worker id, and trace id.
+    - provider retry/circuit controls are env-driven (transcript + LLM bounded retries, fail-fast circuit open mode).
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
 - Eval assets:
   - Runtime policy/config under `eval/methods/v0/*`.

@@ -225,6 +225,10 @@ Rules:
   - unlock progress resumes after reload via latest-mine lookup for `source_item_unlock_generation`.
   - user-menu credits now show refill timing plus latest ledger action summary for hold/settle/refund visibility.
   - Home now includes a first-time dismissible helper clarifying `For You` vs `Your channels`.
+- Backend scale hardening (2026-02-20):
+  - unlock/manual/service generation now runs enqueue-only with durable DB lease claim + heartbeat worker semantics.
+  - `ingestion_jobs` now carries retry/lease metadata (`attempts`, `max_attempts`, `next_run_at`, `lease_expires_at`, `worker_id`, `trace_id`, `payload`).
+  - queue backpressure (`QUEUE_BACKPRESSURE`) and intake pause (`QUEUE_INTAKE_DISABLED`) are enforced, and service ops now expose `/api/ops/queue/health`.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

@@ -55,6 +55,7 @@
 - 2026-02-20 note: subscription new-upload ingest now writes unlockable feed rows (`my_feed_unlockable`) before generation; this lifecycle change is outside this endpoint envelope.
 - 2026-02-20 note: unlock reliability sweeps (expired/stale/orphan recovery) run in source-video routes and service cron trigger path; additive and outside this endpoint envelope.
 - 2026-02-20 note: unlock/generate responses now include additive `trace_id` and unlock lifecycle logs propagate the same correlation ID; additive and outside this endpoint envelope.
+- 2026-02-20 note: ingestion worker hardening adds queue lease/retry metadata on `ingestion_jobs` and service queue-health endpoint `GET /api/ops/queue/health`; additive and outside this endpoint envelope.
 
 ## Request
 ```json
@@ -111,6 +112,7 @@
 - `NO_CAPTIONS` -> `422`
 - `TRANSCRIPT_EMPTY` -> `422`
 - `PROVIDER_FAIL` -> `502`
+- `PROVIDER_DEGRADED` -> `503`
 - `TIMEOUT` -> `504`
 - `RATE_LIMITED` -> `429`
 - `SAFETY_BLOCKED` -> `422`
@@ -125,6 +127,8 @@
 - `YT2BP_AUTH_LIMIT_PER_MIN`
 - `YT2BP_IP_LIMIT_PER_HOUR`
 - `YT2BP_CORE_TIMEOUT_MS` (default `120000`, bounded `30000..300000`)
+- `TRANSCRIPT_MAX_ATTEMPTS`, `TRANSCRIPT_TIMEOUT_MS`, `LLM_MAX_ATTEMPTS`, `LLM_TIMEOUT_MS` (bounded provider retry budgets used by this endpoint)
+- `PROVIDER_CIRCUIT_FAILURE_THRESHOLD`, `PROVIDER_CIRCUIT_COOLDOWN_SECONDS`, `PROVIDER_FAIL_FAST_MODE` (provider fail-fast behavior)
 - `CHANNEL_GATES_MODE` (`bypass|shadow|enforce`) for channel-candidate evaluation path outside this endpoint.
 
 ## Integration contract (bleuV1)
@@ -151,6 +155,7 @@
 - Source-page read-time asset hydration behavior is intentionally outside this endpoint contract.
 - Source-page public feed retrieval (`GET /api/source-pages/:platform/:externalId/blueprints`) is intentionally outside this endpoint contract.
 - Source-page video-library listing/queue flow (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`, compatibility alias `/videos/generate`) is intentionally outside this endpoint contract.
+- Service queue operations (`POST /api/ingestion/jobs/trigger`, `GET /api/ingestion/jobs/latest`, `GET /api/ops/queue/health`) are intentionally outside this endpoint contract.
 - Refill-credit wallet and source-unlock persistence (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`, `/api/credits`) are intentionally outside this endpoint contract.
 - Unlock reliability sweep behavior and unlock trace correlation (`trace_id`) are intentionally outside this endpoint contract.
 

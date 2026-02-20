@@ -73,6 +73,8 @@ a61) [have] Unlock activity status is now unified across Home `For You`, Source 
 a62) [have] Credits dropdown now surfaces refill timing (`next +1`) and latest ledger activity summary for clearer unlock debit/refund visibility.
 a63) [have] Home now includes a first-time dismissible scope helper clarifying `For You` vs `Your channels`.
 a64) [have] Unlock backend now runs reliability sweeps (expired/stale/orphan recovery) with structured traceable logs, and unlock/generate responses include additive `trace_id`.
+a65) [have] Unlock/manual/service ingestion execution is now enqueue-first with durable DB lease claiming (no in-request `setImmediate` worker path).
+a66) [have] Service operations now include `GET /api/ops/queue/health` for queue depth, stale leases, and provider circuit snapshots.
 
 ## Core Model
 b1) `Source Item`
@@ -216,6 +218,7 @@ si8) `POST /api/my-feed/items/:id/skip`
 si9) debug-only endpoint (service auth + env gate): `POST /api/debug/subscriptions/:id/simulate-new-uploads` (`ENABLE_DEBUG_ENDPOINTS=true` required, authenticated by `x-service-token`, no user bearer token required)
 si10) YouTube channel resolver accepts handle/channel URL/channel ID and uses `browseId` fallback parsing for handle pages where `channelId` is absent.
 si11) service-ops endpoint: `GET /api/ingestion/jobs/latest` (service auth; latest ingestion health snapshot)
+si11b) service-ops endpoint: `GET /api/ops/queue/health` (service auth; queue depth/stale lease/provider circuit state snapshot)
 si12) YouTube search endpoint: `GET /api/youtube-search?q=<query>&limit=<1..25>&page_token=<optional>`
 si13) YouTube channel search endpoint: `GET /api/youtube-channel-search?q=<query>&limit=<1..25>&page_token=<optional>`
 si14) `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` per subscription row (derived from YouTube API; no schema change).
@@ -229,6 +232,7 @@ si21) `POST /api/source-subscriptions/refresh-generate` returns `409 JOB_ALREADY
 si22) `POST /api/source-subscriptions/refresh-generate` returns `400 MAX_ITEMS_EXCEEDED` if selected item count exceeds `20`.
 si23) refresh candidate cooldown table is active: `refresh_video_attempts` (tracks failed manual refresh attempts with retry hold window).
 si24) user endpoint: `GET /api/ingestion/jobs/latest-mine?scope=manual_refresh_selection` (restore active manual-refresh status after page reload).
+si24b) job status endpoints now include additive retry/lease metadata (`attempts`, `max_attempts`, `next_run_at`, `lease_expires_at`, `trace_id`).
 si25) user endpoint: `POST /api/my-feed/items/:id/auto-publish` (run auto-channel publish for a saved My Feed blueprint).
 si26) `POST /api/my-feed/items/:id/auto-publish` returns additive classifier metadata (`classifier_mode`, `classifier_reason`, optional `classifier_confidence`) for audit/debug.
 si27) `AUTO_CHANNEL_CLASSIFIER_MODE` now supports `llm_labeler_v1` (artifact-only input, sync before publish, retry once on invalid output, fallback to `general`).

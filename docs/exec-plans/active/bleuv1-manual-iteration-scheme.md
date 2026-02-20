@@ -409,6 +409,7 @@ Completion evidence (2026-02-20)
 - Added `server/services/unlockReliabilitySweeps.ts` and `server/services/unlockTrace.ts`.
 - Updated `server/index.ts` unlock endpoints/worker logs to propagate `trace_id`, wire sweep runs, and include trace metadata in credit ledger writes.
 - Added tests: `src/test/unlockReliabilitySweeps.test.ts`, `src/test/unlockTracing.test.ts`, `src/test/creditReservationLifecycle.test.ts`, `src/test/sourceUnlockRace.test.ts`.
+- Queue hardening follow-up (2026-02-20): unlock/manual/service ingestion jobs now enqueue with DB lease claims (`claim_ingestion_jobs`), worker heartbeats, retry metadata fields, backpressure errors, and service queue-health endpoint (`/api/ops/queue/health`).
 
 ### Step 12 - Subscriptions management actions
 Scope

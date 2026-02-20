@@ -51,8 +51,22 @@ async function readUnlockBySourceItemId(db: DbClient, sourceItemId: string) {
   return (data || null) as SourceItemUnlockRow | null;
 }
 
+async function readUnlockById(db: DbClient, unlockId: string) {
+  const { data, error } = await db
+    .from('source_item_unlocks')
+    .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+    .eq('id', unlockId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data || null) as SourceItemUnlockRow | null;
+}
+
 export async function getSourceItemUnlockBySourceItemId(db: DbClient, sourceItemId: string) {
   return readUnlockBySourceItemId(db, sourceItemId);
+}
+
+export async function getSourceItemUnlockById(db: DbClient, unlockId: string) {
+  return readUnlockById(db, unlockId);
 }
 
 export async function getSourceItemUnlocksBySourceItemIds(db: DbClient, sourceItemIds: string[]) {
@@ -265,16 +279,18 @@ export async function markUnlockProcessing(db: DbClient, input: {
   unlockId: string;
   userId: string;
   jobId: string;
+  reservationSeconds?: number;
 }) {
   const { data, error } = await db
     .from('source_item_unlocks')
     .update({
       status: 'processing',
       job_id: input.jobId,
-      reservation_expires_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+      reservation_expires_at: new Date(Date.now() + Math.max(30, input.reservationSeconds || 300) * 1000).toISOString(),
     })
     .eq('id', input.unlockId)
     .eq('reserved_by_user_id', input.userId)
+    .eq('status', 'reserved')
     .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
     .maybeSingle();
   if (error) throw error;
@@ -285,8 +301,9 @@ export async function completeUnlock(db: DbClient, input: {
   unlockId: string;
   blueprintId: string;
   jobId: string;
+  expectedJobId?: string;
 }) {
-  const { data, error } = await db
+  let query = db
     .from('source_item_unlocks')
     .update({
       status: 'ready',
@@ -299,9 +316,17 @@ export async function completeUnlock(db: DbClient, input: {
       last_error_message: null,
     })
     .eq('id', input.unlockId)
+    .eq('status', 'processing')
+    .eq('job_id', input.expectedJobId || input.jobId)
     .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
-    .single();
+    .maybeSingle();
+  const { data, error } = await query;
   if (error) throw error;
+  if (!data) {
+    const reloaded = await readUnlockById(db, input.unlockId);
+    if (!reloaded) throw new Error('UNLOCK_NOT_FOUND');
+    return reloaded;
+  }
   return data as SourceItemUnlockRow;
 }
 
@@ -309,8 +334,9 @@ export async function failUnlock(db: DbClient, input: {
   unlockId: string;
   errorCode: string;
   errorMessage: string;
+  expectedJobId?: string;
 }) {
-  const { data, error } = await db
+  let query = db
     .from('source_item_unlocks')
     .update({
       status: 'available',
@@ -322,9 +348,19 @@ export async function failUnlock(db: DbClient, input: {
       last_error_message: String(input.errorMessage || '').slice(0, 500),
     })
     .eq('id', input.unlockId)
+    .in('status', ['processing', 'reserved'])
     .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
-    .single();
+    .maybeSingle();
+  if (input.expectedJobId) {
+    query = query.eq('job_id', input.expectedJobId);
+  }
+  const { data, error } = await query;
   if (error) throw error;
+  if (!data) {
+    const reloaded = await readUnlockById(db, input.unlockId);
+    if (!reloaded) throw new Error('UNLOCK_NOT_FOUND');
+    return reloaded;
+  }
   return data as SourceItemUnlockRow;
 }
 
