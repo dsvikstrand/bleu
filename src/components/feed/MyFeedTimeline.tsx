@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +27,8 @@ import { publishCandidate, rejectCandidate, submitCandidateAndEvaluate } from '@
 import {
   acceptMyFeedPendingItem,
   deactivateSourceSubscriptionByChannelId,
+  getIngestionJob,
+  type IngestionJobStatus,
   skipMyFeedPendingItem,
 } from '@/lib/subscriptionsApi';
 import { unlockSourcePageVideos } from '@/lib/sourcePagesApi';
@@ -68,6 +70,10 @@ export function MyFeedTimeline({
   const [submissionDialogItemId, setSubmissionDialogItemId] = useState<string | null>(null);
   const [subscriptionDialogItemId, setSubscriptionDialogItemId] = useState<string | null>(null);
   const [unsubscribeDialogItemId, setUnsubscribeDialogItemId] = useState<string | null>(null);
+  const [optimisticUnlockingItemIds, setOptimisticUnlockingItemIds] = useState<Record<string, boolean>>({});
+  const [activeUnlockJobId, setActiveUnlockJobId] = useState<string | null>(null);
+  const [activeUnlockItemId, setActiveUnlockItemId] = useState<string | null>(null);
+  const [handledUnlockTerminalJobId, setHandledUnlockTerminalJobId] = useState<string | null>(null);
 
   const canMutate = isOwnerView && !!user;
 
@@ -324,33 +330,113 @@ export function MyFeedTimeline({
         ],
       });
     },
-    onSuccess: (result) => {
+    onSuccess: (result, item) => {
       invalidateFeedQueries();
       queryClient.invalidateQueries({ queryKey: ['source-page-videos'] });
       queryClient.invalidateQueries({ queryKey: ['source-page-blueprints'] });
       if (result.job_id) {
+        setActiveUnlockJobId(result.job_id);
+        setHandledUnlockTerminalJobId(null);
         toast({
           title: 'Unlock queued',
-          description: `Queued ${result.queued_count}, ready ${result.ready_count}, in progress ${result.in_progress_count}.`,
+          description: `Queued ${result.queued_count}, ready ${result.ready_count}, in progress ${result.in_progress_count}. This card will update automatically.`,
         });
         return;
       }
+      if (item.id) {
+        setOptimisticUnlockingItemIds((prev) => {
+          const next = { ...prev };
+          delete next[item.id];
+          return next;
+        });
+      }
+      setActiveUnlockItemId(null);
       toast({
         title: 'Unlock status updated',
-        description: `Ready ${result.ready_count}, in progress ${result.in_progress_count}.`,
+        description: result.ready_count > 0
+          ? `Ready ${result.ready_count}, in progress ${result.in_progress_count}.`
+          : `No new unlock started. Ready ${result.ready_count}, in progress ${result.in_progress_count}.`,
       });
     },
-    onError: (error) => {
+    onError: (error, item) => {
       toast({
         title: 'Unlock failed',
         description: error instanceof Error ? error.message : 'Could not start unlock.',
         variant: 'destructive',
       });
+      if (item?.id) {
+        setOptimisticUnlockingItemIds((prev) => {
+          const next = { ...prev };
+          delete next[item.id];
+          return next;
+        });
+      }
+      setActiveUnlockItemId(null);
+    },
+    onMutate: (item) => {
+      setOptimisticUnlockingItemIds((prev) => ({ ...prev, [item.id]: true }));
+      setActiveUnlockItemId(item.id);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
     },
   });
+
+  const unlockJobQuery = useQuery({
+    queryKey: ['my-feed-unlock-job', user?.id, activeUnlockJobId],
+    enabled: Boolean(user) && Boolean(activeUnlockJobId),
+    queryFn: () => getIngestionJob(activeUnlockJobId as string),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status as IngestionJobStatus | undefined;
+      if (!status) return 3500;
+      return status === 'queued' || status === 'running' ? 3500 : false;
+    },
+  });
+
+  useEffect(() => {
+    const job = unlockJobQuery.data;
+    if (!job?.job_id) return;
+    if (job.status !== 'succeeded' && job.status !== 'failed') return;
+    if (handledUnlockTerminalJobId === job.job_id) return;
+
+    setHandledUnlockTerminalJobId(job.job_id);
+    invalidateFeedQueries();
+    queryClient.invalidateQueries({ queryKey: ['source-page-videos'] });
+    queryClient.invalidateQueries({ queryKey: ['source-page-blueprints'] });
+    queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
+    queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
+
+    if (activeUnlockItemId) {
+      setOptimisticUnlockingItemIds((prev) => {
+        const next = { ...prev };
+        delete next[activeUnlockItemId];
+        return next;
+      });
+      setActiveUnlockItemId(null);
+    }
+    setActiveUnlockJobId(null);
+
+    if (job.status === 'succeeded') {
+      toast({
+        title: 'Unlock finished',
+        description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${Math.max(0, job.processed_count - job.inserted_count - job.skipped_count)}.`,
+      });
+      return;
+    }
+
+    toast({
+      title: 'Unlock failed',
+      description: job.error_message || 'Could not complete unlock generation.',
+      variant: 'destructive',
+    });
+  }, [
+    activeUnlockItemId,
+    handledUnlockTerminalJobId,
+    queryClient,
+    toast,
+    unlockJobQuery.data,
+    user?.id,
+  ]);
 
   const hasItems = (items || []).length > 0;
 
@@ -408,6 +494,7 @@ export function MyFeedTimeline({
         const tags = blueprint?.tags || [];
         const canAccept = item.state === 'my_feed_pending_accept' || item.state === 'my_feed_skipped';
         const isUnlockable = item.state === 'my_feed_unlockable' && !blueprint;
+        const isUnlocking = Boolean(item.source?.unlockInProgress) || Boolean(optimisticUnlockingItemIds[item.id]);
         const preview = buildFeedSummary({
           primary: blueprint?.llmReview || null,
           fallback: source?.title || 'Open to view the full blueprint.',
@@ -512,9 +599,9 @@ export function MyFeedTimeline({
                               event.stopPropagation();
                               unlockMutation.mutate(item);
                             }}
-                            disabled={unlockMutation.isPending || Boolean(item.source?.unlockInProgress)}
+                            disabled={unlockMutation.isPending || isUnlocking}
                           >
-                            {item.source?.unlockInProgress ? 'Generating...' : 'Unlock Blueprint'}
+                            {isUnlocking ? 'Unlocking...' : 'Unlock Blueprint'}
                           </Button>
                           <span className="inline-flex items-center text-xs text-muted-foreground">
                             Cost {Number(item.source?.unlockCost || 0).toFixed(3)} cr
@@ -597,7 +684,7 @@ export function MyFeedTimeline({
                     {item.state === 'channel_published' ? (
                       `Posted to ${getChannelDisplayName(item.candidate?.channelSlug || null)}`
                     ) : item.state === 'my_feed_unlockable' ? (
-                      item.source?.unlockInProgress ? 'Unlock in progress' : 'Unlock available'
+                      isUnlocking ? 'Unlocking...' : 'Unlock available'
                     ) : autoChannelPipelineEnabled || !canMutate ? (
                       item.state === 'my_feed_generating' || item.state === 'candidate_submitted'
                         ? 'Publishing...'

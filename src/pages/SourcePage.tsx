@@ -162,6 +162,7 @@ export default function SourcePage() {
   const sourceBlueprintItems = sourceBlueprintsQuery.data?.pages.flatMap((page) => page.items) || [];
 
   const [selectedVideoIds, setSelectedVideoIds] = useState<Record<string, boolean>>({});
+  const [optimisticUnlockingVideoIds, setOptimisticUnlockingVideoIds] = useState<Record<string, boolean>>({});
   const [videoLibraryKind, setVideoLibraryKind] = useState<'full' | 'shorts'>('full');
   const [activeVideoLibraryJobId, setActiveVideoLibraryJobId] = useState<string | null>(null);
   const [handledVideoLibraryTerminalJobId, setHandledVideoLibraryTerminalJobId] = useState<string | null>(null);
@@ -190,6 +191,15 @@ export default function SourcePage() {
     [selectedVideoIds, sourceVideoItems],
   );
 
+  const clearOptimisticUnlocking = (keys: string[]) => {
+    if (keys.length === 0) return;
+    setOptimisticUnlockingVideoIds((previous) => {
+      const next = { ...previous };
+      for (const key of keys) delete next[key];
+      return next;
+    });
+  };
+
   const videoLibraryGenerateMutation = useMutation({
     mutationFn: (items: SourcePageVideoLibraryItem[]) => unlockSourcePageVideos({
       platform,
@@ -202,10 +212,12 @@ export default function SourcePage() {
         thumbnail_url: item.thumbnail_url,
       })),
     }),
-    onSuccess: (data) => {
+    onSuccess: (data, _items, context) => {
       if (data.job_id) {
         setActiveVideoLibraryJobId(data.job_id);
         setHandledVideoLibraryTerminalJobId(null);
+      } else {
+        clearOptimisticUnlocking(context?.optimisticKeys || []);
       }
       setSelectedVideoIds({});
       queryClient.invalidateQueries({ queryKey: ['source-page-videos', platform, externalId, user?.id] });
@@ -216,12 +228,24 @@ export default function SourcePage() {
           : `Ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}.`,
       });
     },
-    onError: (error) => {
+    onError: (error, _items, context) => {
       toast({
         title: 'Unlock failed',
         description: getSourceVideoLibraryErrorMessage(error, 'Could not start source video unlock.'),
         variant: 'destructive',
       });
+      clearOptimisticUnlocking(context?.optimisticKeys || []);
+    },
+    onMutate: (items) => {
+      const optimisticKeys = items.map((item) => getVideoSelectionKey(item));
+      setOptimisticUnlockingVideoIds((previous) => {
+        const next = { ...previous };
+        for (const key of optimisticKeys) {
+          next[key] = true;
+        }
+        return next;
+      });
+      return { optimisticKeys };
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
@@ -269,6 +293,7 @@ export default function SourcePage() {
     queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
 
     if (job.status === 'succeeded') {
+      setOptimisticUnlockingVideoIds({});
       toast({
         title: 'Video Library unlock finished',
         description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${Math.max(0, job.processed_count - job.inserted_count - job.skipped_count)}.`,
@@ -276,6 +301,7 @@ export default function SourcePage() {
       return;
     }
 
+    setOptimisticUnlockingVideoIds({});
     toast({
       title: 'Video Library unlock failed',
       description: job.error_message || 'Could not complete source video unlock.',
@@ -552,6 +578,7 @@ export default function SourcePage() {
                             {sourceVideoItems.map((item) => {
                               const key = getVideoSelectionKey(item);
                               const checked = Boolean(selectedVideoIds[key]);
+                              const isUnlocking = Boolean(item.unlock_in_progress) || Boolean(optimisticUnlockingVideoIds[key]);
                               const createdLabel = item.published_at ? formatRelativeShort(item.published_at) : 'Unknown time';
 
                               return (
@@ -562,7 +589,7 @@ export default function SourcePage() {
                                       disabled={
                                         !canUnlockSourceVideos
                                         || item.already_exists_for_user
-                                        || item.unlock_in_progress
+                                        || isUnlocking
                                         || item.unlock_status === 'ready'
                                         || videoLibraryGenerateMutation.isPending
                                       }
@@ -586,9 +613,9 @@ export default function SourcePage() {
                                             Ready
                                           </Badge>
                                         ) : null}
-                                        {item.unlock_in_progress ? (
+                                        {isUnlocking ? (
                                           <Badge variant="secondary" className="h-5 px-2 text-[10px]">
-                                            Generating
+                                            Unlocking...
                                           </Badge>
                                         ) : null}
                                         {item.already_exists_for_user ? (
