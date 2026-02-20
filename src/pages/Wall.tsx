@@ -546,7 +546,8 @@ export default function Wall() {
 
   const unlockMutation = useMutation({
     mutationFn: async (item: ForYouLockedItem) => {
-      const externalId = String(item.sourcePageId || item.sourceChannelId || '').trim();
+      // Source-page API path key expects provider external id (YouTube channel id), not source_pages UUID.
+      const externalId = String(item.sourceChannelId || '').trim();
       if (!externalId) {
         throw new Error('Could not resolve source channel for unlock.');
       }
