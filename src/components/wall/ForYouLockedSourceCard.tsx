@@ -12,6 +12,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { formatRelativeShort } from '@/lib/timeFormat';
 
+const unlockCostFormatter = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 1,
+});
+
 type ForYouLockedSourceCardProps = {
   title: string;
   sourceChannelTitle: string | null;
@@ -83,7 +87,7 @@ export function ForYouLockedSourceCard({
                 {isUnlocking ? 'Unlocking...' : 'Unlock available'}
               </Badge>
               <span className="inline-flex h-6 items-center rounded-full border border-border/60 bg-muted/40 px-2.5 text-[11px] text-muted-foreground">
-                Cost {unlockCost.toFixed(3)} cr
+                Cost {unlockCostFormatter.format(unlockCost)} cr
               </span>
             </div>
 
@@ -110,7 +114,7 @@ export function ForYouLockedSourceCard({
           <AlertDialogHeader>
             <AlertDialogTitle>Unlock this blueprint?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will spend {unlockCost.toFixed(3)} credits to unlock and generate it.
+              This will spend {unlockCostFormatter.format(unlockCost)} credits to unlock and generate it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

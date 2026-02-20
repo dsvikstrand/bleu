@@ -43,6 +43,10 @@ function formatFollowerCount(value: number) {
   return `${value.toLocaleString()} followers`;
 }
 
+const unlockCostFormatter = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 1,
+});
+
 function getSourcePageErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiRequestError) {
     switch (error.errorCode) {
@@ -575,7 +579,7 @@ export default function SourcePage() {
                                         </a>
                                         {canUnlockSourceVideos ? (
                                           <Badge variant="outline" className="h-5 px-2 text-[10px]">
-                                            Cost {Number(item.unlock_cost || 0).toFixed(3)} cr
+                                            Cost {unlockCostFormatter.format(Number(item.unlock_cost || 0))} cr
                                           </Badge>
                                         ) : null}
                                         {item.unlock_status === 'ready' ? (

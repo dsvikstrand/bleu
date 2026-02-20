@@ -42,6 +42,9 @@ import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
 
 const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 'active' && channel.isJoinEnabled);
 const CHANNEL_NAME_BY_SLUG = new Map(CHANNELS_CATALOG.map((channel) => [channel.slug, channel.name]));
+const unlockCostFormatter = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 1,
+});
 
 function getUnlockActionErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiRequestError) {
@@ -617,7 +620,7 @@ export function MyFeedTimeline({
                             {isUnlocking ? 'Unlocking...' : 'Unlock Blueprint'}
                           </Button>
                           <span className="inline-flex items-center text-xs text-muted-foreground">
-                            Cost {Number(item.source?.unlockCost || 0).toFixed(3)} cr
+                            Cost {unlockCostFormatter.format(Number(item.source?.unlockCost || 0))} cr
                           </span>
                           {item.source?.readyBlueprintId ? (
                             <Link
