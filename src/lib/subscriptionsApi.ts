@@ -66,13 +66,43 @@ async function getAuthHeader(): Promise<Record<string, string>> {
   return { Authorization: `Bearer ${token}` };
 }
 
+async function getRefreshedAuthHeader(): Promise<Record<string, string>> {
+  const { data, error } = await supabase.auth.refreshSession();
+  const token = data.session?.access_token;
+  if (error || !token) {
+    throw new ApiRequestError(401, 'Session expired or invalid. Please sign in again.', 'AUTH_REQUIRED');
+  }
+  return { Authorization: `Bearer ${token}` };
+}
+
+async function parseApiResponse<T>(response: Response): Promise<ApiEnvelope<T> | null> {
+  return (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
+}
+
+function getApiErrorMessage<T>(response: Response, json: ApiEnvelope<T> | null) {
+  if (response.status === 401) return 'Session expired or invalid. Please sign in again.';
+  const fallback = `Request failed (${response.status})`;
+  if (!json) return fallback;
+  const maybeError = (json as unknown as { error?: string }).error;
+  return json.message || maybeError || fallback;
+}
+
+function getApiErrorCode<T>(json: ApiEnvelope<T> | null): string | null {
+  if (!json) return null;
+  return json.error_code || (json as unknown as { error?: string }).error || null;
+}
+
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<ApiEnvelope<T>> {
+  return apiRequestInternal(path, init, false);
+}
+
+async function apiRequestInternal<T>(path: string, init: RequestInit | undefined, refreshed: boolean): Promise<ApiEnvelope<T>> {
   const base = getApiBase();
   if (!base) {
     throw new ApiRequestError(503, 'Backend API is not configured.', 'API_NOT_CONFIGURED');
   }
 
-  const authHeader = await getAuthHeader();
+  const authHeader = refreshed ? await getRefreshedAuthHeader() : await getAuthHeader();
   const response = await fetch(`${base}${path}`, {
     ...init,
     headers: {
@@ -82,20 +112,24 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<ApiEnvel
     },
   });
 
-  const json = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
+  if (response.status === 401 && !refreshed) {
+    return apiRequestInternal(path, init, true);
+  }
+
+  const json = await parseApiResponse<T>(response);
   if (!response.ok || !json) {
     throw new ApiRequestError(
       response.status,
-      json?.message || `Request failed (${response.status})`,
-      json?.error_code || null,
+      getApiErrorMessage(response, json),
+      getApiErrorCode(json),
       json?.data ?? null,
     );
   }
   if (!json.ok) {
     throw new ApiRequestError(
       response.status,
-      json.message || 'Request failed.',
-      json.error_code || null,
+      getApiErrorMessage(response, json),
+      getApiErrorCode(json),
       json.data ?? null,
     );
   }

@@ -462,19 +462,38 @@ app.use((req, res, next) => {
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
   if (!token) {
     if (allowsAnonymous) return next();
+    console.warn('[auth] unauthorized_request_missing_token', {
+      method: req.method,
+      path: req.path,
+    });
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   supabaseClient.auth.getUser(token)
     .then(({ data, error }) => {
       if (error || !data.user) {
+        console.warn('[auth] unauthorized_request_invalid_token', {
+          method: req.method,
+          path: req.path,
+          reason: error?.message || 'no_user',
+          token_length: token.length,
+        });
         return res.status(401).json({ error: 'Unauthorized' });
       }
       res.locals.user = data.user;
       res.locals.authToken = token;
       return next();
     })
-    .catch(() => res.status(401).json({ error: 'Unauthorized' }));
+    .catch((err: unknown) => {
+      const reason = err instanceof Error ? err.message : 'lookup_failed';
+      console.warn('[auth] unauthorized_request_lookup_failed', {
+        method: req.method,
+        path: req.path,
+        reason,
+        token_length: token.length,
+      });
+      return res.status(401).json({ error: 'Unauthorized' });
+    });
 });
 
 const InventoryRequestSchema = z.object({
