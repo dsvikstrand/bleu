@@ -69,6 +69,9 @@ a57) [have] Subscription auto-ingestion now writes unlockable My Feed rows (`my_
 a58) [have] Source-video unlock throttling now uses soft request caps (burst+sustained) instead of hard cooldown, and frontend credit meter refreshes immediately after unlock actions.
 a59) [have] `/wall` scope split is active: `For You` is now the subscribed-source stream (locked + unlocked), while `Your channels` keeps the previous followed-channel ranking behavior.
 a60) [have] Explore search now supports `Sources` results (app Source Pages only), with dedicated filter and grouped section in `All` results.
+a61) [have] Unlock activity status is now unified across Home `For You`, Source Page `Video Library`, and `My Feed` with shared job-resume behavior (`latest-mine` scope: `source_item_unlock_generation`).
+a62) [have] Credits dropdown now surfaces refill timing (`next +1`) and latest ledger activity summary for clearer unlock debit/refund visibility.
+a63) [have] Home now includes a first-time dismissible scope helper clarifying `For You` vs `Your channels`.
 
 ## Core Model
 b1) `Source Item`

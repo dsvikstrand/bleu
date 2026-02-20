@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { config } from '@/config/runtime';
 
-type CreditsResponse = {
+export type CreditsResponse = {
   remaining: number;
   limit: number;
   resetAt: string;
@@ -12,6 +12,53 @@ type CreditsResponse = {
   refill_rate_per_sec?: number;
   seconds_to_full?: number;
 };
+
+export type AiCreditsView = CreditsResponse & {
+  displayBalance: number;
+  displayCapacity: number;
+  secondsToNextCredit: number | null;
+  nextRefillLabel: string;
+};
+
+function formatDurationShort(totalSeconds: number) {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(seconds / 60);
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+  }
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
+}
+
+function toAiCreditsView(credits: CreditsResponse): AiCreditsView {
+  const displayBalance = Number(credits.balance ?? credits.remaining ?? 0);
+  const displayCapacity = Math.max(0.001, Number(credits.capacity ?? credits.limit ?? 0));
+  const refillRate = Math.max(0, Number(credits.refill_rate_per_sec ?? 0));
+  const atCapacity = !credits.bypass && displayBalance >= displayCapacity - 0.0005;
+  const secondsPerCredit = refillRate > 0 ? Math.max(1, Math.ceil(1 / refillRate)) : null;
+  const secondsToNextCredit = credits.bypass
+    ? null
+    : atCapacity
+      ? 0
+      : secondsPerCredit;
+  const nextRefillLabel = credits.bypass
+    ? 'Unlimited'
+    : atCapacity
+      ? 'Full'
+      : secondsToNextCredit === null
+        ? 'Refill unknown'
+        : `+1 in ${formatDurationShort(secondsToNextCredit)}`;
+
+  return {
+    ...credits,
+    displayBalance,
+    displayCapacity,
+    secondsToNextCredit,
+    nextRefillLabel,
+  };
+}
 
 function toFallbackCreditsFromWallet(wallet: {
   balance: number;
@@ -101,8 +148,9 @@ export function useAiCredits(enabled: boolean) {
   return useQuery({
     queryKey: ['ai-credits'],
     queryFn: fetchCredits,
-    enabled: enabled && !!config.agenticBackendUrl,
+    enabled,
     staleTime: 15_000,
     refetchInterval: 15_000,
+    select: toAiCreditsView,
   });
 }

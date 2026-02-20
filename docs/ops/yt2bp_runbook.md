@@ -35,6 +35,7 @@
   - `POST /api/source-pages/:platform/:externalId/videos/generate` (compatibility alias to `/videos/unlock`)
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
+  - Frontend trust status now resumes unlock jobs via `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation` after reload.
 - Profile feed read endpoint:
   - `GET /api/profile/:userId/feed` (optional auth; public profiles readable, private profiles owner-only)
 
@@ -242,6 +243,7 @@ Safe defaults:
   1) Check `/api/credits` response fields (`balance`, `capacity`, `refill_rate_per_sec`, `seconds_to_full`).
   2) Confirm wallet env defaults are set as expected (`CREDIT_WALLET_*`).
   3) Verify user has active subscriptions on the source page (cost is subscriber-based and can drop as followers increase).
+  4) Verify `credit_ledger` latest rows for the user (`hold/refund/settle`) match expected unlock attempts.
 
 ### `UNLOCK_RESERVATION_EXPIRED` or `UNLOCK_GENERATION_FAILED`
 - Meaning: unlock reservation expired or queued generation failed; held credits should be refunded.

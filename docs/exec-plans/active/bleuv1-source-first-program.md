@@ -220,6 +220,11 @@ Rules:
   - Explore adds a dedicated `Sources` filter and includes a `Sources` section in `All` results.
   - backend adds additive public endpoint `GET /api/source-pages/search` (app source-pages only, no schema changes).
   - source cards are minimal and link directly to `/s/:platform/:externalId`.
+- Unlock trust pass (2026-02-20):
+  - shared frontend unlock tracker now drives status cards on Home `For You`, Source Page `Video Library`, and `My Feed`.
+  - unlock progress resumes after reload via latest-mine lookup for `source_item_unlock_generation`.
+  - user-menu credits now show refill timing plus latest ledger action summary for hold/settle/refund visibility.
+  - Home now includes a first-time dismissible helper clarifying `For You` vs `Your channels`.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

@@ -44,6 +44,7 @@
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
     - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status labels (`Posted to <Channel>`, `Publishing...`, or `In My Feed`) with a unified `Blueprint` badge.
+    - unlock activity status now uses a shared frontend tracker and compact status card across Home `For You`, Source Page `Video Library`, and `My Feed`.
     - `My Feed` subscription notices render avatar and optional banner background; card click opens a details popup with confirm-gated `Unsubscribe`.
     - subscription notice details popup is intentionally minimal (relative time + unsubscribe only).
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
@@ -55,6 +56,7 @@
     - authenticated `Video Library` section for creator back-catalog selection (`select -> unlock -> async generation`) with two filters: `Full videos` and `Shorts` (`<=60s` threshold).
     - source blueprint feed is now live: public-only channel-published cards, deduped by source video (`source_item_id`), newest-first, with `Load more` cursor pagination.
     - source feed cards are Home-style read-only (`open blueprint` on card click, no like/comment/share controls in this step).
+    - reload-resume trust behavior: active unlock jobs are restored from `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation`.
     - active subscription rows are copy-light; avatar is the channel-open link target.
     - includes YouTube OAuth connect + bulk import flow (`Connect YouTube` -> preview -> select channels -> import).
     - import selection defaults to none selected; users explicitly choose channels to import.
@@ -65,6 +67,7 @@
     - marks completion only after successful import (`imported` or `reactivated` > 0)
     - skip path records non-blocking onboarding state.
   - User menu includes a direct `Subscriptions` shortcut to `/subscriptions`; profile tab keeps a lightweight owner-only list with `Unsubscribe`.
+  - User menu credit panel shows refill timing (`next +1`) plus latest wallet ledger activity summary when available.
 - Backend:
   - Express server in `server/index.ts`.
   - `/api/youtube-to-blueprint` generation pipeline.

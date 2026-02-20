@@ -12,8 +12,8 @@ interface HelpOverlayProps {
 const FLOW_STEPS = [
   { label: 'Pull From YouTube', hint: 'Use a single video URL to generate a blueprint draft.' },
   { label: 'Save To My Feed', hint: 'Each item lands in your personal timeline first.' },
-  { label: 'Add Insight or Remix', hint: 'Refine and add context before sharing.' },
-  { label: 'Auto Channel Publish', hint: 'Quality/safety checks run before public distribution.' },
+  { label: 'Unlock Source Videos', hint: 'Use credits to unlock locked source cards when generation is needed.' },
+  { label: 'Auto Channel Publish', hint: 'Generated blueprints are auto-routed to channels after checks.' },
   { label: 'Community Feedback', hint: 'Votes and comments keep Home relevant.' },
 ];
 
@@ -22,7 +22,7 @@ const FEATURE_CARDS = [
     title: 'My Feed',
     description: 'My Feed is your personal pulled-content lane. Everything lands here first.',
     icon: Sparkles,
-    bullets: ['Private-by-default intake', 'Review before sharing', 'Keeps rejected channel items accessible'],
+    bullets: ['Personal source intake', 'Unlock and open source cards', 'Keeps rejected items accessible'],
   },
   {
     title: 'Blueprints',
@@ -40,7 +40,7 @@ const FEATURE_CARDS = [
     title: 'Community',
     description: 'Home has two lanes: For You (subscribed sources) and Your channels (followed channels).',
     icon: Users,
-    bullets: ['Vote and comment', 'Promote high-signal content', 'Discuss practical value'],
+    bullets: ['For You = latest source stream', 'Your channels = followed-channel lane', 'Vote and comment on open blueprints'],
   },
 ];
 
@@ -79,7 +79,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       Here’s the goal: turn source content into actionable blueprints you can consume
                       in bite-sized form. My Feed is your personal intake lane, and Home gives you
-                      For You (subscribed sources) plus Your channels (followed channels) after quality checks.
+                      For You (latest subscribed-source stream) plus Your channels (followed channels, latest/trending) after quality checks.
                       You can remix insights, auto-publish keeps useful items moving,
                       and community feedback helps surface the best content.
                     </p>
@@ -93,8 +93,8 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                         <Sparkles className="h-4 w-4" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold">The Flow</p>
-                        <p className="text-xs text-muted-foreground">Source pull → My Feed → unlock/publish → Home lanes</p>
+                      <p className="text-sm font-semibold">The Flow</p>
+                        <p className="text-xs text-muted-foreground">Source pull → My Feed → unlock/generate → Home lanes</p>
                       </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -141,7 +141,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <div>
                       <p className="text-sm font-semibold">Tip for first‑time users</p>
                       <p className="text-xs text-muted-foreground">
-                        Start with YouTube pull, save to My Feed, and let auto-publish route eligible items to Home.
+                        Start with subscribed sources in For You, unlock one item, then open the generated blueprint in Home.
                       </p>
                     </div>
                     <Button

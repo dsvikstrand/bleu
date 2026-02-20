@@ -29,10 +29,12 @@ import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useMyFeed } from '@/hooks/useMyFeed';
 import { extractYouTubeVideoId } from '@/lib/sourceIdentity';
-import { ApiRequestError, getIngestionJob, type IngestionJobStatus } from '@/lib/subscriptionsApi';
+import { ApiRequestError } from '@/lib/subscriptionsApi';
 import { unlockSourcePageVideos } from '@/lib/sourcePagesApi';
 import { WallBlueprintCard } from '@/components/wall/WallBlueprintCard';
 import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
+import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
+import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 
 interface BlueprintPost {
   id: string;
@@ -100,7 +102,16 @@ function getForYouErrorMessage(error: unknown, fallback: string) {
     if (error.errorCode === 'INSUFFICIENT_CREDITS') {
       return 'Not enough credits to unlock this blueprint yet.';
     }
+    if (error.errorCode === 'RATE_LIMITED') {
+      return 'Too many unlock requests, retry shortly.';
+    }
+    if (error.errorCode === 'SOURCE_PAGE_NOT_FOUND') {
+      return 'Source page missing for this item. Try opening the source first.';
+    }
     return error.message || fallback;
+  }
+  if (error instanceof Error && /source video id/i.test(error.message)) {
+    return 'Could not resolve source video id for this item. Try opening it from Source Page.';
   }
   return error instanceof Error ? error.message : fallback;
 }
@@ -113,9 +124,8 @@ export default function Wall() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [scopeOpen, setScopeOpen] = useState(false);
   const [selectedTagSlug, setSelectedTagSlug] = useState<string | null>(null);
+  const [showScopeHelper, setShowScopeHelper] = useState(false);
   const [optimisticUnlockingSourceItemIds, setOptimisticUnlockingSourceItemIds] = useState<Record<string, boolean>>({});
-  const [activeUnlockJobId, setActiveUnlockJobId] = useState<string | null>(null);
-  const [terminalUnlockJobId, setTerminalUnlockJobId] = useState<string | null>(null);
   const { followedTags } = useTagFollows();
 
   const joinedChannelSlugs = useMemo(() => {
@@ -184,6 +194,15 @@ export default function Wall() {
     ? forYouFilterParam
     : 'all';
 
+  useEffect(() => {
+    if (!user) {
+      setShowScopeHelper(false);
+      return;
+    }
+    const dismissed = localStorage.getItem('home_scope_helper_dismissed_v1') === '1';
+    setShowScopeHelper(!dismissed);
+  }, [user?.id, user]);
+
   const updateSearchParams = (updates: { scope?: string; sort?: FeedSort; state?: ForYouFilter | null }) => {
     const next = new URLSearchParams(searchParams);
     if (updates.scope) next.set('scope', updates.scope);
@@ -191,6 +210,11 @@ export default function Wall() {
     if (updates.state === null) next.delete('state');
     else if (updates.state) next.set('state', updates.state);
     setSearchParams(next, { replace: true });
+  };
+
+  const dismissScopeHelper = () => {
+    localStorage.setItem('home_scope_helper_dismissed_v1', '1');
+    setShowScopeHelper(false);
   };
 
   useEffect(() => {
@@ -614,6 +638,41 @@ export default function Wall() {
     },
   });
 
+  const forYouUnlockTracker = useSourceUnlockJobTracker({
+    userId: user?.id,
+    enabled: Boolean(user) && isForYouScope,
+    scope: 'source_item_unlock_generation',
+    onTerminal: (job) => {
+      setOptimisticUnlockingSourceItemIds({});
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] }),
+        queryClient.invalidateQueries({ queryKey: ['wall-for-you-blueprint-stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
+        queryClient.refetchQueries({ queryKey: ['ai-credits'], exact: false }),
+      ]);
+
+      if (job.status === 'succeeded') {
+        toast({
+          title: 'Unlock complete',
+          description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${Math.max(0, job.processed_count - job.inserted_count - job.skipped_count)}.`,
+        });
+        return;
+      }
+
+      toast({
+        title: 'Unlock failed',
+        description: job.error_message || 'Could not complete unlock generation.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!isForYouScope || !user) return;
+    void forYouUnlockTracker.resume();
+  }, [forYouUnlockTracker.resume, isForYouScope, user]);
+
   const unlockMutation = useMutation({
     mutationFn: async (item: ForYouLockedItem) => {
       // Source-page API path key expects provider external id (YouTube channel id), not source_pages UUID.
@@ -655,8 +714,7 @@ export default function Wall() {
     },
     onSuccess: async (result, item) => {
       if (result.job_id) {
-        setActiveUnlockJobId(result.job_id);
-        setTerminalUnlockJobId(null);
+        forYouUnlockTracker.start(result.job_id);
         logP3Event({
           eventName: 'wall_for_you_unlock_queued',
           surface: 'wall',
@@ -712,59 +770,12 @@ export default function Wall() {
       });
     },
     onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
+        queryClient.refetchQueries({ queryKey: ['ai-credits'], exact: false }),
+      ]);
     },
   });
-
-  const unlockJobQuery = useQuery({
-    queryKey: ['wall-for-you-unlock-job', user?.id, activeUnlockJobId],
-    enabled: isForYouScope && !!activeUnlockJobId,
-    queryFn: () => getIngestionJob(activeUnlockJobId as string),
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return 3_000;
-      const status = data.status as IngestionJobStatus;
-      return status === 'succeeded' || status === 'failed' ? false : 3_000;
-    },
-  });
-
-  useEffect(() => {
-    const job = unlockJobQuery.data;
-    if (!job) return;
-    if (job.status !== 'succeeded' && job.status !== 'failed') return;
-    if (terminalUnlockJobId === job.job_id) return;
-
-    setTerminalUnlockJobId(job.job_id);
-    setActiveUnlockJobId(null);
-    setOptimisticUnlockingSourceItemIds({});
-
-    void Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] }),
-      queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] }),
-      queryClient.invalidateQueries({ queryKey: ['wall-for-you-blueprint-stats'] }),
-      queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
-    ]);
-
-    if (job.status === 'succeeded') {
-      toast({
-        title: 'Unlock complete',
-        description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}.`,
-      });
-      return;
-    }
-
-    toast({
-      title: 'Unlock failed',
-      description: job.error_message || 'Could not complete unlock generation.',
-      variant: 'destructive',
-    });
-  }, [
-    queryClient,
-    toast,
-    unlockJobQuery.data,
-    terminalUnlockJobId,
-    user?.id,
-  ]);
 
   const handleLike = (blueprintId: string, currentlyLiked: boolean) => {
     if (!user) {
@@ -832,10 +843,23 @@ export default function Wall() {
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
             <h1 className="text-2xl font-semibold">Live blueprint stream</h1>
             <p className="text-sm text-muted-foreground">
-              For You shows subscribed sources, while Your channels keeps your followed-channel lane.
+              For You is your subscribed-source stream (locked + open). Your channels is your followed-channel lane (latest/trending).
             </p>
           </div>
         </section>
+
+        {user && showScopeHelper ? (
+          <div className="mb-4 mx-3 sm:mx-4 border border-border/40 px-3 py-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                Tip: use <span className="font-medium text-foreground">For You</span> to unlock source videos directly, and <span className="font-medium text-foreground">Your channels</span> to browse followed channels.
+              </p>
+              <Button size="sm" variant="ghost" className="h-7 px-2.5 text-xs" onClick={dismissScopeHelper}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {!user && (
           <div className="mb-6 mx-3 sm:mx-4 border border-border/40 px-3 py-4">
@@ -979,7 +1003,7 @@ export default function Wall() {
                 <div>
                   <p className="text-sm font-semibold">Join channels to shape this lane</p>
                   <p className="text-xs text-muted-foreground">
-                    Start with a few channels and Your channels will prioritize those lanes.
+                    Follow channels to personalize this lane.
                   </p>
                 </div>
                 <Button asChild size="sm">
@@ -1001,6 +1025,16 @@ export default function Wall() {
                 </Button>
               </div>
             )}
+
+            {isForYouScope && forYouUnlockTracker.activity.visible ? (
+              <div className="mb-3 mx-3 sm:mx-4">
+                <UnlockActivityCard
+                  title="For You unlock"
+                  activity={forYouUnlockTracker.activity}
+                  onClear={!forYouUnlockTracker.activity.isActive ? forYouUnlockTracker.clear : undefined}
+                />
+              </div>
+            ) : null}
 
             {isForYouScope ? (
               isForYouLoading ? (
@@ -1080,7 +1114,7 @@ export default function Wall() {
                       <div>
                         <h3 className="font-semibold">No source items yet</h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Subscribe to a source and new videos will appear here for unlock.
+                          Subscribe to a source to unlock videos here.
                         </p>
                       </div>
                       <div className="flex gap-2">

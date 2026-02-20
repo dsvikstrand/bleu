@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,10 +25,9 @@ import { buildFeedSummary } from '@/lib/feedPreview';
 import { getMyFeedStateLabel, type MyFeedItemState } from '@/lib/myFeedState';
 import { publishCandidate, rejectCandidate, submitCandidateAndEvaluate } from '@/lib/myFeedApi';
 import {
+  ApiRequestError,
   acceptMyFeedPendingItem,
   deactivateSourceSubscriptionByChannelId,
-  getIngestionJob,
-  type IngestionJobStatus,
   skipMyFeedPendingItem,
 } from '@/lib/subscriptionsApi';
 import { unlockSourcePageVideos } from '@/lib/sourcePagesApi';
@@ -38,9 +37,30 @@ import { formatRelativeShort } from '@/lib/timeFormat';
 import { config } from '@/config/runtime';
 import type { MyFeedItemView } from '@/hooks/useMyFeed';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
+import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
+import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
 
 const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 'active' && channel.isJoinEnabled);
 const CHANNEL_NAME_BY_SLUG = new Map(CHANNELS_CATALOG.map((channel) => [channel.slug, channel.name]));
+
+function getUnlockActionErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiRequestError) {
+    if (error.errorCode === 'INSUFFICIENT_CREDITS') {
+      return 'Not enough credits right now.';
+    }
+    if (error.errorCode === 'RATE_LIMITED') {
+      return 'Too many unlock requests, retry shortly.';
+    }
+    if (error.errorCode === 'SOURCE_PAGE_NOT_FOUND') {
+      return 'Source page missing for this item. Try opening it from source page first.';
+    }
+    return error.message || fallback;
+  }
+  if (error instanceof Error && /source video id/i.test(error.message)) {
+    return 'Could not resolve source video id for this item.';
+  }
+  return error instanceof Error ? error.message : fallback;
+}
 
 type MyFeedTimelineProps = {
   items: MyFeedItemView[] | undefined;
@@ -71,11 +91,45 @@ export function MyFeedTimeline({
   const [subscriptionDialogItemId, setSubscriptionDialogItemId] = useState<string | null>(null);
   const [unsubscribeDialogItemId, setUnsubscribeDialogItemId] = useState<string | null>(null);
   const [optimisticUnlockingItemIds, setOptimisticUnlockingItemIds] = useState<Record<string, boolean>>({});
-  const [activeUnlockJobId, setActiveUnlockJobId] = useState<string | null>(null);
-  const [activeUnlockItemId, setActiveUnlockItemId] = useState<string | null>(null);
-  const [handledUnlockTerminalJobId, setHandledUnlockTerminalJobId] = useState<string | null>(null);
 
   const canMutate = isOwnerView && !!user;
+
+  const unlockTracker = useSourceUnlockJobTracker({
+    userId: user?.id,
+    enabled: canMutate,
+    scope: 'source_item_unlock_generation',
+    onTerminal: (job) => {
+      invalidateFeedQueries();
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['source-page-videos'] }),
+        queryClient.invalidateQueries({ queryKey: ['source-page-blueprints'] }),
+        queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
+        queryClient.refetchQueries({ queryKey: ['ai-credits'], exact: false }),
+      ]);
+
+      setOptimisticUnlockingItemIds({});
+
+      if (job.status === 'succeeded') {
+        toast({
+          title: 'Unlock finished',
+          description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${Math.max(0, job.processed_count - job.inserted_count - job.skipped_count)}.`,
+        });
+        return;
+      }
+
+      toast({
+        title: 'Unlock failed',
+        description: job.error_message || 'Could not complete unlock generation.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!canMutate) return;
+    void unlockTracker.resume();
+  }, [canMutate, unlockTracker.resume]);
 
   const invalidateFeedQueries = () => {
     if (user?.id) {
@@ -336,8 +390,7 @@ export function MyFeedTimeline({
       queryClient.invalidateQueries({ queryKey: ['source-page-videos'] });
       queryClient.invalidateQueries({ queryKey: ['source-page-blueprints'] });
       if (result.job_id) {
-        setActiveUnlockJobId(result.job_id);
-        setHandledUnlockTerminalJobId(null);
+        unlockTracker.start(result.job_id);
         toast({
           title: 'Unlock queued',
           description: `Queued ${result.queued_count}, ready ${result.ready_count}, in progress ${result.in_progress_count}. This card will update automatically.`,
@@ -351,7 +404,6 @@ export function MyFeedTimeline({
           return next;
         });
       }
-      setActiveUnlockItemId(null);
       toast({
         title: 'Unlock status updated',
         description: result.ready_count > 0
@@ -362,7 +414,7 @@ export function MyFeedTimeline({
     onError: (error, item) => {
       toast({
         title: 'Unlock failed',
-        description: error instanceof Error ? error.message : 'Could not start unlock.',
+        description: getUnlockActionErrorMessage(error, 'Could not start unlock.'),
         variant: 'destructive',
       });
       if (item?.id) {
@@ -372,74 +424,18 @@ export function MyFeedTimeline({
           return next;
         });
       }
-      setActiveUnlockItemId(null);
     },
     onMutate: (item) => {
       setOptimisticUnlockingItemIds((prev) => ({ ...prev, [item.id]: true }));
-      setActiveUnlockItemId(item.id);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
+      queryClient.refetchQueries({ queryKey: ['ai-credits'], exact: false });
     },
   });
-
-  const unlockJobQuery = useQuery({
-    queryKey: ['my-feed-unlock-job', user?.id, activeUnlockJobId],
-    enabled: Boolean(user) && Boolean(activeUnlockJobId),
-    queryFn: () => getIngestionJob(activeUnlockJobId as string),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status as IngestionJobStatus | undefined;
-      if (!status) return 3500;
-      return status === 'queued' || status === 'running' ? 3500 : false;
-    },
-  });
-
-  useEffect(() => {
-    const job = unlockJobQuery.data;
-    if (!job?.job_id) return;
-    if (job.status !== 'succeeded' && job.status !== 'failed') return;
-    if (handledUnlockTerminalJobId === job.job_id) return;
-
-    setHandledUnlockTerminalJobId(job.job_id);
-    invalidateFeedQueries();
-    queryClient.invalidateQueries({ queryKey: ['source-page-videos'] });
-    queryClient.invalidateQueries({ queryKey: ['source-page-blueprints'] });
-    queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
-    queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
-
-    if (activeUnlockItemId) {
-      setOptimisticUnlockingItemIds((prev) => {
-        const next = { ...prev };
-        delete next[activeUnlockItemId];
-        return next;
-      });
-      setActiveUnlockItemId(null);
-    }
-    setActiveUnlockJobId(null);
-
-    if (job.status === 'succeeded') {
-      toast({
-        title: 'Unlock finished',
-        description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${Math.max(0, job.processed_count - job.inserted_count - job.skipped_count)}.`,
-      });
-      return;
-    }
-
-    toast({
-      title: 'Unlock failed',
-      description: job.error_message || 'Could not complete unlock generation.',
-      variant: 'destructive',
-    });
-  }, [
-    activeUnlockItemId,
-    handledUnlockTerminalJobId,
-    queryClient,
-    toast,
-    unlockJobQuery.data,
-    user?.id,
-  ]);
 
   const hasItems = (items || []).length > 0;
+  const showUnlockActivity = canMutate && unlockTracker.activity.visible;
 
   const submissionDialogItem = useMemo(
     () => (items || []).find((item) => item.id === submissionDialogItemId) || null,
@@ -466,21 +462,37 @@ export function MyFeedTimeline({
 
   if (!hasItems) {
     return (
-      <Card className="border-border/40">
-        <CardContent className="p-4 space-y-3">
-          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-          {emptyActionHref && emptyActionLabel ? (
-            <Button asChild size="sm" variant="outline">
-              <Link to={emptyActionHref}>{emptyActionLabel}</Link>
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
+      <div className="space-y-3">
+        {showUnlockActivity ? (
+          <UnlockActivityCard
+            title="Unlock activity"
+            activity={unlockTracker.activity}
+            onClear={!unlockTracker.activity.isActive ? unlockTracker.clear : undefined}
+          />
+        ) : null}
+        <Card className="border-border/40">
+          <CardContent className="p-4 space-y-3">
+            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+            {emptyActionHref && emptyActionLabel ? (
+              <Button asChild size="sm" variant="outline">
+                <Link to={emptyActionHref}>{emptyActionLabel}</Link>
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {showUnlockActivity ? (
+        <UnlockActivityCard
+          title="Unlock activity"
+          activity={unlockTracker.activity}
+          onClear={!unlockTracker.activity.isActive ? unlockTracker.clear : undefined}
+        />
+      ) : null}
       {(items || []).map((item) => {
         const blueprint = item.blueprint;
         const source = item.source;

@@ -59,6 +59,7 @@ Execution mode:
 40. [have] Step 39 - Shared source unlock + refill credits (unlock cards, wallet ledger, no historical backfill)
 41. [have] Step 40 - Home scope split (`For You` subscribed-source stream + `Your channels` followed-channel feed parity)
 42. [have] Step 41 - Explore sources search (`Sources` filter + app source-page search results + source cards)
+43. [have] Step 42 - Unlock trust pass (shared unlock job activity + credit transparency + Home scope helper clarity)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -373,6 +374,24 @@ Completion evidence (2026-02-20)
 - Updated `src/pages/Wall.tsx` scope selector and query split (`for-you` personal source stream, `your-channels` legacy behavior).
 - Added mixed stream rendering with locked-source cards and unlocked blueprint cards on `For You`.
 - Wired wall-level unlock action + ingestion job polling + telemetry (`wall_for_you_unlock_*`) with query invalidation to transition locked -> blueprint.
+
+### Step 42 - Unlock trust pass (activity + credits + scope clarity)
+Scope
+- unify unlock job visibility across Home, Source Page, and My Feed.
+- improve credit clarity in dropdown (`next +1` and latest ledger event).
+- add first-time Home helper clarifying `For You` vs `Your channels`.
+
+Definition of done
+- unlock activity card appears consistently on all unlock-capable surfaces and resumes after reload.
+- unlock cards stay in `Unlocking...` until terminal job or explicit ready/in-progress response.
+- user menu credit panel shows refill timing and latest wallet activity when available.
+- Home helper strip is dismissible and persists dismissal in local storage.
+
+Completion evidence (2026-02-20)
+- Added shared hook `src/hooks/useSourceUnlockJobTracker.ts` and shared UI `src/components/shared/UnlockActivityCard.tsx`.
+- Replaced per-surface unlock polling logic in `src/pages/Wall.tsx`, `src/pages/SourcePage.tsx`, and `src/components/feed/MyFeedTimeline.tsx`.
+- Added `src/hooks/useCreditActivity.ts` and updated `src/components/shared/UserMenu.tsx` with `nextRefillLabel` and latest ledger summary.
+- Updated Home scope copy and added dismissible helper strip (`home_scope_helper_dismissed_v1`).
 
 ### Step 12 - Subscriptions management actions
 Scope

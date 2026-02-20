@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { config } from '@/config/runtime';
-import { ApiRequestError, getIngestionJob, type IngestionJobStatus } from '@/lib/subscriptionsApi';
+import { ApiRequestError } from '@/lib/subscriptionsApi';
 import {
   type SourcePageVideoLibraryItem,
   getSourcePage,
@@ -26,6 +26,8 @@ import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
+import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
+import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 
 function getInitials(title: string, fallback: string) {
   const raw = title.trim() || fallback.trim();
@@ -63,7 +65,7 @@ function getSourceVideoLibraryErrorMessage(error: unknown, fallback: string) {
       case 'AUTH_REQUIRED':
         return 'Sign in required.';
       case 'RATE_LIMITED':
-        return 'Video library is cooling down. Please retry shortly.';
+        return 'Too many unlock requests, retry shortly.';
       case 'SOURCE_VIDEO_LIST_FAILED':
         return 'Could not load source videos right now.';
       case 'SOURCE_VIDEO_GENERATE_INVALID_INPUT':
@@ -71,10 +73,15 @@ function getSourceVideoLibraryErrorMessage(error: unknown, fallback: string) {
       case 'SOURCE_VIDEO_GENERATE_FAILED':
         return 'Could not start unlock generation for selected videos.';
       case 'INSUFFICIENT_CREDITS':
-        return 'You need more credits. Wait for refill and retry.';
+        return 'Not enough credits right now.';
+      case 'SOURCE_PAGE_NOT_FOUND':
+        return 'Source page not found.';
       default:
         return error.message || fallback;
     }
+  }
+  if (error instanceof Error && /source video id/i.test(error.message)) {
+    return 'Could not resolve source video id for one or more selected items.';
   }
   return error instanceof Error ? error.message : fallback;
 }
@@ -164,8 +171,6 @@ export default function SourcePage() {
   const [selectedVideoIds, setSelectedVideoIds] = useState<Record<string, boolean>>({});
   const [optimisticUnlockingVideoIds, setOptimisticUnlockingVideoIds] = useState<Record<string, boolean>>({});
   const [videoLibraryKind, setVideoLibraryKind] = useState<'full' | 'shorts'>('full');
-  const [activeVideoLibraryJobId, setActiveVideoLibraryJobId] = useState<string | null>(null);
-  const [handledVideoLibraryTerminalJobId, setHandledVideoLibraryTerminalJobId] = useState<string | null>(null);
 
   const sourceVideosQuery = useInfiniteQuery({
     queryKey: ['source-page-videos', platform, externalId, user?.id, videoLibraryKind],
@@ -200,6 +205,41 @@ export default function SourcePage() {
     });
   };
 
+  const videoLibraryUnlockTracker = useSourceUnlockJobTracker({
+    userId: user?.id,
+    enabled: backendEnabled && isValidRoute && Boolean(user),
+    scope: 'source_item_unlock_generation',
+    onTerminal: (job) => {
+      setOptimisticUnlockingVideoIds({});
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['source-page-videos', platform, externalId, user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['source-page-blueprints', platform, externalId] }),
+        queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
+        queryClient.refetchQueries({ queryKey: ['ai-credits'], exact: false }),
+      ]);
+
+      if (job.status === 'succeeded') {
+        toast({
+          title: 'Video Library unlock finished',
+          description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${Math.max(0, job.processed_count - job.inserted_count - job.skipped_count)}.`,
+        });
+        return;
+      }
+
+      toast({
+        title: 'Video Library unlock failed',
+        description: job.error_message || 'Could not complete source video unlock.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!user) return;
+    void videoLibraryUnlockTracker.resume();
+  }, [user?.id, videoLibraryUnlockTracker.resume]);
+
   const videoLibraryGenerateMutation = useMutation({
     mutationFn: (items: SourcePageVideoLibraryItem[]) => unlockSourcePageVideos({
       platform,
@@ -214,8 +254,7 @@ export default function SourcePage() {
     }),
     onSuccess: (data, _items, context) => {
       if (data.job_id) {
-        setActiveVideoLibraryJobId(data.job_id);
-        setHandledVideoLibraryTerminalJobId(null);
+        videoLibraryUnlockTracker.start(data.job_id);
       } else {
         clearOptimisticUnlocking(context?.optimisticKeys || []);
       }
@@ -249,73 +288,10 @@ export default function SourcePage() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
+      queryClient.refetchQueries({ queryKey: ['ai-credits'], exact: false });
     },
   });
-
-  const videoLibraryJobQuery = useQuery({
-    queryKey: ['source-page-video-library-job', user?.id, activeVideoLibraryJobId],
-    enabled: Boolean(user) && Boolean(activeVideoLibraryJobId),
-    queryFn: () => getIngestionJob(activeVideoLibraryJobId as string),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status as IngestionJobStatus | undefined;
-      if (!status) return 3500;
-      return status === 'queued' || status === 'running' ? 3500 : false;
-    },
-  });
-
-  const videoLibraryJobStatus = (videoLibraryJobQuery.data?.status
-    || (activeVideoLibraryJobId ? 'queued' : null)) as IngestionJobStatus | null;
-  const videoLibraryJobProcessed = videoLibraryJobQuery.data?.processed_count || 0;
-  const videoLibraryJobInserted = videoLibraryJobQuery.data?.inserted_count || 0;
-  const videoLibraryJobSkipped = videoLibraryJobQuery.data?.skipped_count || 0;
-  const videoLibraryJobFailed = Math.max(0, videoLibraryJobProcessed - videoLibraryJobInserted - videoLibraryJobSkipped);
-  const videoLibraryJobRunning = videoLibraryJobStatus === 'queued' || videoLibraryJobStatus === 'running';
-  const videoLibraryJobLabel = videoLibraryJobStatus === 'succeeded'
-    ? 'Succeeded'
-    : videoLibraryJobStatus === 'failed'
-      ? 'Failed'
-      : videoLibraryJobStatus === 'running'
-        ? 'Running'
-        : videoLibraryJobStatus === 'queued'
-          ? 'Queued'
-          : null;
-
-  useEffect(() => {
-    const job = videoLibraryJobQuery.data;
-    if (!job?.job_id) return;
-    if (job.status !== 'succeeded' && job.status !== 'failed') return;
-    if (handledVideoLibraryTerminalJobId === job.job_id) return;
-
-    setHandledVideoLibraryTerminalJobId(job.job_id);
-    queryClient.invalidateQueries({ queryKey: ['source-page-videos', platform, externalId, user?.id] });
-    queryClient.invalidateQueries({ queryKey: ['source-page-blueprints', platform, externalId] });
-    queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
-    queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
-
-    if (job.status === 'succeeded') {
-      setOptimisticUnlockingVideoIds({});
-      toast({
-        title: 'Video Library unlock finished',
-        description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${Math.max(0, job.processed_count - job.inserted_count - job.skipped_count)}.`,
-      });
-      return;
-    }
-
-    setOptimisticUnlockingVideoIds({});
-    toast({
-      title: 'Video Library unlock failed',
-      description: job.error_message || 'Could not complete source video unlock.',
-      variant: 'destructive',
-    });
-  }, [
-    externalId,
-    handledVideoLibraryTerminalJobId,
-    platform,
-    queryClient,
-    toast,
-    user?.id,
-    videoLibraryJobQuery.data,
-  ]);
+  const videoLibraryJobRunning = videoLibraryUnlockTracker.activity.isActive;
 
   useEffect(() => {
     setSelectedVideoIds({});
@@ -531,18 +507,12 @@ export default function SourcePage() {
                         </p>
                       ) : null}
 
-                      {videoLibraryJobLabel ? (
-                        <div className="rounded-md border border-border/40 bg-muted/10 p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-medium">Video Library unlock</p>
-                            <Badge variant={videoLibraryJobStatus === 'failed' ? 'destructive' : 'secondary'}>
-                              {videoLibraryJobLabel}
-                            </Badge>
-                          </div>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Inserted {videoLibraryJobInserted}, skipped {videoLibraryJobSkipped}, failed {videoLibraryJobFailed}.
-                          </p>
-                        </div>
+                      {videoLibraryUnlockTracker.activity.visible ? (
+                        <UnlockActivityCard
+                          title="Video Library unlock"
+                          activity={videoLibraryUnlockTracker.activity}
+                          onClear={!videoLibraryUnlockTracker.activity.isActive ? videoLibraryUnlockTracker.clear : undefined}
+                        />
                       ) : null}
 
                       {!sourceVideosQuery.isFetching && sourceVideosQuery.error ? (
