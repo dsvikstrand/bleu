@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { FollowButton } from './FollowButton';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings, Calendar } from 'lucide-react';
+import { Settings, Calendar, Rss, RefreshCcw } from 'lucide-react';
 import type { PublicProfile } from '@/hooks/useUserProfile';
 
 interface ProfileHeaderProps {
@@ -42,12 +42,26 @@ export function ProfileHeader({ profile, onFollowersClick, onFollowingClick }: P
 
           <div className="flex gap-2">
             {isOwnProfile ? (
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/settings">
-                  <Settings className="h-4 w-4 mr-1" />
-                  Edit Profile
-                </Link>
-              </Button>
+              <>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/settings">
+                    <Settings className="h-4 w-4 mr-1" />
+                    Edit Profile
+                  </Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/subscriptions">
+                    <Rss className="h-4 w-4 mr-1" />
+                    Subscriptions
+                  </Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/subscriptions?refresh=1">
+                    <RefreshCcw className="h-4 w-4 mr-1" />
+                    Refresh
+                  </Link>
+                </Button>
+              </>
             ) : (
               <FollowButton targetUserId={profile.user_id} />
             )}

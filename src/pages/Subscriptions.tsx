@@ -189,6 +189,20 @@ export default function Subscriptions() {
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
+    if (searchParams.get('refresh') !== '1') return;
+    setIsRefreshDialogOpen(true);
+    setHasScannedRefreshCandidates(false);
+    setRefreshErrorText(null);
+    setRefreshCandidates([]);
+    setRefreshSelected({});
+    setRefreshScanErrors([]);
+    setRefreshCooldownFiltered(0);
+    const next = new URLSearchParams(searchParams);
+    next.delete('refresh');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
     const connectStatus = String(searchParams.get('yt_connect') || '').trim();
     if (!connectStatus) return;
 
@@ -746,23 +760,6 @@ export default function Subscriptions() {
             <p className="text-sm text-muted-foreground">
               Add channels here. New uploads from active subscriptions will land in My Feed automatically.
             </p>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() => handleAddSubscriptionDialogChange(true)}
-                disabled={!subscriptionsEnabled}
-              >
-                Add Subscription
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleRefreshDialogChange(true)}
-                disabled={!subscriptionsEnabled}
-              >
-                Refresh
-              </Button>
-            </div>
             {!subscriptionsEnabled ? (
               <p className="text-xs text-muted-foreground">
                 Subscription APIs require `VITE_AGENTIC_BACKEND_URL`.
@@ -776,6 +773,15 @@ export default function Subscriptions() {
             <CardTitle className="text-base">YouTube account</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={() => handleAddSubscriptionDialogChange(true)}
+                disabled={!subscriptionsEnabled}
+              >
+                Add Subscription
+              </Button>
+            </div>
             {!subscriptionsEnabled ? (
               <p className="text-sm text-muted-foreground">Connect requires `VITE_AGENTIC_BACKEND_URL`.</p>
             ) : youtubeConnectionQuery.isLoading ? (
