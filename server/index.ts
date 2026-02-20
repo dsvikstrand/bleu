@@ -62,7 +62,6 @@ import {
   countActiveSubscribersForSourcePage,
   ensureSourceItemUnlock,
   failUnlock,
-  findExpiredReservedUnlocks,
   getSourceItemUnlockBySourceItemId,
   getSourceItemUnlocksBySourceItemIds,
   markUnlockProcessing,
@@ -70,6 +69,8 @@ import {
   type SourceItemUnlockRow,
 } from './services/sourceUnlocks';
 import { refundReservation, reserveCredits, settleReservation } from './services/creditWallet';
+import { runUnlockReliabilitySweeps } from './services/unlockReliabilitySweeps';
+import { createUnlockTraceId, logUnlockEvent } from './services/unlockTrace';
 import {
   clampInt,
   getFailureTransition,
@@ -141,6 +142,13 @@ const sourceVideoUnlockSustainedMax = clampInt(process.env.SOURCE_VIDEO_UNLOCK_S
 const sourceUnlockReservationSeconds = clampInt(process.env.SOURCE_UNLOCK_RESERVATION_SECONDS, 300, 60, 3600);
 const sourceUnlockGenerateMaxItems = clampInt(process.env.SOURCE_UNLOCK_GENERATE_MAX_ITEMS, 100, 1, 500);
 const sourceUnlockExpiredSweepBatch = clampInt(process.env.SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH, 100, 10, 1000);
+const sourceUnlockSweepsEnabledRaw = String(process.env.SOURCE_UNLOCK_SWEEPS_ENABLED || 'true').trim().toLowerCase();
+const sourceUnlockSweepsEnabled = !(sourceUnlockSweepsEnabledRaw === 'false' || sourceUnlockSweepsEnabledRaw === '0' || sourceUnlockSweepsEnabledRaw === 'off');
+const sourceUnlockSweepBatch = clampInt(process.env.SOURCE_UNLOCK_SWEEP_BATCH, 100, 10, 1000);
+const sourceUnlockProcessingStaleMs = clampInt(process.env.SOURCE_UNLOCK_PROCESSING_STALE_MS, 10 * 60_000, 60_000, 24 * 60 * 60 * 1000);
+const sourceUnlockSweepMinIntervalMs = clampInt(process.env.SOURCE_UNLOCK_SWEEP_MIN_INTERVAL_MS, 30_000, 1_000, 10 * 60_000);
+const sourceUnlockSweepDryLogsRaw = String(process.env.SOURCE_UNLOCK_SWEEP_DRY_LOGS || 'true').trim().toLowerCase();
+const sourceUnlockSweepDryLogs = !(sourceUnlockSweepDryLogsRaw === 'false' || sourceUnlockSweepDryLogsRaw === '0' || sourceUnlockSweepDryLogsRaw === 'off');
 const refreshFailureCooldownHours = clampInt(process.env.REFRESH_FAILURE_COOLDOWN_HOURS, 6, 1, 168);
 const ingestionStaleRunningMs = clampInt(process.env.INGESTION_STALE_RUNNING_MS, 30 * 60 * 1000, 60_000, 24 * 60 * 60 * 1000);
 const autoBannerMode = normalizeAutoBannerMode(process.env.SUBSCRIPTION_AUTO_BANNER_MODE);
@@ -3509,55 +3517,34 @@ async function loadExistingSourceVideoStateForUser(
   return result;
 }
 
-async function recoverExpiredSourceUnlockReservations(db: ReturnType<typeof createClient>) {
-  const expired = await findExpiredReservedUnlocks(db, sourceUnlockExpiredSweepBatch);
-  if (expired.length === 0) return 0;
-
-  let recovered = 0;
-  for (const unlock of expired) {
-    const userId = String(unlock.reserved_by_user_id || '').trim();
-    const amount = Math.max(0, Number(unlock.estimated_cost || 0));
-    if (userId && amount > 0) {
-      try {
-        await refundReservation(db, {
-          userId,
-          amount,
-          idempotencyKey: `unlock:${unlock.id}:expired_refund`,
-          reasonCode: 'UNLOCK_RESERVATION_EXPIRED_REFUND',
-          context: {
-            source_item_id: unlock.source_item_id,
-            source_page_id: unlock.source_page_id,
-            unlock_id: unlock.id,
-            metadata: {
-              reservation_expires_at: unlock.reservation_expires_at,
-            },
-          },
-        });
-      } catch (error) {
-        console.log('[unlock_expired_refund_failed]', JSON.stringify({
-          unlock_id: unlock.id,
-          user_id: userId,
-          error: error instanceof Error ? error.message : String(error),
-        }));
-      }
-    }
-
-    try {
-      await failUnlock(db, {
-        unlockId: unlock.id,
-        errorCode: 'UNLOCK_RESERVATION_EXPIRED',
-        errorMessage: 'Reservation expired before generation started.',
-      });
-      recovered += 1;
-    } catch (error) {
-      console.log('[unlock_expired_reset_failed]', JSON.stringify({
-        unlock_id: unlock.id,
+async function runUnlockSweeps(db: ReturnType<typeof createClient>, input?: {
+  mode?: 'opportunistic' | 'cron';
+  force?: boolean;
+  traceId?: string;
+}) {
+  if (!sourceUnlockSweepsEnabled) return null;
+  try {
+    return await runUnlockReliabilitySweeps(db, {
+      mode: input?.mode || 'opportunistic',
+      force: Boolean(input?.force),
+      traceId: input?.traceId,
+      batchSize: sourceUnlockSweepBatch || sourceUnlockExpiredSweepBatch,
+      processingStaleMs: sourceUnlockProcessingStaleMs,
+      minIntervalMs: sourceUnlockSweepMinIntervalMs,
+      dryLogs: sourceUnlockSweepDryLogs,
+      enabled: sourceUnlockSweepsEnabled,
+    });
+  } catch (error) {
+    logUnlockEvent(
+      'unlock_sweep_failed',
+      { trace_id: String(input?.traceId || '').trim() || createUnlockTraceId() },
+      {
+        mode: input?.mode || 'opportunistic',
         error: error instanceof Error ? error.message : String(error),
-      }));
-    }
+      },
+    );
+    return null;
   }
-
-  return recovered;
 }
 
 function toUnlockSnapshot(input: {
@@ -4212,11 +4199,18 @@ async function processSourceItemUnlockGenerationJob(input: {
   jobId: string;
   userId: string;
   items: SourceUnlockQueueItem[];
+  traceId: string;
 }) {
   const db = getServiceSupabaseClient();
   if (!db) {
     throw new Error('Service role client not configured');
   }
+
+  logUnlockEvent(
+    'unlock_job_started',
+    { trace_id: input.traceId, job_id: input.jobId, user_id: input.userId },
+    { queued_count: input.items.length },
+  );
 
   let processed = 0;
   let inserted = 0;
@@ -4285,14 +4279,21 @@ async function processSourceItemUnlockGenerationJob(input: {
             sourceTag: 'source_unlock_generation',
           });
         } catch (autoChannelError) {
-          console.log('[auto_channel_pipeline_failed]', JSON.stringify({
-            user_id: input.userId,
-            user_feed_item_id: unlockingFeed.id,
-            blueprint_id: generated.blueprintId,
-            source_item_id: sourceRow.id,
-            source_tag: 'source_unlock_generation',
-            error: autoChannelError instanceof Error ? autoChannelError.message : String(autoChannelError),
-          }));
+          logUnlockEvent(
+            'auto_channel_pipeline_failed',
+            {
+              trace_id: input.traceId,
+              job_id: input.jobId,
+              user_id: input.userId,
+              source_item_id: sourceRow.id,
+            },
+            {
+              user_feed_item_id: unlockingFeed.id,
+              blueprint_id: generated.blueprintId,
+              source_tag: 'source_unlock_generation',
+              error: autoChannelError instanceof Error ? autoChannelError.message : String(autoChannelError),
+            },
+          );
         }
       }
 
@@ -4314,19 +4315,27 @@ async function processSourceItemUnlockGenerationJob(input: {
           metadata: {
             job_id: input.jobId,
             blueprint_id: generated.blueprintId,
+            trace_id: input.traceId,
           },
         },
       });
 
       inserted += 1;
 
-      console.log('[source_unlock_generation_succeeded]', JSON.stringify({
-        job_id: input.jobId,
-        unlock_id: item.unlock_id,
-        source_item_id: item.source_item_id,
-        blueprint_id: generated.blueprintId,
-        attached_users: feedRows.length,
-      }));
+      logUnlockEvent(
+        'unlock_item_succeeded',
+        {
+          trace_id: input.traceId,
+          job_id: input.jobId,
+          unlock_id: item.unlock_id,
+          source_item_id: item.source_item_id,
+          video_id: item.video_id,
+        },
+        {
+          blueprint_id: generated.blueprintId,
+          attached_users: feedRows.length,
+        },
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const errorCode = error instanceof PipelineError
@@ -4353,16 +4362,23 @@ async function processSourceItemUnlockGenerationJob(input: {
             metadata: {
               job_id: input.jobId,
               error_code: errorCode,
+              trace_id: input.traceId,
             },
           },
         });
       } catch (refundError) {
-        console.log('[source_unlock_refund_failed]', JSON.stringify({
-          job_id: input.jobId,
-          unlock_id: item.unlock_id,
-          user_id: item.reserved_by_user_id,
-          error: refundError instanceof Error ? refundError.message : String(refundError),
-        }));
+        logUnlockEvent(
+          'source_unlock_refund_failed',
+          {
+            trace_id: input.traceId,
+            job_id: input.jobId,
+            unlock_id: item.unlock_id,
+            user_id: item.reserved_by_user_id,
+          },
+          {
+            error: refundError instanceof Error ? refundError.message : String(refundError),
+          },
+        );
       }
 
       try {
@@ -4372,21 +4388,29 @@ async function processSourceItemUnlockGenerationJob(input: {
           errorMessage: message,
         });
       } catch (unlockError) {
-        console.log('[source_unlock_fail_transition_failed]', JSON.stringify({
-          job_id: input.jobId,
-          unlock_id: item.unlock_id,
-          error: unlockError instanceof Error ? unlockError.message : String(unlockError),
-        }));
+        logUnlockEvent(
+          'source_unlock_fail_transition_failed',
+          { trace_id: input.traceId, job_id: input.jobId, unlock_id: item.unlock_id },
+          {
+            error: unlockError instanceof Error ? unlockError.message : String(unlockError),
+          },
+        );
       }
 
-      console.log('[source_unlock_generation_failed]', JSON.stringify({
-        job_id: input.jobId,
-        unlock_id: item.unlock_id,
-        source_item_id: item.source_item_id,
-        video_id: item.video_id,
-        error_code: errorCode,
-        error: message.slice(0, 220),
-      }));
+      logUnlockEvent(
+        'unlock_item_failed',
+        {
+          trace_id: input.traceId,
+          job_id: input.jobId,
+          unlock_id: item.unlock_id,
+          source_item_id: item.source_item_id,
+          video_id: item.video_id,
+        },
+        {
+          error_code: errorCode,
+          error: message.slice(0, 220),
+        },
+      );
     }
   }
 
@@ -4400,14 +4424,17 @@ async function processSourceItemUnlockGenerationJob(input: {
     error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
   }).eq('id', input.jobId);
 
-  console.log('[source_unlock_generation_job_done]', JSON.stringify({
-    job_id: input.jobId,
-    user_id: input.userId,
-    processed,
-    inserted,
-    skipped,
-    failures: failures.length,
-  }));
+  logUnlockEvent(
+    'unlock_job_terminal',
+    { trace_id: input.traceId, job_id: input.jobId, user_id: input.userId },
+    {
+      status: failures.length ? 'failed' : 'succeeded',
+      processed,
+      inserted,
+      skipped,
+      failures: failures.length,
+    },
+  );
 }
 
 async function syncSingleSubscription(db: ReturnType<typeof createClient>, subscription: {
@@ -5134,7 +5161,7 @@ app.get(
 
   let page;
   try {
-    await recoverExpiredSourceUnlockReservations(sourcePageDb);
+    await runUnlockSweeps(sourcePageDb, { mode: 'opportunistic' });
     page = await listYouTubeSourceVideos({
       apiKey: youtubeDataApiKey,
       channelId: sourcePage.external_id,
@@ -5261,6 +5288,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
   if (!userId || !authToken) {
     return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
   }
+  const traceId = createUnlockTraceId();
+  const traceData = { trace_id: traceId };
 
   const platform = normalizeSourcePagePlatform(req.params.platform || '');
   if (!platform) {
@@ -5268,7 +5297,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       ok: false,
       error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
       message: 'Unsupported source page platform.',
-      data: null,
+      data: traceData,
     });
   }
   if (platform !== 'youtube') {
@@ -5276,7 +5305,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       ok: false,
       error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
       message: 'Only YouTube source pages are supported in this version.',
-      data: null,
+      data: traceData,
     });
   }
 
@@ -5286,7 +5315,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       ok: false,
       error_code: 'INVALID_INPUT',
       message: 'externalId required',
-      data: null,
+      data: traceData,
     });
   }
 
@@ -5296,7 +5325,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       ok: false,
       error_code: 'SOURCE_VIDEO_GENERATE_INVALID_INPUT',
       message: 'Invalid unlock payload.',
-      data: null,
+      data: traceData,
     });
   }
   if (parsed.data.items.length > sourceUnlockGenerateMaxItems) {
@@ -5304,14 +5333,19 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       ok: false,
       error_code: 'SOURCE_VIDEO_GENERATE_INVALID_INPUT',
       message: `Select up to ${sourceUnlockGenerateMaxItems} videos per request.`,
-      data: null,
+      data: traceData,
     });
   }
 
   const db = getAuthedSupabaseClient(authToken);
-  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: traceData });
   const sourcePageDb = getServiceSupabaseClient();
-  if (!sourcePageDb) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+  if (!sourcePageDb) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: traceData });
+
+  logUnlockEvent('unlock_request_received', { trace_id: traceId, user_id: userId, platform, external_id: externalId }, {
+    requested_items: parsed.data.items.length,
+    route: req.path,
+  });
 
   let sourcePage;
   try {
@@ -5321,7 +5355,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       ok: false,
       error_code: 'READ_FAILED',
       message: error instanceof Error ? error.message : 'Could not read source page.',
-      data: null,
+      data: traceData,
     });
   }
   if (!sourcePage) {
@@ -5329,11 +5363,11 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       ok: false,
       error_code: 'SOURCE_PAGE_NOT_FOUND',
       message: 'Source page not found.',
-      data: null,
+      data: traceData,
     });
   }
 
-  await recoverExpiredSourceUnlockReservations(sourcePageDb);
+  await runUnlockSweeps(sourcePageDb, { mode: 'opportunistic', traceId });
 
   const dedupedMap = new Map<string, SourcePageVideoGenerateItem>();
   for (const item of parsed.data.items) {
@@ -5347,7 +5381,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       ok: false,
       error_code: 'SOURCE_VIDEO_GENERATE_INVALID_INPUT',
       message: 'No valid videos selected for generation.',
-      data: null,
+      data: traceData,
     });
   }
 
@@ -5363,7 +5397,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       ok: false,
       error_code: 'READ_FAILED',
       message: error instanceof Error ? error.message : 'Could not resolve duplicate state.',
-      data: null,
+      data: traceData,
     });
   }
 
@@ -5378,10 +5412,13 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
   try {
     activeSubscriberCount = await countActiveSubscribersForSourcePage(sourcePageDb, sourcePage.id);
   } catch (error) {
-    console.log('[source_unlock_active_subscriber_count_failed]', JSON.stringify({
-      source_page_id: sourcePage.id,
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    logUnlockEvent(
+      'source_unlock_active_subscriber_count_failed',
+      { trace_id: traceId, user_id: userId, source_page_id: sourcePage.id },
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
   }
   const estimatedUnlockCost = computeUnlockCost(activeSubscriberCount);
 
@@ -5451,6 +5488,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
             metadata: {
               source: 'source_page_video_library',
               video_id: item.video_id,
+              trace_id: traceId,
             },
           },
         });
@@ -5490,13 +5528,28 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         reserved_cost: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
         reserved_by_user_id: userId,
       });
+      logUnlockEvent(
+        'unlock_item_queued',
+        {
+          trace_id: traceId,
+          user_id: userId,
+          source_page_id: sourcePage.id,
+          unlock_id: reservedUnlock.id,
+          source_item_id: source.id,
+          video_id: item.video_id,
+        },
+        {
+          cost: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
+        },
+      );
     } catch (error) {
-      console.log('[source_unlock_prepare_failed]', JSON.stringify({
-        user_id: userId,
-        source_page_id: sourcePage.id,
-        video_id: item.video_id,
-        error: error instanceof Error ? error.message : String(error),
-      }));
+      logUnlockEvent(
+        'source_unlock_prepare_failed',
+        { trace_id: traceId, user_id: userId, source_page_id: sourcePage.id, video_id: item.video_id },
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
       inProgressRows.push({
         video_id: item.video_id,
         title: item.title,
@@ -5516,6 +5569,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       error_code: 'INSUFFICIENT_CREDITS',
       message: 'Insufficient credits for unlock.',
       data: {
+        ...traceData,
         required: insufficientRows[0]?.required || 0,
         balance: insufficientRows[0]?.balance || 0,
         insufficient: insufficientRows,
@@ -5529,6 +5583,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       error_code: null,
       message: 'source unlock status resolved',
       data: {
+        ...traceData,
         job_id: null,
         queued_count: 0,
         skipped_existing_count: duplicateRows.length,
@@ -5564,7 +5619,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       ok: false,
       error_code: 'SOURCE_VIDEO_GENERATE_FAILED',
       message: jobCreateError.message,
-      data: null,
+      data: traceData,
     });
   }
 
@@ -5573,6 +5628,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       jobId: job.id,
       userId,
       items: queueItems,
+      traceId,
     }).catch(async (error) => {
       const serviceDb = getServiceSupabaseClient();
       if (serviceDb) {
@@ -5583,12 +5639,14 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
           error_message: (error instanceof Error ? error.message : String(error)).slice(0, 500),
         }).eq('id', job.id);
       }
-      console.log('[source_unlock_generation_job_failed]', JSON.stringify({
-        job_id: job.id,
-        user_id: userId,
-        source_page_id: sourcePage.id,
-        error: error instanceof Error ? error.message : String(error),
-      }));
+      logUnlockEvent(
+        'unlock_job_terminal',
+        { trace_id: traceId, job_id: job.id, user_id: userId, source_page_id: sourcePage.id },
+        {
+          status: 'failed',
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
     });
   });
 
@@ -5597,6 +5655,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     error_code: null,
     message: 'background unlock generation started',
     data: {
+      ...traceData,
       job_id: job.id,
       queued_count: queueItems.length,
       skipped_existing_count: duplicateRows.length,
@@ -6737,6 +6796,7 @@ app.post('/api/ingestion/jobs/trigger', async (req, res) => {
       recovered_job_ids: recoveredJobs.map((row) => row.id),
     }));
   }
+  await runUnlockSweeps(db, { mode: 'cron', force: true });
 
   const { data: runningJob, error: runningJobError } = await db
     .from('ingestion_jobs')

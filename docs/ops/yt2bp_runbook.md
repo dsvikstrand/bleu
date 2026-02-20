@@ -32,7 +32,9 @@
     - rate policy: burst `4/15s` + sustained `40/10m` per user/IP.
   - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth shared unlock + async generation queue for selected source videos)
     - rate policy: burst `8/10s` + sustained `120/10m` per user/IP.
+    - additive response field: `data.trace_id` for unlock tracing.
   - `POST /api/source-pages/:platform/:externalId/videos/generate` (compatibility alias to `/videos/unlock`)
+    - mirrors unlock response contract, including `data.trace_id`.
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
   - Frontend trust status now resumes unlock jobs via `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation` after reload.
@@ -131,6 +133,11 @@ Required runtime variables:
 - `SOURCE_UNLOCK_RESERVATION_SECONDS` (default `300`)
 - `SOURCE_UNLOCK_GENERATE_MAX_ITEMS` (default `100`)
 - `SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH` (default `100`)
+- `SOURCE_UNLOCK_SWEEPS_ENABLED` (default `true`)
+- `SOURCE_UNLOCK_SWEEP_BATCH` (default `100`)
+- `SOURCE_UNLOCK_PROCESSING_STALE_MS` (default `600000`)
+- `SOURCE_UNLOCK_SWEEP_MIN_INTERVAL_MS` (default `30000`)
+- `SOURCE_UNLOCK_SWEEP_DRY_LOGS` (default `true`)
 - `SOURCE_VIDEO_UNLOCK_BURST_WINDOW_MS` (default `10000`)
 - `SOURCE_VIDEO_UNLOCK_BURST_MAX` (default `8`)
 - `SOURCE_VIDEO_UNLOCK_SUSTAINED_WINDOW_MS` (default `600000`)
@@ -171,6 +178,11 @@ Safe defaults:
 - `SOURCE_UNLOCK_RESERVATION_SECONDS=300`
 - `SOURCE_UNLOCK_GENERATE_MAX_ITEMS=100`
 - `SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH=100`
+- `SOURCE_UNLOCK_SWEEPS_ENABLED=true`
+- `SOURCE_UNLOCK_SWEEP_BATCH=100`
+- `SOURCE_UNLOCK_PROCESSING_STALE_MS=600000`
+- `SOURCE_UNLOCK_SWEEP_MIN_INTERVAL_MS=30000`
+- `SOURCE_UNLOCK_SWEEP_DRY_LOGS=true`
 - `SOURCE_VIDEO_UNLOCK_BURST_WINDOW_MS=10000`
 - `SOURCE_VIDEO_UNLOCK_BURST_MAX=8`
 - `SOURCE_VIDEO_UNLOCK_SUSTAINED_WINDOW_MS=600000`
@@ -250,7 +262,8 @@ Safe defaults:
 - Action:
   1) Inspect `source_item_unlocks` row (`status`, `last_error_code`, `last_error_message`, `reservation_expires_at`).
   2) Inspect `credit_ledger` for matching `hold` and `refund` entries via `unlock_id`.
-  3) Retry unlock from source page after verifying provider health.
+  3) Correlate unlock logs via `trace_id` from unlock response (`unlock_request_received` -> `unlock_item_*` -> `unlock_job_terminal`).
+  4) Retry unlock from source page after verifying provider health.
 
 ### `candidate_pending_manual_review` growth
 - Meaning: gate pipeline is producing warn outcomes (fit/quality) and routing to manual review.

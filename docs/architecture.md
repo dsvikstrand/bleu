@@ -86,7 +86,9 @@
       - list limiter policy: burst `4/15s` + sustained `40/10m` per user/IP.
     - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth-only shared unlock + queue start for selected source-library videos, ingestion scope `source_item_unlock_generation`)
       - unlock limiter policy: burst `8/10s` + sustained `120/10m` per user/IP.
+      - response now includes additive `data.trace_id` for end-to-end unlock tracing.
     - `POST /api/source-pages/:platform/:externalId/videos/generate` (compatibility alias to unlock flow)
+      - alias mirrors unlock response contract, including additive `data.trace_id`.
     - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)
     - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth-only, unsubscribe parity + notice cleanup)
     - `POST /api/source-subscriptions/:id/sync`
@@ -118,6 +120,10 @@
   - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables + auto-banner policy/queue tables + refill-credit/unlock tables.
   - source-identity foundation: `source_pages` table and FK links from `user_source_subscriptions` + `source_items` via `source_page_id`.
   - shared unlock foundation: `source_item_unlocks` (status/cost/reservation/ready blueprint) + `user_credit_wallets` + immutable `credit_ledger`.
+  - unlock reliability sweeps:
+    - opportunistic sweeps on source-page video list/unlock routes.
+    - forced sweep on service cron trigger path.
+    - stale/orphan recovery emits structured `unlock_sweep_*` logs and uses idempotent refund/fail transitions.
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
 - Eval assets:
   - Runtime policy/config under `eval/methods/v0/*`.

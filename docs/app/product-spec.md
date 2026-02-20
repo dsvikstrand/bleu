@@ -72,6 +72,7 @@ a60) [have] Explore search now supports `Sources` results (app Source Pages only
 a61) [have] Unlock activity status is now unified across Home `For You`, Source Page `Video Library`, and `My Feed` with shared job-resume behavior (`latest-mine` scope: `source_item_unlock_generation`).
 a62) [have] Credits dropdown now surfaces refill timing (`next +1`) and latest ledger activity summary for clearer unlock debit/refund visibility.
 a63) [have] Home now includes a first-time dismissible scope helper clarifying `For You` vs `Your channels`.
+a64) [have] Unlock backend now runs reliability sweeps (expired/stale/orphan recovery) with structured traceable logs, and unlock/generate responses include additive `trace_id`.
 
 ## Core Model
 b1) `Source Item`
@@ -244,14 +245,16 @@ si37) auth endpoint: `DELETE /api/source-pages/:platform/:externalId/subscribe` 
 si38) compatibility note: legacy `POST/GET/PATCH/DELETE /api/source-subscriptions*` remains live while Source Pages rollout expands.
 si39) public/auth endpoint: `GET /api/source-pages/:platform/:externalId/blueprints?limit=<1..24>&cursor=<opaque?>` (public channel-published feed for the source page, deduped by `source_item_id` with `next_cursor` pagination).
 si40) auth endpoint: `GET /api/source-pages/:platform/:externalId/videos?page_token=<optional>&limit=<1..25>&kind=<full|shorts>` (source-page video-library listing for signed-in users, includes duplicate flags per row; shorts threshold is `<=60s`).
-si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/unlock` (reserves credits, starts shared unlock generation queue, returns `job_id` + ready/in-progress/insufficient summary buckets).
-si42) compatibility alias: `POST /api/source-pages/:platform/:externalId/videos/generate` routes to unlock flow in this phase.
+si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/unlock` (reserves credits, starts shared unlock generation queue, returns `job_id` + ready/in-progress/insufficient summary buckets + additive `trace_id`).
+si42) compatibility alias: `POST /api/source-pages/:platform/:externalId/videos/generate` routes to unlock flow in this phase and mirrors additive `trace_id`.
 si43) `GET /api/source-pages/:platform/:externalId/videos` now includes unlock metadata per row (`unlock_status`, `unlock_cost`, `unlock_in_progress`, `ready_blueprint_id`).
 si44) `GET /api/credits` now returns refill-wallet fields (`balance`, `capacity`, `refill_rate_per_sec`, `seconds_to_full`) alongside compatibility fields (`remaining`, `limit`, `resetAt`).
 si45) source-page video-library unlock worker scope is `source_item_unlock_generation` (single generation per source video, shared fan-out to subscribed users).
 si46) source-page video-library list rate policy: burst `4/15s` plus sustained `40/10m` per user/IP (reduce accidental 429 on normal tab-switch/load-more while keeping abuse guardrails).
 si47) source-page video-library unlock/generate rate policy: burst `8/10s` plus sustained `120/10m` per user/IP (credit balance remains the primary generation throttle).
 si48) public/auth endpoint: `GET /api/source-pages/search?q=<query>&limit=<1..25>` (Explore source lookup against app `source_pages`; returns minimal source cards and source-page paths).
+si49) unlock reliability sweeps run opportunistically on source-page video list/unlock routes and force-run on service cron trigger path.
+si50) unlock trace propagation contract: `trace_id` is emitted in unlock responses and threaded through unlock queue/job logs and credit-ledger metadata (`hold|settle|refund`).
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

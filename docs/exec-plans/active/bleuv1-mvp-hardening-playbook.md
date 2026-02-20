@@ -23,10 +23,10 @@ b4) [todo] Add first-unlock guided milestone in onboarding so users see a comple
 b5) [todo] Add plain-language tooltip for shared unlock economics and why costs vary.
 
 ### P1 - Reliability and Operations
-c1) [todo] Add integrity sweeps for stale unlock reservations and orphaned unlock/job/feed relations.
-c2) [todo] Add unlock pipeline correlation IDs from request -> ingestion job -> blueprint -> publish result.
+c1) [have] Integrity sweeps now recover stale unlock reservations/processing rows and orphan running unlock jobs with idempotent refund/fail transitions.
+c2) [have] Unlock pipeline now emits correlation `trace_id` from request -> queue/job -> item success/failure -> terminal logs.
 c3) [todo] Normalize unlock failure reasons to stable user-facing messages and stable internal reason codes.
-c4) [todo] Add focused backend integration tests for hold/settle/refund idempotency and concurrent unlock race handling.
+c4) [have] Added focused backend integration tests for hold/settle/refund idempotency and concurrent unlock reserve semantics.
 c5) [todo] Add explicit smoke playbook for mobile OAuth callback edge cases and unlock transitions.
 
 ### P2 - Maintainability and Scale-readiness

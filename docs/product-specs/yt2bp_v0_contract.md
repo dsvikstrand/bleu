@@ -53,6 +53,8 @@
 - 2026-02-20 note: source-page unlock route guard is soft-limited (`8/10s` burst + `120/10m` sustained) and no longer uses hard unlock cooldown; additive and outside this endpoint envelope.
 - 2026-02-20 note: refill-credit wallet model (`user_credit_wallets`, `credit_ledger`, `/api/credits` refill fields) is additive and outside this endpoint envelope.
 - 2026-02-20 note: subscription new-upload ingest now writes unlockable feed rows (`my_feed_unlockable`) before generation; this lifecycle change is outside this endpoint envelope.
+- 2026-02-20 note: unlock reliability sweeps (expired/stale/orphan recovery) run in source-video routes and service cron trigger path; additive and outside this endpoint envelope.
+- 2026-02-20 note: unlock/generate responses now include additive `trace_id` and unlock lifecycle logs propagate the same correlation ID; additive and outside this endpoint envelope.
 
 ## Request
 ```json
@@ -150,6 +152,7 @@
 - Source-page public feed retrieval (`GET /api/source-pages/:platform/:externalId/blueprints`) is intentionally outside this endpoint contract.
 - Source-page video-library listing/queue flow (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`, compatibility alias `/videos/generate`) is intentionally outside this endpoint contract.
 - Refill-credit wallet and source-unlock persistence (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`, `/api/credits`) are intentionally outside this endpoint contract.
+- Unlock reliability sweep behavior and unlock trace correlation (`trace_id`) are intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: env-controlled via `YT2BP_CORE_TIMEOUT_MS` (default `120s`).

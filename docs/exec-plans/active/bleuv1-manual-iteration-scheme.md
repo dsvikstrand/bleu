@@ -60,6 +60,7 @@ Execution mode:
 41. [have] Step 40 - Home scope split (`For You` subscribed-source stream + `Your channels` followed-channel feed parity)
 42. [have] Step 41 - Explore sources search (`Sources` filter + app source-page search results + source cards)
 43. [have] Step 42 - Unlock trust pass (shared unlock job activity + credit transparency + Home scope helper clarity)
+44. [have] Step 43 - Backend unlock hardening (reliability sweeps + trace IDs + idempotency/race tests)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -392,6 +393,22 @@ Completion evidence (2026-02-20)
 - Replaced per-surface unlock polling logic in `src/pages/Wall.tsx`, `src/pages/SourcePage.tsx`, and `src/components/feed/MyFeedTimeline.tsx`.
 - Added `src/hooks/useCreditActivity.ts` and updated `src/components/shared/UserMenu.tsx` with `nextRefillLabel` and latest ledger summary.
 - Updated Home scope copy and added dismissible helper strip (`home_scope_helper_dismissed_v1`).
+
+### Step 43 - Backend unlock hardening (sweeps + tracing + tests)
+Scope
+- add safe unlock reliability sweeps for stale reservations/processing rows and orphan unlock jobs.
+- add correlation tracing (`trace_id`) from unlock request to terminal job logs.
+- add backend-focused service-level integration tests for credit idempotency and unlock reserve race semantics.
+
+Definition of done
+- unlock routes return additive `data.trace_id` and emit structured unlock lifecycle logs.
+- stale unlock/job recovery runs opportunistically in source-video routes and force-runs in service cron trigger flow.
+- backend tests cover sweep recovery, trace utilities, credit hold/settle/refund idempotency, and concurrent reserve behavior.
+
+Completion evidence (2026-02-20)
+- Added `server/services/unlockReliabilitySweeps.ts` and `server/services/unlockTrace.ts`.
+- Updated `server/index.ts` unlock endpoints/worker logs to propagate `trace_id`, wire sweep runs, and include trace metadata in credit ledger writes.
+- Added tests: `src/test/unlockReliabilitySweeps.test.ts`, `src/test/unlockTracing.test.ts`, `src/test/creditReservationLifecycle.test.ts`, `src/test/sourceUnlockRace.test.ts`.
 
 ### Step 12 - Subscriptions management actions
 Scope
