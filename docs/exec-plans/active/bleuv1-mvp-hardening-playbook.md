@@ -1,0 +1,79 @@
+# bleuV1 MVP Hardening Playbook
+
+Status: `active`
+
+## Goal
+Convert the current feature-complete MVP into a stable, clear, and scalable product surface by hardening UX trust, runtime reliability, and engineering foundations.
+
+## Current State Snapshot
+a1) [have] Core source-first loop is live: source subscriptions -> unlock/generate -> blueprint -> channel/home visibility.
+a2) [have] Source Pages, Source Video Library, shared unlock, refill credits, onboarding, and Explore source search are implemented.
+a3) [have] Canonical docs and active plan registry are in good shape and checks are passing.
+a4) [have] Primary architecture risk is concentration of logic in very large files (`server/index.ts`, `src/pages/Wall.tsx`, `src/pages/Subscriptions.tsx`, `src/pages/SourcePage.tsx`).
+a5) [todo] Improve user trust around unlock/credit transitions and async processing visibility.
+a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
+
+## MVP Priorities
+
+### P0 - Trust and Clarity (user-facing)
+b1) [todo] Add one shared card-state legend (`Locked`, `Unlocking`, `Ready`) reused on Home, Source Page, and My Feed.
+b2) [todo] Add lightweight recent-activity panel for generation jobs (queued/running/succeeded/failed).
+b3) [todo] Improve credit transparency in UI: latest debit event, refill pace, and next refill timer.
+b4) [todo] Add first-unlock guided milestone in onboarding so users see a complete success loop quickly.
+b5) [todo] Add plain-language tooltip for shared unlock economics and why costs vary.
+
+### P1 - Reliability and Operations
+c1) [todo] Add integrity sweeps for stale unlock reservations and orphaned unlock/job/feed relations.
+c2) [todo] Add unlock pipeline correlation IDs from request -> ingestion job -> blueprint -> publish result.
+c3) [todo] Normalize unlock failure reasons to stable user-facing messages and stable internal reason codes.
+c4) [todo] Add focused backend integration tests for hold/settle/refund idempotency and concurrent unlock race handling.
+c5) [todo] Add explicit smoke playbook for mobile OAuth callback edge cases and unlock transitions.
+
+### P2 - Maintainability and Scale-readiness
+d1) [todo] Split `server/index.ts` into route modules (`source pages`, `subscriptions`, `unlock/credits`, `ingestion jobs`).
+d2) [todo] Extract large page orchestration logic from `Wall`, `Subscriptions`, and `SourcePage` into smaller hooks/components.
+d3) [todo] Incrementally tighten TypeScript strictness for touched modules.
+d4) [todo] Add CI PR gate for `test`, `build`, and docs checks before merge.
+d5) [todo] Add runtime health dashboard script for unlock throughput, failure rates, and queue latency.
+
+## Blind Spots To Fix
+e1) [todo] Async unlock feedback can still feel uncertain if job visibility is delayed or too hidden.
+e2) [todo] Credits can appear "stuck" if debit/refill updates are not immediate and explicit.
+e3) [todo] Scope language on Home (`For You` vs `Your channels`) can be misread without concise helper copy.
+e4) [todo] Source/channel naming overlap can confuse non-technical users without consistent glossary phrasing.
+e5) [todo] Legacy copy traces (`inventory/libraries`) should be removed from high-traffic screens to avoid identity drift.
+
+## Execution Sequence (4 Sprint Track)
+f1) [todo] Sprint 1: UX trust pass (`legend`, `job tray`, `credit detail`, `first-unlock onboarding cue`).
+f2) [todo] Sprint 2: Reliability pass (`idempotency tests`, `stale sweeps`, `error-code/message normalization`, `correlation IDs`).
+f3) [todo] Sprint 3: Refactor pass (`server route modularization`, `page-level hook extraction`, `strict TS increments`).
+f4) [todo] Sprint 4: Growth stability pass (`funnel instrumentation`, `activation tuning`, `retention baseline review`).
+
+## Success Metrics
+g1) [todo] Activation: `% of new users who complete first unlock within 24h`.
+g2) [todo] Reliability: `unlock success rate`, `median unlock-to-ready time`, `refund ratio`.
+g3) [todo] Economics: `average credits spent per active user`, `cost-per-unlock distribution`, `shared unlock reuse rate`.
+g4) [todo] UX clarity: `% repeated unlock clicks within 30s for same item` (confusion proxy).
+g5) [todo] Retention: `D1` and `D7` by cohort (`imported subscriptions` vs `skipped onboarding`).
+
+## Manual Inspection Checklist
+h1) [todo] Unlock from Source Page shows immediate state transition and terminal result without page refresh.
+h2) [todo] Unlock from Home `For You` mirrors Source Page behavior and card parity.
+h3) [todo] Credit display updates immediately after reserve/settle/refund events.
+h4) [todo] OAuth connect/import callback on mobile returns user to intended flow reliably.
+h5) [todo] New users can understand first action without internal jargon.
+h6) [todo] `For You` and `Your channels` behavior matches their labels.
+h7) [todo] Source search in Explore returns valid Source Pages and routes correctly.
+
+## Decision Log (Lock)
+i1) [have] Keep source-first identity and shared unlock economics.
+i2) [have] Keep credits as primary throttle with soft anti-abuse request limits.
+i3) [have] Keep Source Pages platform-agnostic for future adapters.
+i4) [have] Prioritize feed usage over adding large new discovery surfaces in current MVP phase.
+i5) [have] Optimize trust/reliability before expansion features.
+
+## Validation Commands
+j1) [todo] `npm run test`
+j2) [todo] `npm run build`
+j3) [todo] `npm run docs:refresh-check -- --json`
+j4) [todo] `npm run docs:link-check`
